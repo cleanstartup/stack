@@ -58,7 +58,7 @@ func main() {
 - Module registrieren Activities und Assets dezentral.
 - `web build` materialisiert Assets in `.way2go/public`.
 - `web run` serviert nur fertige Assets und erwartet, dass `build` bereits gelaufen ist.
-- `web dev` rebuildet bei Änderungen per Polling.
+- `web dev` rebuildet bei Änderungen per Polling und triggert per SSE einen Browser-Reload.
 - `web.Page` rendert eine minimale HTML-Shell und kann `templ.Component` als Body verwenden.
 
 ## Demo
