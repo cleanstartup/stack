@@ -1,8 +1,10 @@
 package web_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -294,4 +296,75 @@ func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 	if !called {
 		t.Fatalf("expected global middleware to be called")
 	}
+}
+
+func TestPageRendersMinimalHtmlShell(t *testing.T) {
+	r := web.NewRegistry()
+	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "site", Files: []string{"site.css"}}
+	a := web.Simple(
+		web.Ref("page"),
+		func(ctx activity.Context) activity.Result {
+			return web.Page{
+				Title:  "demo",
+				Body:   "hello",
+				Styles: []web.AssetRef{pageRef},
+			}
+		},
+	)
+	web.RegisterWebActivity(r, a)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/page", nil)
+	r.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "<!doctype html>") {
+		t.Fatalf("expected html shell, got %q", body)
+	}
+	if !strings.Contains(body, "<link rel=\"stylesheet\" href=\"/assets/css/site/site.css\">") {
+		t.Fatalf("expected stylesheet link, got %q", body)
+	}
+	if !strings.Contains(body, "<main>hello</main>") {
+		t.Fatalf("expected body content, got %q", body)
+	}
+}
+
+func TestPageRendersTemplComponentBody(t *testing.T) {
+	r := web.NewRegistry()
+	a := web.Simple(
+		web.Ref("templ"),
+		func(ctx activity.Context) activity.Result {
+			return web.Page{
+				Title: "demo",
+				Body: templBody(func(_ context.Context, w io.Writer) error {
+					_, err := io.WriteString(w, "<strong>templ body</strong>")
+					return err
+				}),
+			}
+		},
+	)
+	web.RegisterWebActivity(r, a)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/templ", nil)
+	r.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "<strong>templ body</strong>") {
+		t.Fatalf("expected templ body, got %q", rec.Body.String())
+	}
+}
+
+type templBody func(context.Context, io.Writer) error
+
+func (b templBody) Render(ctx context.Context, w io.Writer) error {
+	if b == nil {
+		return nil
+	}
+	return b(ctx, w)
 }

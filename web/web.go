@@ -70,9 +70,6 @@ type ActivityHandler[C any] func(ctx Context[C]) activity.Result
 type ActivityMiddleware[C any] func(next ActivityHandler[C]) ActivityHandler[C]
 type GlobalMiddleware func(next func(ctx activity.Context) activity.Result) func(ctx activity.Context) activity.Result
 type ActivityOption[C any] func(a *WebActivity[C])
-type Module interface {
-	register(*Registry)
-}
 
 type uriRefKey struct {
 	id string
@@ -89,11 +86,6 @@ type WebActivity[C any] struct {
 	handler     ActivityHandler[C]
 	middlewares []ActivityMiddleware[C]
 	ref         *uriRefKey
-}
-
-type group struct {
-	path  string
-	items []Module
 }
 
 type handlerContext[C any] struct {
@@ -132,31 +124,8 @@ func MountDefault(path string, handler http.Handler) { defaultRegistry.Mount(pat
 
 func DefaultGroup(path string) *Registry { return defaultRegistry.Group(path) }
 
-func RegisterAllDefault(modules ...Module) {
-	for _, module := range modules {
-		if module == nil {
-			continue
-		}
-		module.register(defaultRegistry)
-	}
-}
-
 func UseDefaultGlobalMiddleware(mw ...GlobalMiddleware) {
 	defaultRegistry.UseGlobalMiddleware(mw...)
-}
-
-func Bind(path string, modules ...Module) Module {
-	return &group{path: path, items: modules}
-}
-
-func Compose(modules ...Module) Module {
-	return Bind("", modules...)
-}
-
-func Run(addr string, modules ...Module) error {
-	Reset()
-	RegisterAllDefault(modules...)
-	return http.ListenAndServe(addr, DefaultHandler())
 }
 
 func URI(target any) string {
@@ -321,19 +290,6 @@ func (a *WebActivity[C]) URI() string {
 
 func (a *WebActivity[C]) register(r *Registry) {
 	RegisterWebActivity(r, a)
-}
-
-func (g *group) register(r *Registry) {
-	if g == nil {
-		return
-	}
-	next := r.Group(g.path)
-	for _, item := range g.items {
-		if item == nil {
-			continue
-		}
-		item.register(next)
-	}
 }
 
 func RegisterWebActivity[C any](r *Registry, a *WebActivity[C]) {
@@ -766,12 +722,24 @@ func renderResult(w http.ResponseWriter, r *http.Request, result activity.Result
 	}
 
 	switch typed := result.(type) {
+	case Page:
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		return typed.Render(r.Context(), w)
+	case *Page:
+		if typed == nil {
+			w.WriteHeader(http.StatusNoContent)
+			return nil
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		return typed.Render(r.Context(), w)
 	case templ.Component:
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		templ.Handler(typed).ServeHTTP(w, r)
 		return nil
 	case interface {
 		Render(context.Context, io.Writer) error
 	}:
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		return typed.Render(r.Context(), w)
 	case http.Handler:
 		typed.ServeHTTP(w, r)
