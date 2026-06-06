@@ -19,6 +19,7 @@ import (
 )
 
 type activityMetaContextKey struct{}
+type devStateContextKey struct{}
 
 type ActivityMeta struct {
 	ID      string
@@ -35,6 +36,7 @@ type Registry struct {
 	byActivity   map[uintptr]string
 	byRef        map[uintptr]string
 	globalMW     []GlobalMiddleware
+	devState     *DevState
 }
 
 type RuntimeContext struct {
@@ -104,6 +106,7 @@ func NewRegistry() *Registry {
 		byActivity:   map[uintptr]string{},
 		byRef:        map[uintptr]string{},
 		globalMW:     []GlobalMiddleware{},
+		devState:     nil,
 	}
 }
 
@@ -313,6 +316,7 @@ func RegisterWebActivity[C any](r *Registry, a *WebActivity[C]) {
 			ID:      id,
 			Pattern: pattern,
 		})
+		req = withDevState(req, r.devState)
 		rq := newRequest(req, map[string]string{}, req.URL.Query())
 		decoded := a.decode(rq)
 		if rq.Failed() {
@@ -378,6 +382,7 @@ func Register[P any, I any](r *Registry, def *activity.Definition[P, I], resolve
 	}
 
 	handler := func(w http.ResponseWriter, req *http.Request) {
+		req = withDevState(req, r.devState)
 		pathParams := map[string]string{}
 		for _, name := range def.PathParamNames() {
 			pathParams[name] = chi.URLParam(req, name)
@@ -437,6 +442,7 @@ func RegisterActivity[P any, I any](r *Registry, a *activity.Activity[P, I]) {
 	}
 
 	handler := func(w http.ResponseWriter, req *http.Request) {
+		req = withDevState(req, r.devState)
 		pathParams := map[string]string{}
 		for _, name := range a.PathParamNames() {
 			pathParams[name] = chi.URLParam(req, name)
@@ -520,6 +526,20 @@ func (r *Registry) UseGlobalMiddleware(mw ...GlobalMiddleware) {
 		return
 	}
 	r.globalMW = append(r.globalMW, mw...)
+}
+
+func (r *Registry) SetDevState(state *DevState) {
+	if r == nil {
+		return
+	}
+	r.devState = state
+}
+
+func (r *Registry) RegisterDevEndpoints(state *DevState) {
+	if r == nil || state == nil {
+		return
+	}
+	r.router.Get("/__way2go/dev/events", state.ServeHTTP)
 }
 
 func prefixedPath(prefix string, path string) string {
@@ -723,12 +743,20 @@ func renderResult(w http.ResponseWriter, r *http.Request, result activity.Result
 
 	switch typed := result.(type) {
 	case Page:
+		if state := devStateFromContext(r.Context()); state != nil {
+			typed.AssetVersion = fmt.Sprintf("%d", state.Revision())
+			typed.LiveReloadURL = devLiveReloadScriptURL()
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		return typed.Render(r.Context(), w)
 	case *Page:
 		if typed == nil {
 			w.WriteHeader(http.StatusNoContent)
 			return nil
+		}
+		if state := devStateFromContext(r.Context()); state != nil {
+			typed.AssetVersion = fmt.Sprintf("%d", state.Revision())
+			typed.LiveReloadURL = devLiveReloadScriptURL()
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		return typed.Render(r.Context(), w)
@@ -739,6 +767,12 @@ func renderResult(w http.ResponseWriter, r *http.Request, result activity.Result
 	case interface {
 		Render(context.Context, io.Writer) error
 	}:
+		if page, ok := typed.(*Page); ok {
+			if state := devStateFromContext(r.Context()); state != nil {
+				page.AssetVersion = fmt.Sprintf("%d", state.Revision())
+				page.LiveReloadURL = devLiveReloadScriptURL()
+			}
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		return typed.Render(r.Context(), w)
 	case http.Handler:

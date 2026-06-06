@@ -360,6 +360,58 @@ func TestPageRendersTemplComponentBody(t *testing.T) {
 	}
 }
 
+func TestPageRendersDevReloadAndVersionedAssets(t *testing.T) {
+	r := web.NewRegistry()
+	devState := web.NewDevState()
+	devState.MarkBuilt()
+	r.SetDevState(devState)
+
+	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "site", Files: []string{"site.css"}}
+	a := web.Simple(
+		web.Ref("dev"),
+		func(ctx activity.Context) activity.Result {
+			return web.Page{
+				Title:  "dev",
+				Body:   "hello",
+				Styles: []web.AssetRef{pageRef},
+			}
+		},
+	)
+	web.RegisterWebActivity(r, a)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/dev", nil)
+	r.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "?v=1") {
+		t.Fatalf("expected versioned asset URL, got %q", body)
+	}
+	if !strings.Contains(body, "/__way2go/dev/events") {
+		t.Fatalf("expected dev reload script, got %q", body)
+	}
+}
+
+func TestDevEventsEndpointIsMounted(t *testing.T) {
+	r := web.NewRegistry()
+	state := web.NewDevState()
+	r.SetDevState(state)
+	r.RegisterDevEndpoints(state)
+
+	rec := httptest.NewRecorder()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(http.MethodGet, "/__way2go/dev/events", nil).WithContext(ctx)
+	r.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK && rec.Code != 0 {
+		t.Fatalf("expected dev events endpoint to start cleanly, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "connected") {
+		t.Fatalf("expected SSE handshake, got %q", rec.Body.String())
+	}
+}
+
 type templBody func(context.Context, io.Writer) error
 
 func (b templBody) Render(ctx context.Context, w io.Writer) error {

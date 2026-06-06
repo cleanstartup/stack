@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -51,6 +52,26 @@ func (r AssetRef) URLs() []string {
 
 func (r AssetRef) URL() string {
 	urls := r.URLs()
+	if len(urls) == 0 {
+		return ""
+	}
+	return urls[0]
+}
+
+func (r AssetRef) URLsWithVersion(version string) []string {
+	urls := r.URLs()
+	if strings.TrimSpace(version) == "" {
+		return urls
+	}
+	out := make([]string, 0, len(urls))
+	for _, u := range urls {
+		out = append(out, withAssetVersion(u, version))
+	}
+	return out
+}
+
+func (r AssetRef) URLWithVersion(version string) string {
+	urls := r.URLsWithVersion(version)
 	if len(urls) == 0 {
 		return ""
 	}
@@ -224,6 +245,20 @@ func (s generatedAssetSource) Materialize(ws *Workspace, kind AssetKind) ([]stri
 func AssetURL(kind AssetKind, id string, parts ...string) string {
 	segments := append([]string{"/assets", string(kind), id}, parts...)
 	return path.Join(segments...)
+}
+
+func withAssetVersion(assetURL, version string) string {
+	if strings.TrimSpace(version) == "" {
+		return assetURL
+	}
+	parsed, err := url.Parse(assetURL)
+	if err != nil {
+		return assetURL
+	}
+	query := parsed.Query()
+	query.Set("v", version)
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
 }
 
 func assetID(value string) string {

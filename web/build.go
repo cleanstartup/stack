@@ -32,6 +32,7 @@ type ServeConfig struct {
 	OutputDir string
 	AssetsFS  fs.FS
 	AssetRoot string
+	DevState  *DevState
 }
 
 type DevConfig struct {
@@ -41,6 +42,7 @@ type DevConfig struct {
 	AssetsFS     fs.FS
 	AssetRoot    string
 	PollInterval time.Duration
+	DevState     *DevState
 }
 
 type MaterializedAsset struct {
@@ -139,6 +141,7 @@ func (e *BuildEngine) Serve(ctx context.Context, cfg ServeConfig) error {
 	}
 
 	registry := NewRegistry()
+	registry.SetDevState(cfg.DevState)
 	e.builder.registerRoutes(registry)
 
 	assetFS := cfg.AssetsFS
@@ -154,6 +157,7 @@ func (e *BuildEngine) Serve(ctx context.Context, cfg ServeConfig) error {
 	}
 
 	registry.Mount("/assets", assetHandler(assetFS, assetRoot))
+	registry.RegisterDevEndpoints(cfg.DevState)
 
 	server := &http.Server{
 		Addr:    addr,
@@ -227,6 +231,9 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	if e == nil || e.builder == nil {
 		return fmt.Errorf("build engine is nil")
 	}
+	if cfg.DevState == nil {
+		cfg.DevState = NewDevState()
+	}
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = time.Second
 	}
@@ -246,6 +253,9 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	}); err != nil {
 		return err
 	}
+	if cfg.DevState != nil {
+		cfg.DevState.MarkBuilt()
+	}
 
 	serveCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -257,6 +267,7 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 			OutputDir: cfg.OutputDir,
 			AssetsFS:  cfg.AssetsFS,
 			AssetRoot: cfg.AssetRoot,
+			DevState:  cfg.DevState,
 		})
 	}()
 
@@ -290,6 +301,9 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 			}); err != nil {
 				fmt.Fprintln(os.Stderr, "web dev build failed:", err)
 				continue
+			}
+			if cfg.DevState != nil {
+				cfg.DevState.Broadcast()
 			}
 			snapshot = current
 		}

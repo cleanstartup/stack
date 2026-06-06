@@ -5,16 +5,19 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/a-h/templ"
 )
 
 type Page struct {
-	Title   string
-	Body    any
-	Styles  []AssetRef
-	Scripts []AssetRef
+	Title         string
+	Body          any
+	Styles        []AssetRef
+	Scripts       []AssetRef
+	AssetVersion  string
+	LiveReloadURL string
 }
 
 func (p Page) Render(ctx context.Context, w io.Writer) error {
@@ -30,7 +33,7 @@ func (p Page) Render(ctx context.Context, w io.Writer) error {
 	out.WriteString(html.EscapeString(title))
 	out.WriteString("</title>")
 	for _, style := range p.Styles {
-		for _, url := range style.URLs() {
+		for _, url := range style.URLsWithVersion(p.AssetVersion) {
 			out.WriteString("<link rel=\"stylesheet\" href=\"")
 			out.WriteString(html.EscapeString(url))
 			out.WriteString("\">")
@@ -43,11 +46,18 @@ func (p Page) Render(ctx context.Context, w io.Writer) error {
 	}
 	out.WriteString("</main>")
 	for _, script := range p.Scripts {
-		for _, url := range script.URLs() {
+		for _, url := range script.URLsWithVersion(p.AssetVersion) {
 			out.WriteString("<script defer src=\"")
 			out.WriteString(html.EscapeString(url))
 			out.WriteString("\"></script>")
 		}
+	}
+	if strings.TrimSpace(p.LiveReloadURL) != "" {
+		out.WriteString("<script>")
+		out.WriteString(`(()=>{const u=`)
+		out.WriteString(strconv.Quote(p.LiveReloadURL))
+		out.WriteString(`;const es=new EventSource(u);es.onmessage=()=>location.reload();es.onerror=()=>{try{es.close()}catch(_){}};})()`)
+		out.WriteString("</script>")
 	}
 	out.WriteString("</body></html>")
 
