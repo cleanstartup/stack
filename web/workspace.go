@@ -87,6 +87,10 @@ func walkTree(root string, visit func(path string, entry fs.DirEntry) error) err
 }
 
 func copyTree(dst, src string) error {
+	return copyTreeExcept(dst, src, nil)
+}
+
+func copyTreeExcept(dst, src string, skip func(rel string, entry fs.DirEntry) bool) error {
 	return filepath.WalkDir(src, func(current string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -96,6 +100,12 @@ func copyTree(dst, src string) error {
 			return err
 		}
 		target := filepath.Join(dst, rel)
+		if skip != nil && skip(rel, entry) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if entry.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}

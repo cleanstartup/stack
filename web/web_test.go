@@ -300,7 +300,7 @@ func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 
 func TestPageRendersMinimalHtmlShell(t *testing.T) {
 	r := web.NewRegistry()
-	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "site", Files: []string{"site.css"}}
+	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app", Files: []string{"app.css"}}
 	a := web.Simple(
 		web.Ref("page"),
 		func(ctx activity.Context) activity.Result {
@@ -324,7 +324,7 @@ func TestPageRendersMinimalHtmlShell(t *testing.T) {
 	if !strings.Contains(body, "<!doctype html>") {
 		t.Fatalf("expected html shell, got %q", body)
 	}
-	if !strings.Contains(body, "<link rel=\"stylesheet\" href=\"/assets/css/site/site.css\">") {
+	if !strings.Contains(body, "<link rel=\"stylesheet\" href=\"/assets/css/app/app.css\">") {
 		t.Fatalf("expected stylesheet link, got %q", body)
 	}
 	if !strings.Contains(body, "<main>hello</main>") {
@@ -366,7 +366,7 @@ func TestPageRendersDevReloadAndVersionedAssets(t *testing.T) {
 	devState.MarkBuilt()
 	r.SetDevState(devState)
 
-	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "site", Files: []string{"site.css"}}
+	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app", Files: []string{"app.css"}}
 	a := web.Simple(
 		web.Ref("dev"),
 		func(ctx activity.Context) activity.Result {

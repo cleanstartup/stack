@@ -109,7 +109,14 @@ func (e *BuildEngine) Build(ctx context.Context, cfg BuildConfig) (*BuildResult,
 	if err := os.MkdirAll(workspace.Out, 0o755); err != nil {
 		return nil, err
 	}
-	if err := copyTree(workspace.Out, workspace.Src); err != nil {
+	if err := copyTreeExcept(workspace.Out, workspace.Src, func(rel string, entry fs.DirEntry) bool {
+		rel = filepath.ToSlash(rel)
+		stylePrefix := "assets/css/"
+		return rel == "assets/css" || strings.HasPrefix(rel, stylePrefix)
+	}); err != nil {
+		return nil, err
+	}
+	if err := e.buildStyleBundle(ctx, workspace); err != nil {
 		return nil, err
 	}
 
@@ -326,11 +333,28 @@ func (e *BuildEngine) materializeAssets(workspace *Workspace) error {
 }
 
 func (e *BuildEngine) watchPaths() []string {
-	if e == nil || e.builder == nil || e.builder.assets == nil {
+	if e == nil || e.builder == nil {
 		return nil
 	}
 	seen := map[string]struct{}{}
 	var paths []string
+	if e.builder.styles != nil {
+		for _, p := range e.builder.styles.WatchPaths() {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if _, exists := seen[p]; exists {
+				continue
+			}
+			seen[p] = struct{}{}
+			paths = append(paths, p)
+		}
+	}
+	if e.builder.assets == nil {
+		sort.Strings(paths)
+		return paths
+	}
 	for _, entry := range e.builder.assets.Entries() {
 		if watcher, ok := entry.Source.(WatchPathsProvider); ok {
 			for _, p := range watcher.WatchPaths() {

@@ -60,6 +60,8 @@ func main() {
 - `web run` serviert nur fertige Assets und erwartet, dass `build` bereits gelaufen ist.
 - `web dev` rebuildet bei Änderungen per Polling und triggert per SSE einen Browser-Reload.
 - Lokale Dependency-Assets können Watch-Pfade mitbringen, z. B. über `web.FromFS(..., watchPath)` oder `web.WithWatchPaths(...)`.
+- CSS-Assets laufen zentral durch einen Tailwind-Build-Output (`/assets/css/app/app.css`); wenn das Tailwind-Tool nicht verfügbar ist, fällt der Build auf eine direkte CSS-Kopie zurück.
+- Zusätzliche Tailwind-Scan-Pfade kannst du mit `b.TailwindScan(...)` registrieren.
 - `web.Page` rendert eine minimale HTML-Shell und kann `templ.Component` als Body verwenden.
 
 ## Demo

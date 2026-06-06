@@ -17,12 +17,14 @@ func (r activityRouteRegistration[P, I]) register(reg *Registry) {
 
 type Builder struct {
 	routes []routeRegistration
+	styles *StyleRegistry
 	assets *AssetRegistry
 }
 
 func NewBuilder() *Builder {
 	return &Builder{
 		routes: []routeRegistration{},
+		styles: NewStyleRegistry(),
 		assets: NewAssetRegistry(),
 	}
 }
@@ -54,23 +56,56 @@ func (b *Builder) Assets() *AssetRegistry {
 }
 
 func (b *Builder) Add(kind AssetKind, src AssetSource) AssetRef {
-	if b == nil || b.assets == nil {
+	if b == nil {
 		return AssetRef{}
 	}
-	b.assets.Add(kind, src)
-	if src == nil {
-		return AssetRef{}
+	switch kind {
+	case AssetKindCSS:
+		if b.styles == nil {
+			return AssetRef{}
+		}
+		return b.styles.AddCSS(src)
+	default:
+		if b.assets == nil {
+			return AssetRef{}
+		}
+		b.assets.Add(kind, src)
+		if src == nil {
+			return AssetRef{}
+		}
+		ref := AssetRef{Kind: kind, ID: src.ID()}
+		if namer, ok := src.(AssetNamer); ok {
+			ref.Files = append([]string{}, namer.AssetNames()...)
+		}
+		return ref
 	}
-	ref := AssetRef{Kind: kind, ID: src.ID()}
-	if namer, ok := src.(AssetNamer); ok {
-		ref.Files = append([]string{}, namer.AssetNames()...)
-	}
-	return ref
 }
 
-func (b *Builder) CSS(src AssetSource) AssetRef  { return b.Add(AssetKindCSS, src) }
+func (b *Builder) CSS(src AssetSource) AssetRef {
+	if b == nil || b.styles == nil {
+		return AssetRef{}
+	}
+	return b.styles.AddCSS(src)
+}
+
+func (b *Builder) TailwindCSS(src AssetSource) AssetRef { return b.CSS(src) }
+
 func (b *Builder) JS(src AssetSource) AssetRef   { return b.Add(AssetKindJS, src) }
 func (b *Builder) File(src AssetSource) AssetRef { return b.Add(AssetKindFile, src) }
+
+func (b *Builder) TailwindScan(paths ...string) {
+	if b == nil || b.styles == nil {
+		return
+	}
+	b.styles.AddScan(paths...)
+}
+
+func (b *Builder) Styles() *StyleRegistry {
+	if b == nil {
+		return nil
+	}
+	return b.styles
+}
 
 func (b *Builder) registerRoutes(reg *Registry) {
 	if b == nil || reg == nil {

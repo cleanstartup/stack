@@ -32,8 +32,13 @@ func (p Page) Render(ctx context.Context, w io.Writer) error {
 	out.WriteString("<title>")
 	out.WriteString(html.EscapeString(title))
 	out.WriteString("</title>")
+	seenStyles := map[string]struct{}{}
 	for _, style := range p.Styles {
 		for _, url := range style.URLsWithVersion(p.AssetVersion) {
+			if _, exists := seenStyles[url]; exists {
+				continue
+			}
+			seenStyles[url] = struct{}{}
 			out.WriteString("<link rel=\"stylesheet\" href=\"")
 			out.WriteString(html.EscapeString(url))
 			out.WriteString("\">")
@@ -45,8 +50,13 @@ func (p Page) Render(ctx context.Context, w io.Writer) error {
 		return err
 	}
 	out.WriteString("</main>")
+	seenScripts := map[string]struct{}{}
 	for _, script := range p.Scripts {
 		for _, url := range script.URLsWithVersion(p.AssetVersion) {
+			if _, exists := seenScripts[url]; exists {
+				continue
+			}
+			seenScripts[url] = struct{}{}
 			out.WriteString("<script defer src=\"")
 			out.WriteString(html.EscapeString(url))
 			out.WriteString("\"></script>")
