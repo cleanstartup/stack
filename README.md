@@ -78,4 +78,4 @@ go run ./cmd/demo run
 go run ./cmd/demo dev
 ```
 
-Die Demo registriert eine Activity plus CSS-, Tailwind- und JS-Assets direkt über `web.Run(web.Module(web.ConventionalAssets(), web.Simple(..., web.WithStaticTitle(...))))`, gibt direkt ein `templ.Component` zurück und nutzt dieselbe zentrale `web`-Runtime wie die spätere Anwendung.
+Die Demo registriert eine Activity plus CSS-, Tailwind- und JS-Assets direkt über `web.App(web.Module(web.ConventionalAssets(), web.Simple(..., web.WithStaticTitle(...))))`, gibt direkt ein `templ.Component` zurück und nutzt dieselbe zentrale `web`-Runtime wie die spätere Anwendung.

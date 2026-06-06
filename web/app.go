@@ -16,8 +16,6 @@ type WebApp struct {
 	engine  *BuildEngine
 }
 
-type App = WebApp
-
 func newWebApp() *WebApp {
 	builder := NewBuilder()
 	app := &WebApp{builder: builder}
@@ -191,12 +189,14 @@ func ExecuteCLI(parts ...Part) error {
 	return nil
 }
 
-func Run(parts ...Part) {
+func App(parts ...Part) {
 	if err := ExecuteCLI(parts...); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
+
+func Run(parts ...Part) { App(parts...) }
 
 type runCommandInput struct {
 	Addr      string

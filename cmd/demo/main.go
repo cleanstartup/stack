@@ -10,9 +10,9 @@ import (
 )
 
 func main() {
-	web.Run(
+	web.App(
+		web.ConventionalAssets(),
 		web.Module(
-			web.ConventionalAssets(),
 			web.Simple(
 				web.RootRef(),
 				func(ctx activity.Context) activity.Result {
