@@ -301,13 +301,13 @@ func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 func TestPageRendersMinimalHtmlShell(t *testing.T) {
 	r := web.NewRegistry()
 	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app", Files: []string{"app.css"}}
+	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}})
 	a := web.Simple(
 		web.Ref("page"),
 		func(ctx activity.Context) activity.Result {
 			return web.Page{
-				Title:  "demo",
-				Body:   "hello",
-				Styles: []web.AssetRef{pageRef},
+				Title: "demo",
+				Body:  "hello",
 			}
 		},
 	)
@@ -367,13 +367,13 @@ func TestPageRendersDevReloadAndVersionedAssets(t *testing.T) {
 	r.SetDevState(devState)
 
 	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app", Files: []string{"app.css"}}
+	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}})
 	a := web.Simple(
 		web.Ref("dev"),
 		func(ctx activity.Context) activity.Result {
 			return web.Page{
-				Title:  "dev",
-				Body:   "hello",
-				Styles: []web.AssetRef{pageRef},
+				Title: "dev",
+				Body:  "hello",
 			}
 		},
 	)

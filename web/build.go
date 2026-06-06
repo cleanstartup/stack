@@ -152,6 +152,7 @@ func (e *BuildEngine) Serve(ctx context.Context, cfg ServeConfig) error {
 	}
 
 	registry := NewRegistry()
+	registry.SetAssets(e.builder.Manifest())
 	registry.SetDevState(cfg.DevState)
 	e.builder.registerRoutes(registry)
 

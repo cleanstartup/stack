@@ -62,15 +62,7 @@ func (b *Builder) Add(kind AssetKind, src AssetSource) AssetRef {
 	if b.assets == nil {
 		return AssetRef{}
 	}
-	b.assets.Add(kind, src)
-	if src == nil {
-		return AssetRef{}
-	}
-	ref := AssetRef{Kind: kind, ID: src.ID()}
-	if namer, ok := src.(AssetNamer); ok {
-		ref.Files = append([]string{}, namer.AssetNames()...)
-	}
-	return ref
+	return b.assets.Add(kind, src)
 }
 
 func (b *Builder) CSS(src AssetSource) AssetRef {
@@ -102,6 +94,20 @@ func (b *Builder) Styles() *TailwindRegistry {
 		return nil
 	}
 	return b.tailwind
+}
+
+func (b *Builder) Manifest() AssetManifest {
+	if b == nil {
+		return AssetManifest{}
+	}
+	manifest := AssetManifest{}
+	if b.assets != nil {
+		manifest = b.assets.Manifest()
+	}
+	if b.tailwind != nil && len(b.tailwind.Inputs()) > 0 {
+		manifest.Styles = append(manifest.Styles, b.tailwind.BundleRef())
+	}
+	return manifest
 }
 
 func (b *Builder) registerRoutes(reg *Registry) {

@@ -20,6 +20,7 @@ import (
 
 type activityMetaContextKey struct{}
 type devStateContextKey struct{}
+type assetManifestContextKey struct{}
 
 type ActivityMeta struct {
 	ID      string
@@ -37,6 +38,7 @@ type Registry struct {
 	byRef        map[uintptr]string
 	globalMW     []GlobalMiddleware
 	devState     *DevState
+	assets       AssetManifest
 }
 
 type RuntimeContext struct {
@@ -107,6 +109,7 @@ func NewRegistry() *Registry {
 		byRef:        map[uintptr]string{},
 		globalMW:     []GlobalMiddleware{},
 		devState:     nil,
+		assets:       AssetManifest{},
 	}
 }
 
@@ -316,6 +319,7 @@ func RegisterWebActivity[C any](r *Registry, a *WebActivity[C]) {
 			ID:      id,
 			Pattern: pattern,
 		})
+		req = withAssetManifest(req, r.assets)
 		req = withDevState(req, r.devState)
 		rq := newRequest(req, map[string]string{}, req.URL.Query())
 		decoded := a.decode(rq)
@@ -382,6 +386,7 @@ func Register[P any, I any](r *Registry, def *activity.Definition[P, I], resolve
 	}
 
 	handler := func(w http.ResponseWriter, req *http.Request) {
+		req = withAssetManifest(req, r.assets)
 		req = withDevState(req, r.devState)
 		pathParams := map[string]string{}
 		for _, name := range def.PathParamNames() {
@@ -442,6 +447,7 @@ func RegisterActivity[P any, I any](r *Registry, a *activity.Activity[P, I]) {
 	}
 
 	handler := func(w http.ResponseWriter, req *http.Request) {
+		req = withAssetManifest(req, r.assets)
 		req = withDevState(req, r.devState)
 		pathParams := map[string]string{}
 		for _, name := range a.PathParamNames() {
@@ -533,6 +539,13 @@ func (r *Registry) SetDevState(state *DevState) {
 		return
 	}
 	r.devState = state
+}
+
+func (r *Registry) SetAssets(manifest AssetManifest) {
+	if r == nil {
+		return
+	}
+	r.assets = manifest
 }
 
 func (r *Registry) RegisterDevEndpoints(state *DevState) {
@@ -744,7 +757,6 @@ func renderResult(w http.ResponseWriter, r *http.Request, result activity.Result
 	switch typed := result.(type) {
 	case Page:
 		if state := devStateFromContext(r.Context()); state != nil {
-			typed.AssetVersion = fmt.Sprintf("%d", state.Revision())
 			typed.LiveReloadURL = devLiveReloadScriptURL()
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -755,7 +767,6 @@ func renderResult(w http.ResponseWriter, r *http.Request, result activity.Result
 			return nil
 		}
 		if state := devStateFromContext(r.Context()); state != nil {
-			typed.AssetVersion = fmt.Sprintf("%d", state.Revision())
 			typed.LiveReloadURL = devLiveReloadScriptURL()
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -769,7 +780,6 @@ func renderResult(w http.ResponseWriter, r *http.Request, result activity.Result
 	}:
 		if page, ok := typed.(*Page); ok {
 			if state := devStateFromContext(r.Context()); state != nil {
-				page.AssetVersion = fmt.Sprintf("%d", state.Revision())
 				page.LiveReloadURL = devLiveReloadScriptURL()
 			}
 		}

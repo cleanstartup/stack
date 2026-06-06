@@ -120,17 +120,24 @@ type AssetEntry struct {
 
 type AssetRegistry struct {
 	entries []AssetEntry
+	refs    []AssetRef
 }
 
 func NewAssetRegistry() *AssetRegistry {
-	return &AssetRegistry{entries: []AssetEntry{}}
+	return &AssetRegistry{entries: []AssetEntry{}, refs: []AssetRef{}}
 }
 
-func (r *AssetRegistry) Add(kind AssetKind, src AssetSource) {
+func (r *AssetRegistry) Add(kind AssetKind, src AssetSource) AssetRef {
 	if r == nil || src == nil {
-		return
+		return AssetRef{}
 	}
 	r.entries = append(r.entries, AssetEntry{Kind: kind, Source: src})
+	ref := AssetRef{Kind: kind, ID: src.ID()}
+	if namer, ok := src.(AssetNamer); ok {
+		ref.Files = append([]string{}, namer.AssetNames()...)
+	}
+	r.refs = append(r.refs, ref)
+	return ref
 }
 
 func (r *AssetRegistry) Entries() []AssetEntry {
@@ -140,6 +147,35 @@ func (r *AssetRegistry) Entries() []AssetEntry {
 	out := make([]AssetEntry, len(r.entries))
 	copy(out, r.entries)
 	return out
+}
+
+func (r *AssetRegistry) Refs(kind AssetKind) []AssetRef {
+	if r == nil {
+		return nil
+	}
+	out := make([]AssetRef, 0, len(r.refs))
+	for _, ref := range r.refs {
+		if ref.Kind != kind {
+			continue
+		}
+		out = append(out, ref)
+	}
+	return out
+}
+
+type AssetManifest struct {
+	Styles  []AssetRef
+	Scripts []AssetRef
+}
+
+func (r *AssetRegistry) Manifest() AssetManifest {
+	if r == nil {
+		return AssetManifest{}
+	}
+	return AssetManifest{
+		Styles:  append([]AssetRef{}, r.Refs(AssetKindCSS)...),
+		Scripts: append([]AssetRef{}, r.Refs(AssetKindJS)...),
+	}
 }
 
 type fileAssetSource struct {

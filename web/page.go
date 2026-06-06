@@ -14,9 +14,6 @@ import (
 type Page struct {
 	Title         string
 	Body          any
-	Styles        []AssetRef
-	Scripts       []AssetRef
-	AssetVersion  string
 	LiveReloadURL string
 }
 
@@ -32,36 +29,16 @@ func (p Page) Render(ctx context.Context, w io.Writer) error {
 	out.WriteString("<title>")
 	out.WriteString(html.EscapeString(title))
 	out.WriteString("</title>")
-	seenStyles := map[string]struct{}{}
-	for _, style := range p.Styles {
-		for _, url := range style.URLsWithVersion(p.AssetVersion) {
-			if _, exists := seenStyles[url]; exists {
-				continue
-			}
-			seenStyles[url] = struct{}{}
-			out.WriteString("<link rel=\"stylesheet\" href=\"")
-			out.WriteString(html.EscapeString(url))
-			out.WriteString("\">")
-		}
-	}
+	manifest := assetManifestFromContext(ctx)
+	version := assetVersionFromContext(ctx)
+	renderAssetLinks(&out, manifest.Styles, "stylesheet", version)
 	out.WriteString("</head><body>")
 	out.WriteString("<main>")
 	if err := renderPageBody(&out, p.Body, ctx); err != nil {
 		return err
 	}
 	out.WriteString("</main>")
-	seenScripts := map[string]struct{}{}
-	for _, script := range p.Scripts {
-		for _, url := range script.URLsWithVersion(p.AssetVersion) {
-			if _, exists := seenScripts[url]; exists {
-				continue
-			}
-			seenScripts[url] = struct{}{}
-			out.WriteString("<script defer src=\"")
-			out.WriteString(html.EscapeString(url))
-			out.WriteString("\"></script>")
-		}
-	}
+	renderAssetLinks(&out, manifest.Scripts, "script", version)
 	if strings.TrimSpace(p.LiveReloadURL) != "" {
 		out.WriteString("<script>")
 		out.WriteString(`(()=>{const u=`)
@@ -76,6 +53,35 @@ func (p Page) Render(ctx context.Context, w io.Writer) error {
 		return fmt.Errorf("render page: %w", err)
 	}
 	return nil
+}
+
+func assetVersionFromContext(ctx context.Context) string {
+	if state := devStateFromContext(ctx); state != nil {
+		return fmt.Sprintf("%d", state.Revision())
+	}
+	return ""
+}
+
+func renderAssetLinks(out *strings.Builder, refs []AssetRef, kind string, version string) {
+	seen := map[string]struct{}{}
+	for _, ref := range refs {
+		for _, url := range ref.URLsWithVersion(version) {
+			if _, exists := seen[url]; exists {
+				continue
+			}
+			seen[url] = struct{}{}
+			switch kind {
+			case "stylesheet":
+				out.WriteString("<link rel=\"stylesheet\" href=\"")
+				out.WriteString(html.EscapeString(url))
+				out.WriteString("\">")
+			case "script":
+				out.WriteString("<script defer src=\"")
+				out.WriteString(html.EscapeString(url))
+				out.WriteString("\"></script>")
+			}
+		}
+	}
 }
 
 func renderPageBody(out *strings.Builder, body any, ctx context.Context) error {
