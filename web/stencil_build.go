@@ -83,7 +83,7 @@ func resolveStencilBinary(cfg BuildConfig) (string, error) {
 	if path := strings.TrimSpace(os.Getenv("WAY2GO_STENCIL_BINARY")); path != "" {
 		return path, nil
 	}
-	return "npx", nil
+	return "npm", nil
 }
 
 func runStencil(ctx context.Context, binaryPath, workDir string) error {
@@ -104,7 +104,7 @@ func stencilCommandArgs(binaryPath string) []string {
 	base := strings.ToLower(filepath.Base(binaryPath))
 	switch base {
 	case "npm":
-		return []string{"exec", "--yes", "stencil", "--", "build"}
+		return []string{"exec", "--yes", "--package=@stencil/core", "--", "stencil", "build"}
 	case "npx":
 		return []string{"--yes", "stencil", "build"}
 	default:
