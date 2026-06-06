@@ -63,7 +63,7 @@ func main() {
 - Das app-weite Styles-Set wird automatisch aus `assets/css` der aufrufenden App angewendet; darin landen alle `*.css` Dateien im zentralen Tailwind-Build.
 - Der Styles-Build läuft zentral über einen Tailwind-Output (`/assets/css/app/app.css`). Das Tailwind-Binary wird automatisch heruntergeladen und im Cache abgelegt, wenn es nicht bereits verfügbar ist.
 - Die Komponenten-Konvention greift automatisch `assets/components`; dort landen `*.tsx` für Stencil-Komponenten und `*.ts` für Hilfslogik.
-- Der Stencil-Build erzeugt einen zentralen JS-Output (`/assets/js/app/app.esm.js`). Das CLI wird bei Bedarf über `npm exec` nachgeladen; du kannst das via `WAY2GO_STENCIL_BINARY` überschreiben.
+- Der Stencil-Build erzeugt einen zentralen JS-Output (`/assets/js/way2go/way2go.esm.js`). Das CLI wird bei Bedarf über `npm exec` nachgeladen; du kannst das via `WAY2GO_STENCIL_BINARY` überschreiben.
 - Zusätzliche Tailwind-Scan-Pfade kannst du mit `web.TailwindScan(...)` registrieren.
 - Die Demo zeigt das Styles-Default-Set in `cmd/demo/assets/css/*.css` plus eine Stencil-Komponente in `cmd/demo/assets/components/*.tsx`. Das Tailwind-Binary wird automatisch geladen; du kannst es bei Bedarf über die `WAY2GO_TAILWIND_*`-Variablen überschreiben.
 - Einfache Web-Activities können direkt `templ.Component` oder Text zurückgeben; den Seitentitel setzt du über `web.WithStaticTitle(...)`. Die HTML-Shell und die globalen CSS-/JS-Assets werden dabei von `web` automatisch injiziert. `web.Page` bleibt für Spezialfälle verfügbar.

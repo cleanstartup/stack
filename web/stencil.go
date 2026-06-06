@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	stencilBundleID   = "app"
-	stencilBundleFile = "app.esm.js"
+	stencilBundleID   = "way2go"
+	stencilBundleFile = "way2go.esm.js"
 )
 
 type stencilInputEntry struct {

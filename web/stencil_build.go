@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -38,6 +39,18 @@ func (e *BuildEngine) buildStencilBundle(ctx context.Context, workspace *Workspa
 
 	configPath := filepath.Join(stencilWorkspace.Root, "stencil.config.ts")
 	if err := os.WriteFile(configPath, []byte(stencilConfigSource()), 0o644); err != nil {
+		return err
+	}
+	tsconfigPath := filepath.Join(stencilWorkspace.Root, "tsconfig.json")
+	if err := os.WriteFile(tsconfigPath, []byte(stencilTSConfigSource()), 0o644); err != nil {
+		return err
+	}
+	packagePath := filepath.Join(stencilWorkspace.Root, "package.json")
+	if err := os.WriteFile(packagePath, []byte(stencilPackageSource()), 0o644); err != nil {
+		return err
+	}
+
+	if err := ensureStencilDependencies(ctx, stencilWorkspace.Root); err != nil {
 		return err
 	}
 
@@ -116,7 +129,7 @@ func stencilConfigSource() string {
 	return `import type { Config } from '@stencil/core';
 
 export const config: Config = {
-  namespace: 'app',
+  namespace: 'way2go',
   srcDir: 'src/assets/js',
   outputTargets: [
     {
@@ -126,4 +139,51 @@ export const config: Config = {
   ],
 };
 `
+}
+
+func stencilTSConfigSource() string {
+	return `{
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "declaration": false,
+    "experimentalDecorators": true,
+    "jsx": "react",
+    "jsxFactory": "h",
+    "lib": ["dom", "es2017"],
+    "module": "esnext",
+    "moduleResolution": "node",
+    "target": "es2017"
+  },
+  "include": ["src/assets/js"]
+}
+`
+}
+
+func stencilPackageSource() string {
+	data, _ := json.MarshalIndent(map[string]any{
+		"name":    "way2go-stencil-workspace",
+		"private": true,
+		"version": "0.0.0",
+		"devDependencies": map[string]string{
+			"@stencil/core": "4.43.5",
+		},
+	}, "", "  ")
+	return string(data) + "\n"
+}
+
+func ensureStencilDependencies(ctx context.Context, workDir string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	marker := filepath.Join(workDir, "node_modules", "@stencil", "core", "package.json")
+	if info, err := os.Stat(marker); err == nil && !info.IsDir() {
+		return nil
+	}
+	cmd := exec.CommandContext(ctx, "npm", "install", "--no-package-lock", "--ignore-scripts")
+	cmd.Dir = workDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("stencil dependency install failed: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
 }
