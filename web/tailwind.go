@@ -2,15 +2,27 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 )
 
-func (e *BuildEngine) buildStyleBundle(ctx context.Context, workspace *Workspace) error {
+const (
+	tailwindDefaultDownloadBase = "https://github.com/tailwindlabs/tailwindcss/releases"
+	tailwindDefaultAPIBase      = "https://api.github.com/repos/tailwindlabs/tailwindcss"
+)
+
+var tailwindBinaryResolveMu sync.Mutex
+
+func (e *BuildEngine) buildStyleBundle(ctx context.Context, workspace *Workspace, cfg BuildConfig) error {
 	if e == nil || e.builder == nil || e.builder.tailwind == nil || workspace == nil {
 		return nil
 	}
@@ -37,10 +49,11 @@ func (e *BuildEngine) buildStyleBundle(ctx context.Context, workspace *Workspace
 		return err
 	}
 
-	if err := runTailwind(ctx, inputPath, outputPath); err != nil {
+	binaryPath, err := resolveTailwindBinary(ctx, cfg)
+	if err != nil {
 		return err
 	}
-	return nil
+	return runTailwind(ctx, binaryPath, inputPath, outputPath)
 }
 
 func (e *BuildEngine) tailwindInput(workspace *Workspace, inputPath string) (string, error) {
@@ -89,24 +102,238 @@ func (e *BuildEngine) tailwindInput(workspace *Workspace, inputPath string) (str
 	return out.String(), nil
 }
 
-func runTailwind(ctx context.Context, inputPath, outputPath string) error {
+func runTailwind(ctx context.Context, binaryPath, inputPath, outputPath string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	runners := [][]string{
-		{"go", "tool", "tailwind", "-i", inputPath, "-o", outputPath, "--minify"},
-		{"tailwindcss", "-i", inputPath, "-o", outputPath, "--minify"},
+	cmd := exec.CommandContext(ctx, binaryPath, "-i", inputPath, "-o", outputPath, "--minify")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("tailwind build failed via %s: %w: %s", binaryPath, err, strings.TrimSpace(string(output)))
 	}
-	var lastErr error
-	for _, args := range runners {
-		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-		output, err := cmd.CombinedOutput()
-		if err == nil {
-			return nil
+	return nil
+}
+
+func resolveTailwindBinary(ctx context.Context, cfg BuildConfig) (string, error) {
+	if path := strings.TrimSpace(cfg.TailwindBinary); path != "" {
+		return path, nil
+	}
+	if path := strings.TrimSpace(os.Getenv("WAY2GO_TAILWIND_BINARY")); path != "" {
+		return path, nil
+	}
+
+	version := strings.TrimSpace(cfg.TailwindVersion)
+	if version == "" {
+		version = strings.TrimSpace(os.Getenv("WAY2GO_TAILWIND_VERSION"))
+	}
+	if version == "" {
+		version = "latest"
+	}
+
+	cacheDir := strings.TrimSpace(cfg.TailwindCacheDir)
+	if cacheDir == "" {
+		cacheDir = strings.TrimSpace(os.Getenv("WAY2GO_TAILWIND_CACHE_DIR"))
+	}
+	if cacheDir == "" {
+		if userCacheDir, err := os.UserCacheDir(); err == nil && strings.TrimSpace(userCacheDir) != "" {
+			cacheDir = filepath.Join(userCacheDir, "way2go", "tailwind")
+		} else {
+			cacheDir = filepath.Join(os.TempDir(), "way2go", "tailwind")
 		}
-		lastErr = fmt.Errorf("tailwind build failed via %s: %w: %s", args[0], err, strings.TrimSpace(string(output)))
 	}
-	return lastErr
+
+	downloadBase := strings.TrimSpace(cfg.TailwindDownloadBase)
+	if downloadBase == "" {
+		downloadBase = strings.TrimSpace(os.Getenv("WAY2GO_TAILWIND_DOWNLOAD_BASE"))
+	}
+	if downloadBase == "" {
+		downloadBase = tailwindDefaultDownloadBase
+	}
+
+	return downloadTailwindBinary(ctx, cacheDir, version, downloadBase)
+}
+
+func downloadTailwindBinary(ctx context.Context, cacheDir, version, downloadBase string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	assetName, err := tailwindAssetName()
+	if err != nil {
+		return "", err
+	}
+	if version == "latest" {
+		if cachedVersion, ok := loadCachedLatestTailwindVersion(cacheDir); ok {
+			version = cachedVersion
+		} else {
+			version, err = resolveLatestTailwindVersion(ctx)
+			if err != nil {
+				return "", err
+			}
+			if err := saveCachedLatestTailwindVersion(cacheDir, version); err != nil {
+				return "", err
+			}
+		}
+	}
+	version = normalizeTailwindVersion(version)
+
+	targetDir := filepath.Join(cacheDir, version)
+	targetPath := filepath.Join(targetDir, assetName)
+	if info, err := os.Stat(targetPath); err == nil && !info.IsDir() {
+		return targetPath, nil
+	}
+
+	tailwindBinaryResolveMu.Lock()
+	defer tailwindBinaryResolveMu.Unlock()
+
+	if info, err := os.Stat(targetPath); err == nil && !info.IsDir() {
+		return targetPath, nil
+	}
+
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return "", err
+	}
+
+	downloadURL := fmt.Sprintf("%s/download/%s/%s", strings.TrimRight(downloadBase, "/"), version, assetName)
+	if version == "latest" {
+		downloadURL = fmt.Sprintf("%s/latest/download/%s", strings.TrimRight(downloadBase, "/"), assetName)
+	}
+
+	tempFile, err := os.CreateTemp(targetDir, assetName+".*.tmp")
+	if err != nil {
+		return "", err
+	}
+	tempPath := tempFile.Name()
+	defer func() {
+		_ = tempFile.Close()
+		_ = os.Remove(tempPath)
+	}()
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("User-Agent", "way2go-web")
+
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return "", fmt.Errorf("tailwind download failed: %s", response.Status)
+	}
+
+	if _, err := io.Copy(tempFile, response.Body); err != nil {
+		return "", err
+	}
+	if err := tempFile.Chmod(0o755); err != nil {
+		return "", err
+	}
+	if err := tempFile.Close(); err != nil {
+		return "", err
+	}
+	if err := os.Rename(tempPath, targetPath); err != nil {
+		return "", err
+	}
+	return targetPath, nil
+}
+
+func resolveLatestTailwindVersion(ctx context.Context) (string, error) {
+	apiBase := strings.TrimSpace(os.Getenv("WAY2GO_TAILWIND_API_BASE"))
+	if apiBase == "" {
+		apiBase = tailwindDefaultAPIBase
+	}
+	apiURL := strings.TrimRight(apiBase, "/") + "/releases/latest"
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("User-Agent", "way2go-web")
+
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return "", fmt.Errorf("resolve latest tailwind version failed: %s", response.Status)
+	}
+
+	var payload struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		return "", err
+	}
+	version := strings.TrimSpace(payload.TagName)
+	if version == "" {
+		return "", fmt.Errorf("latest tailwind release has no tag")
+	}
+	return version, nil
+}
+
+func loadCachedLatestTailwindVersion(cacheDir string) (string, bool) {
+	cacheDir = strings.TrimSpace(cacheDir)
+	if cacheDir == "" {
+		return "", false
+	}
+	content, err := os.ReadFile(filepath.Join(cacheDir, "latest.version"))
+	if err != nil {
+		return "", false
+	}
+	version := strings.TrimSpace(string(content))
+	if version == "" {
+		return "", false
+	}
+	return version, true
+}
+
+func saveCachedLatestTailwindVersion(cacheDir, version string) error {
+	cacheDir = strings.TrimSpace(cacheDir)
+	version = strings.TrimSpace(version)
+	if cacheDir == "" || version == "" {
+		return nil
+	}
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(cacheDir, "latest.version"), []byte(version), 0o644)
+}
+
+func tailwindAssetName() (string, error) {
+	switch runtime.GOOS {
+	case "darwin":
+		switch runtime.GOARCH {
+		case "arm64":
+			return "tailwindcss-macos-arm64", nil
+		case "amd64":
+			return "tailwindcss-macos-x64", nil
+		}
+	case "linux":
+		switch runtime.GOARCH {
+		case "arm64":
+			return "tailwindcss-linux-arm64", nil
+		case "amd64":
+			return "tailwindcss-linux-x64", nil
+		}
+	case "windows":
+		switch runtime.GOARCH {
+		case "amd64":
+			return "tailwindcss-windows-x64.exe", nil
+		}
+	}
+	return "", fmt.Errorf("unsupported platform for tailwind: %s/%s", runtime.GOOS, runtime.GOARCH)
+}
+
+func normalizeTailwindVersion(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" || version == "latest" {
+		return "latest"
+	}
+	if strings.HasPrefix(version, "v") {
+		return version
+	}
+	return "v" + version
 }
 
 func materializeTailwindSource(source AssetSource, workspace *Workspace, kind AssetKind) ([]string, error) {

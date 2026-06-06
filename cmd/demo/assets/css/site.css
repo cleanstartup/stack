@@ -4,6 +4,7 @@ body {
   background: #f8fafc;
   margin: 0;
   padding: 2rem;
+  @apply bg-blue;
 }
 
 .card {

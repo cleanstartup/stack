@@ -61,10 +61,12 @@ func main() {
 - `web dev` rebuildet bei Änderungen per Polling und triggert per SSE einen Browser-Reload.
 - Lokale Dependency-Assets können Watch-Pfade mitbringen, z. B. über `web.FromFS(..., watchPath)` oder `web.WithWatchPaths(...)`.
 - Normale CSS-Assets werden direkt als `<link>` ausgeliefert.
-- Tailwind-Assets laufen zentral durch einen Tailwind-Build-Output (`/assets/css/app/app.css`). Wenn Tailwind-Inputs registriert sind und das Tool fehlt oder fehlschlägt, bricht der Build hart ab.
+- Tailwind-Assets laufen zentral durch einen Tailwind-Build-Output (`/assets/css/app/app.css`). Das Tailwind-Binary wird automatisch heruntergeladen und im Cache abgelegt, wenn es nicht bereits verfügbar ist.
 - Zusätzliche Tailwind-Scan-Pfade kannst du mit `b.TailwindScan(...)` registrieren.
-- Die Demo zeigt beides: direktes CSS in `cmd/demo/assets/css/site.css` plus Tailwind-Input in `cmd/demo/assets/css/tailwind.css`. Wenn du Tailwind-Directives expandieren willst, installiere `go tool tailwind` oder ein `tailwindcss`-Binary.
+- Die Demo zeigt beides: direktes CSS in `cmd/demo/assets/css/site.css` plus Tailwind-Input in `cmd/demo/assets/css/tailwind.css`. Das Binary wird automatisch geladen; du kannst es bei Bedarf über die `WAY2GO_TAILWIND_*`-Variablen überschreiben.
 - `web.Page` rendert eine minimale HTML-Shell und kann `templ.Component` als Body verwenden.
+
+`WAY2GO_TAILWIND_BINARY`, `WAY2GO_TAILWIND_VERSION`, `WAY2GO_TAILWIND_CACHE_DIR` und `WAY2GO_TAILWIND_DOWNLOAD_BASE` überschreiben die Default-Auflösung bei Bedarf.
 
 ## Demo
 

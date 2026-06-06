@@ -23,8 +23,12 @@ const (
 )
 
 type BuildConfig struct {
-	WorkspaceDir string
-	OutputDir    string
+	WorkspaceDir         string
+	OutputDir            string
+	TailwindBinary       string
+	TailwindVersion      string
+	TailwindCacheDir     string
+	TailwindDownloadBase string
 }
 
 type ServeConfig struct {
@@ -116,7 +120,7 @@ func (e *BuildEngine) Build(ctx context.Context, cfg BuildConfig) (*BuildResult,
 	}); err != nil {
 		return nil, err
 	}
-	if err := e.buildStyleBundle(ctx, workspace); err != nil {
+	if err := e.buildStyleBundle(ctx, workspace, cfg); err != nil {
 		return nil, err
 	}
 
