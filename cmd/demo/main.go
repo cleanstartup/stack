@@ -13,11 +13,8 @@ func main() {
 	web.Run(
 		web.ConventionalAssets(),
 		web.Simple(web.RootRef(), func(ctx activity.Context) activity.Result {
-			return web.Page{
-				Title: "way2go demo",
-				Body:  demoBody{},
-			}
-		}),
+			return demoBody{}
+		}, web.WithStaticTitle("way2go demo")),
 	)
 }
 

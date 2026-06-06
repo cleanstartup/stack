@@ -74,6 +74,7 @@ type ActivityHandler[C any] func(ctx Context[C]) activity.Result
 type ActivityMiddleware[C any] func(next ActivityHandler[C]) ActivityHandler[C]
 type GlobalMiddleware func(next func(ctx activity.Context) activity.Result) func(ctx activity.Context) activity.Result
 type ActivityOption[C any] func(a *WebActivity[C])
+type TitleFunc func(ctx activity.Context) string
 
 type uriRefKey struct {
 	id string
@@ -90,6 +91,7 @@ type WebActivity[C any] struct {
 	handler     ActivityHandler[C]
 	middlewares []ActivityMiddleware[C]
 	ref         *uriRefKey
+	title       TitleFunc
 }
 
 type handlerContext[C any] struct {
@@ -258,6 +260,22 @@ func Simple(ref URIRef, handler func(ctx activity.Context) activity.Result, opts
 	)
 }
 
+func WithTitle[C any](title TitleFunc) ActivityOption[C] {
+	return func(a *WebActivity[C]) {
+		if a == nil {
+			return
+		}
+		a.title = title
+	}
+}
+
+func WithStaticTitle(title string) ActivityOption[struct{}] {
+	return WithTitle[struct{}](func(ctx activity.Context) string {
+		_ = ctx
+		return title
+	})
+}
+
 func WithMiddleware[C any](mw ActivityMiddleware[C]) ActivityOption[C] {
 	return func(a *WebActivity[C]) {
 		a.middlewares = append(a.middlewares, mw)
@@ -354,6 +372,9 @@ func RegisterWebActivity[C any](r *Registry, a *WebActivity[C]) {
 		}
 
 		result := run(hctx)
+		if title := strings.TrimSpace(resolveTitle(a.title, hctx)); title != "" {
+			result = wrapPageResult(result, title)
+		}
 		if uri, status, ok := RedirectState(ctx); ok {
 			http.Redirect(w, req, uri, status)
 			return
@@ -531,6 +552,35 @@ func (r *Registry) Group(path string) *Registry {
 		byActivity:   r.byActivity,
 		byRef:        r.byRef,
 		globalMW:     r.globalMW,
+	}
+}
+
+func resolveTitle(title TitleFunc, ctx activity.Context) string {
+	if title == nil {
+		return ""
+	}
+	return title(ctx)
+}
+
+func wrapPageResult(result activity.Result, title string) activity.Result {
+	switch typed := result.(type) {
+	case nil:
+		return Page{Title: title}
+	case Page:
+		if strings.TrimSpace(typed.Title) == "" {
+			typed.Title = title
+		}
+		return typed
+	case *Page:
+		if typed == nil {
+			return Page{Title: title}
+		}
+		if strings.TrimSpace(typed.Title) == "" {
+			typed.Title = title
+		}
+		return typed
+	default:
+		return Page{Title: title, Body: result}
 	}
 }
 

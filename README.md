@@ -64,7 +64,7 @@ func main() {
 - Tailwind-Assets laufen zentral durch einen Tailwind-Build-Output (`/assets/css/app/app.css`). Das Tailwind-Binary wird automatisch heruntergeladen und im Cache abgelegt, wenn es nicht bereits verfügbar ist.
 - Zusätzliche Tailwind-Scan-Pfade kannst du mit `b.TailwindScan(...)` registrieren.
 - Die Demo zeigt beides: direktes CSS in `cmd/demo/assets/css/site.css` plus Tailwind-Fragmente in `cmd/demo/assets/css/*.tailwind.css`. Das Binary wird automatisch geladen; du kannst es bei Bedarf über die `WAY2GO_TAILWIND_*`-Variablen überschreiben.
-- `web.Page` rendert eine minimale HTML-Shell und kann `templ.Component` als Body verwenden; CSS/JS werden global aus dem registrierten Asset-Manifest injiziert.
+- Einfache Web-Activities können direkt `templ.Component` oder Text zurückgeben; den Seitentitel setzt du über `web.WithStaticTitle(...)`. Die HTML-Shell und die globalen CSS/JS-Assets werden dabei von `web` automatisch injiziert. `web.Page` bleibt für Spezialfälle verfügbar.
 
 `WAY2GO_TAILWIND_BINARY`, `WAY2GO_TAILWIND_VERSION`, `WAY2GO_TAILWIND_CACHE_DIR` und `WAY2GO_TAILWIND_DOWNLOAD_BASE` überschreiben die Default-Auflösung bei Bedarf.
 
@@ -78,4 +78,4 @@ go run ./cmd/demo run
 go run ./cmd/demo dev
 ```
 
-Die Demo registriert eine Activity plus CSS-, Tailwind- und JS-Assets direkt über `web.Run(web.ConventionalAssets(), web.Simple(...))`, rendert eine `web.Page` und nutzt dieselbe zentrale `web`-Runtime wie die spätere Anwendung.
+Die Demo registriert eine Activity plus CSS-, Tailwind- und JS-Assets direkt über `web.Run(web.ConventionalAssets(), web.Simple(..., web.WithStaticTitle(...)))`, gibt direkt ein `templ.Component` zurück und nutzt dieselbe zentrale `web`-Runtime wie die spätere Anwendung.

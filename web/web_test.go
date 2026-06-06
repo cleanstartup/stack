@@ -298,18 +298,18 @@ func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 	}
 }
 
-func TestPageRendersMinimalHtmlShell(t *testing.T) {
+func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
 	r := web.NewRegistry()
 	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app", Files: []string{"app.css"}}
 	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}})
 	a := web.Simple(
 		web.Ref("page"),
 		func(ctx activity.Context) activity.Result {
-			return web.Page{
-				Title: "demo",
-				Body:  "hello",
-			}
-		},
+			return templBody(func(_ context.Context, w io.Writer) error {
+				_, err := io.WriteString(w, "hello")
+				return err
+			})
+		}, web.WithStaticTitle("demo"),
 	)
 	web.RegisterWebActivity(r, a)
 
@@ -324,6 +324,9 @@ func TestPageRendersMinimalHtmlShell(t *testing.T) {
 	if !strings.Contains(body, "<!doctype html>") {
 		t.Fatalf("expected html shell, got %q", body)
 	}
+	if !strings.Contains(body, "<title>demo</title>") {
+		t.Fatalf("expected title, got %q", body)
+	}
 	if !strings.Contains(body, "<link rel=\"stylesheet\" href=\"/assets/css/app/app.css\">") {
 		t.Fatalf("expected stylesheet link, got %q", body)
 	}
@@ -337,14 +340,11 @@ func TestPageRendersTemplComponentBody(t *testing.T) {
 	a := web.Simple(
 		web.Ref("templ"),
 		func(ctx activity.Context) activity.Result {
-			return web.Page{
-				Title: "demo",
-				Body: templBody(func(_ context.Context, w io.Writer) error {
-					_, err := io.WriteString(w, "<strong>templ body</strong>")
-					return err
-				}),
-			}
-		},
+			return templBody(func(_ context.Context, w io.Writer) error {
+				_, err := io.WriteString(w, "<strong>templ body</strong>")
+				return err
+			})
+		}, web.WithStaticTitle("demo"),
 	)
 	web.RegisterWebActivity(r, a)
 
@@ -354,6 +354,9 @@ func TestPageRendersTemplComponentBody(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "<title>demo</title>") {
+		t.Fatalf("expected title, got %q", rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), "<strong>templ body</strong>") {
 		t.Fatalf("expected templ body, got %q", rec.Body.String())
@@ -371,11 +374,8 @@ func TestPageRendersDevReloadAndVersionedAssets(t *testing.T) {
 	a := web.Simple(
 		web.Ref("dev"),
 		func(ctx activity.Context) activity.Result {
-			return web.Page{
-				Title: "dev",
-				Body:  "hello",
-			}
-		},
+			return "hello"
+		}, web.WithStaticTitle("dev"),
 	)
 	web.RegisterWebActivity(r, a)
 
@@ -386,6 +386,9 @@ func TestPageRendersDevReloadAndVersionedAssets(t *testing.T) {
 	body := rec.Body.String()
 	if !strings.Contains(body, "?v=1") {
 		t.Fatalf("expected versioned asset URL, got %q", body)
+	}
+	if !strings.Contains(body, "<title>dev</title>") {
+		t.Fatalf("expected title, got %q", body)
 	}
 	if !strings.Contains(body, "/__way2go/dev/events") {
 		t.Fatalf("expected dev reload script, got %q", body)
