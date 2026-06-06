@@ -76,7 +76,13 @@ func renderAssetLinks(out *strings.Builder, refs []AssetRef, kind string, versio
 				out.WriteString(html.EscapeString(url))
 				out.WriteString("\">")
 			case "script":
-				out.WriteString("<script defer src=\"")
+				out.WriteString("<script")
+				if strings.Contains(url, ".esm.js") {
+					out.WriteString(" type=\"module\"")
+				} else {
+					out.WriteString(" defer")
+				}
+				out.WriteString(" src=\"")
 				out.WriteString(html.EscapeString(url))
 				out.WriteString("\"></script>")
 			}

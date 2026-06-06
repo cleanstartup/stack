@@ -301,7 +301,8 @@ func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
 	r := web.NewRegistry()
 	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app", Files: []string{"app.css"}}
-	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}})
+	scriptRef := web.AssetRef{Kind: web.AssetKindJS, ID: "way2go", Files: []string{"way2go.esm.js"}}
+	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}, Scripts: []web.AssetRef{scriptRef}})
 	a := web.Activity(
 		web.Ref("page"),
 		func(ctx activity.Context) activity.Result {
@@ -329,6 +330,9 @@ func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
 	}
 	if !strings.Contains(body, "<link rel=\"stylesheet\" href=\"/assets/css/app/app.css\">") {
 		t.Fatalf("expected stylesheet link, got %q", body)
+	}
+	if !strings.Contains(body, "<script type=\"module\" src=\"/assets/js/way2go/way2go.esm.js\">") {
+		t.Fatalf("expected module script, got %q", body)
 	}
 	if !strings.Contains(body, "<main>hello</main>") {
 		t.Fatalf("expected body content, got %q", body)
