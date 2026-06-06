@@ -66,8 +66,8 @@ type BuildEngine struct {
 	builder *Builder
 }
 
-func NewBuildEngine(mods ...Contributor) *BuildEngine {
-	return New(mods...).engine
+func NewBuildEngine(parts ...Part) *BuildEngine {
+	return New(parts...).engine
 }
 
 func (e *BuildEngine) Build(ctx context.Context, cfg BuildConfig) (*BuildResult, error) {

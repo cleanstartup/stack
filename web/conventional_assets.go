@@ -11,7 +11,7 @@ type conventionalAssets struct {
 	baseDir string
 }
 
-func ConventionalAssets(baseDir ...string) Contributor {
+func ConventionalAssets(baseDir ...string) Part {
 	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
 		return conventionalAssets{baseDir: baseDir[0]}
 	}

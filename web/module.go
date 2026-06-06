@@ -2,52 +2,54 @@ package web
 
 import "github.com/cleanstartup/way2go/activity"
 
-type Contributor interface {
+type Part interface {
 	Apply(*WebApp)
 }
 
-type contributorFunc func(*WebApp)
+type Contributor = Part
 
-func (f contributorFunc) Apply(app *WebApp) {
+type partFunc func(*WebApp)
+
+func (f partFunc) Apply(app *WebApp) {
 	if f == nil || app == nil {
 		return
 	}
 	f(app)
 }
 
-func Compose(contribs ...Contributor) Contributor {
-	return contributorFunc(func(app *WebApp) {
-		for _, contrib := range contribs {
-			if contrib == nil {
+func Module(parts ...Part) Part {
+	return partFunc(func(app *WebApp) {
+		for _, part := range parts {
+			if part == nil {
 				continue
 			}
-			contrib.Apply(app)
+			part.Apply(app)
 		}
 	})
 }
 
-func Module(contribs ...Contributor) Contributor { return Compose(contribs...) }
+func Compose(parts ...Part) Part { return Module(parts...) }
 
-func BindActivity[P any, I any](def *activity.Definition[P, I], resolver activity.Resolver[P, I]) Contributor {
-	return contributorFunc(func(app *WebApp) { AddActivity(app.builder, def, resolver) })
+func BindActivity[P any, I any](def *activity.Definition[P, I], resolver activity.Resolver[P, I]) Part {
+	return partFunc(func(app *WebApp) { AddActivity(app.builder, def, resolver) })
 }
 
-func CSS(src AssetSource) Contributor {
-	return contributorFunc(func(app *WebApp) { app.RegisterCSS(src) })
+func CSS(src AssetSource) Part {
+	return partFunc(func(app *WebApp) { app.RegisterCSS(src) })
 }
 
-func TailwindCSS(src AssetSource) Contributor {
-	return contributorFunc(func(app *WebApp) { app.RegisterTailwindCSS(src) })
+func TailwindCSS(src AssetSource) Part {
+	return partFunc(func(app *WebApp) { app.RegisterTailwindCSS(src) })
 }
 
-func JS(src AssetSource) Contributor {
-	return contributorFunc(func(app *WebApp) { app.RegisterJS(src) })
+func JS(src AssetSource) Part {
+	return partFunc(func(app *WebApp) { app.RegisterJS(src) })
 }
 
-func File(src AssetSource) Contributor {
-	return contributorFunc(func(app *WebApp) { app.RegisterFile(src) })
+func File(src AssetSource) Part {
+	return partFunc(func(app *WebApp) { app.RegisterFile(src) })
 }
 
-func TailwindScan(paths ...string) Contributor {
-	return contributorFunc(func(app *WebApp) { app.RegisterTailwindScan(paths...) })
+func TailwindScan(paths ...string) Part {
+	return partFunc(func(app *WebApp) { app.RegisterTailwindScan(paths...) })
 }

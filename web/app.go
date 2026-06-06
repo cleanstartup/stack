@@ -25,21 +25,21 @@ func newWebApp() *WebApp {
 	return app
 }
 
-func New(contribs ...Contributor) *WebApp {
+func New(parts ...Part) *WebApp {
 	app := newWebApp()
-	app.Apply(contribs...)
+	app.Apply(parts...)
 	return app
 }
 
-func (a *WebApp) Apply(contribs ...Contributor) {
+func (a *WebApp) Apply(parts ...Part) {
 	if a == nil {
 		return
 	}
-	for _, contrib := range contribs {
-		if contrib == nil {
+	for _, part := range parts {
+		if part == nil {
 			continue
 		}
-		contrib.Apply(a)
+		part.Apply(a)
 	}
 }
 
@@ -160,16 +160,16 @@ func (a *WebApp) CLI() *cli.Registry {
 	return r
 }
 
-func Serve(addr string, mods ...Contributor) error {
-	app := New(mods...)
+func Serve(addr string, parts ...Part) error {
+	app := New(parts...)
 	return app.Serve(context.Background(), ServeConfig{
 		Addr:      addr,
 		OutputDir: defaultOutputDir,
 	})
 }
 
-func ExecuteCLI(mods ...Contributor) error {
-	app := New(mods...)
+func ExecuteCLI(parts ...Part) error {
+	app := New(parts...)
 	registry := app.CLI()
 
 	args := os.Args[1:]
@@ -191,8 +191,8 @@ func ExecuteCLI(mods ...Contributor) error {
 	return nil
 }
 
-func Run(mods ...Contributor) {
-	if err := ExecuteCLI(mods...); err != nil {
+func Run(parts ...Part) {
+	if err := ExecuteCLI(parts...); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
