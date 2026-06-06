@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -80,6 +81,36 @@ func (r AssetRef) URLWithVersion(version string) string {
 
 type WatchPathsProvider interface {
 	WatchPaths() []string
+}
+
+type watchedAssetSource struct {
+	source AssetSource
+	paths  []string
+}
+
+func WithWatchPaths(source AssetSource, paths ...string) AssetSource {
+	if source == nil {
+		return nil
+	}
+	cleaned := cleanWatchPaths(paths)
+	if len(cleaned) == 0 {
+		return source
+	}
+	return watchedAssetSource{source: source, paths: cleaned}
+}
+
+func (s watchedAssetSource) ID() string { return s.source.ID() }
+
+func (s watchedAssetSource) Materialize(ws *Workspace, kind AssetKind) ([]string, error) {
+	return s.source.Materialize(ws, kind)
+}
+
+func (s watchedAssetSource) WatchPaths() []string {
+	paths := append([]string{}, s.paths...)
+	if watcher, ok := s.source.(WatchPathsProvider); ok {
+		paths = append(paths, watcher.WatchPaths()...)
+	}
+	return cleanWatchPaths(paths)
 }
 
 type AssetEntry struct {
@@ -174,19 +205,21 @@ func (s dirAssetSource) Materialize(ws *Workspace, kind AssetKind) ([]string, er
 func (s dirAssetSource) WatchPaths() []string { return []string{s.path} }
 
 type fsAssetSource struct {
-	id     string
-	source fs.FS
-	root   string
+	id         string
+	source     fs.FS
+	root       string
+	watchPaths []string
 }
 
-func FromFS(source fs.FS, root string) AssetSource {
+func FromFS(source fs.FS, root string, watchPaths ...string) AssetSource {
 	if strings.TrimSpace(root) == "" {
 		root = "."
 	}
 	return fsAssetSource{
-		id:     assetID(root),
-		source: source,
-		root:   root,
+		id:         assetID(root),
+		source:     source,
+		root:       root,
+		watchPaths: cleanWatchPaths(watchPaths),
 	}
 }
 
@@ -207,6 +240,10 @@ func (s fsAssetSource) Materialize(ws *Workspace, kind AssetKind) ([]string, err
 		return nil, err
 	}
 	return copyFS(dstDir, sub)
+}
+
+func (s fsAssetSource) WatchPaths() []string {
+	return append([]string{}, s.watchPaths...)
 }
 
 type generatedAssetSource struct {
@@ -245,6 +282,14 @@ func (s generatedAssetSource) Materialize(ws *Workspace, kind AssetKind) ([]stri
 func AssetURL(kind AssetKind, id string, parts ...string) string {
 	segments := append([]string{"/assets", string(kind), id}, parts...)
 	return path.Join(segments...)
+}
+
+func CallerDir(skip int) string {
+	_, file, _, ok := runtime.Caller(skip + 1)
+	if !ok {
+		return ""
+	}
+	return filepath.Dir(file)
 }
 
 func withAssetVersion(assetURL, version string) string {
@@ -298,6 +343,26 @@ func sanitizeSegment(value string) string {
 		return "asset"
 	}
 	return result
+}
+
+func cleanWatchPaths(paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(paths))
+	seen := map[string]struct{}{}
+	for _, path := range paths {
+		cleaned := strings.TrimSpace(path)
+		if cleaned == "" {
+			continue
+		}
+		if _, exists := seen[cleaned]; exists {
+			continue
+		}
+		seen[cleaned] = struct{}{}
+		out = append(out, cleaned)
+	}
+	return out
 }
 
 func copyFile(dst, src string) error {

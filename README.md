@@ -59,6 +59,7 @@ func main() {
 - `web build` materialisiert Assets in `.way2go/public`.
 - `web run` serviert nur fertige Assets und erwartet, dass `build` bereits gelaufen ist.
 - `web dev` rebuildet bei Änderungen per Polling und triggert per SSE einen Browser-Reload.
+- Lokale Dependency-Assets können Watch-Pfade mitbringen, z. B. über `web.FromFS(..., watchPath)` oder `web.WithWatchPaths(...)`.
 - `web.Page` rendert eine minimale HTML-Shell und kann `templ.Component` als Body verwenden.
 
 ## Demo
