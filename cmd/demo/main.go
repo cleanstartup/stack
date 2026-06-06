@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"io"
-	"log"
 
 	"github.com/a-h/templ"
 	"github.com/cleanstartup/way2go/activity"
@@ -11,7 +10,7 @@ import (
 )
 
 func main() {
-	if err := web.Run(web.Compose(
+	web.Run(web.Compose(
 		web.ConventionalAssets(),
 		web.Simple(web.RootRef(), func(ctx activity.Context) activity.Result {
 			return web.Page{
@@ -19,9 +18,7 @@ func main() {
 				Body:  demoBody{},
 			}
 		}),
-	)); err != nil {
-		log.Fatal(err)
-	}
+	))
 }
 
 type demoBody struct {

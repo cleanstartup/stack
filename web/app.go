@@ -124,7 +124,7 @@ func Serve(addr string, mods ...Contributor) error {
 	})
 }
 
-func Run(mods ...Contributor) error {
+func ExecuteCLI(mods ...Contributor) error {
 	app := New(mods...)
 	registry := app.CLI()
 
@@ -145,6 +145,13 @@ func Run(mods ...Contributor) error {
 		return errors.New(message)
 	}
 	return nil
+}
+
+func Run(mods ...Contributor) {
+	if err := ExecuteCLI(mods...); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
 type runCommandInput struct {
