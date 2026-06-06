@@ -27,7 +27,7 @@ func TestBuildMaterializesAssets(t *testing.T) {
 	}
 
 	def := activity.As[smokeParams, activity.NoInput]("smoke.page")
-	module := web.Compose(
+	app := web.New(
 		web.BindActivity(def, func(params smokeParams) activity.Instance[smokeParams, activity.NoInput] {
 			return def.Take(params).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
 				return "ok"
@@ -35,8 +35,6 @@ func TestBuildMaterializesAssets(t *testing.T) {
 		}),
 		web.CSS(web.FromFile(cssPath)),
 	)
-
-	app := web.New(module)
 	result, err := app.Build(context.Background(), web.BuildConfig{
 		WorkspaceDir: filepath.Join(tmp, "workspace"),
 		OutputDir:    filepath.Join(tmp, "public"),

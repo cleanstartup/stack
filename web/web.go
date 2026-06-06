@@ -294,8 +294,11 @@ func (a *WebActivity[C]) URI() string {
 	return a.pattern
 }
 
-func (a *WebActivity[C]) Apply(b *Builder) {
-	AddWebActivity(b, a)
+func (a *WebActivity[C]) Apply(app *WebApp) {
+	if app == nil {
+		return
+	}
+	AddWebActivity(app.builder, a)
 }
 
 func (a *WebActivity[C]) register(r *Registry) {

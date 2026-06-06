@@ -78,4 +78,4 @@ go run ./cmd/demo run
 go run ./cmd/demo dev
 ```
 
-Die Demo registriert eine Activity plus CSS-, Tailwind- und JS-Assets über `web.Compose(web.ConventionalAssets(), web.Simple(...))`, rendert eine `web.Page` und nutzt dieselbe zentrale `web`-Runtime wie die spätere Anwendung.
+Die Demo registriert eine Activity plus CSS-, Tailwind- und JS-Assets direkt über `web.Run(web.ConventionalAssets(), web.Simple(...))`, rendert eine `web.Page` und nutzt dieselbe zentrale `web`-Runtime wie die spätere Anwendung.

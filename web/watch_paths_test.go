@@ -33,7 +33,7 @@ func TestBuildEngineCollectsDependencyWatchPaths(t *testing.T) {
 	root := t.TempDir()
 	mustWriteFile(t, filepath.Join(root, "site.css"), "body { color: blue; }")
 
-	engine := NewBuildEngine(Compose(CSS(FromFS(os.DirFS(root), ".", root))))
+	engine := NewBuildEngine(CSS(FromFS(os.DirFS(root), ".", root)))
 
 	got := engine.watchPaths()
 	if len(got) != 1 {

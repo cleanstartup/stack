@@ -11,36 +11,80 @@ import (
 	"github.com/cleanstartup/way2go/cli"
 )
 
-type App struct {
-	engine *BuildEngine
+type WebApp struct {
+	builder *Builder
+	engine  *BuildEngine
 }
 
-func New(mods ...Contributor) *App {
-	return &App{engine: NewBuildEngine(mods...)}
+type App = WebApp
+
+func newWebApp() *WebApp {
+	builder := NewBuilder()
+	app := &WebApp{builder: builder}
+	app.engine = &BuildEngine{builder: builder}
+	return app
 }
 
-func (a *App) Build(ctx context.Context, cfg BuildConfig) (*BuildResult, error) {
+func New(contribs ...Contributor) *WebApp {
+	app := newWebApp()
+	app.Apply(contribs...)
+	return app
+}
+
+func (a *WebApp) Apply(contribs ...Contributor) {
+	if a == nil {
+		return
+	}
+	for _, contrib := range contribs {
+		if contrib == nil {
+			continue
+		}
+		contrib.Apply(a)
+	}
+}
+
+func (a *WebApp) RegisterCSS(src AssetSource) AssetRef {
+	return a.builder.CSS(src)
+}
+
+func (a *WebApp) RegisterTailwindCSS(src AssetSource) AssetRef {
+	return a.builder.TailwindCSS(src)
+}
+
+func (a *WebApp) RegisterJS(src AssetSource) AssetRef {
+	return a.builder.JS(src)
+}
+
+func (a *WebApp) RegisterFile(src AssetSource) AssetRef {
+	return a.builder.File(src)
+}
+
+func (a *WebApp) RegisterTailwindScan(paths ...string) {
+	a.builder.TailwindScan(paths...)
+}
+
+func (a *WebApp) Build(ctx context.Context, cfg BuildConfig) (*BuildResult, error) {
 	if a == nil || a.engine == nil {
 		return nil, fmt.Errorf("app is nil")
 	}
 	return a.engine.Build(ctx, cfg)
 }
 
-func (a *App) Serve(ctx context.Context, cfg ServeConfig) error {
+func (a *WebApp) Serve(ctx context.Context, cfg ServeConfig) error {
 	if a == nil || a.engine == nil {
 		return fmt.Errorf("app is nil")
 	}
 	return a.engine.Serve(ctx, cfg)
 }
 
-func (a *App) Dev(ctx context.Context, cfg DevConfig) error {
+func (a *WebApp) Dev(ctx context.Context, cfg DevConfig) error {
 	if a == nil || a.engine == nil {
 		return fmt.Errorf("app is nil")
 	}
 	return a.engine.Dev(ctx, cfg)
 }
 
-func (a *App) CLI() *cli.Registry {
+func (a *WebApp) CLI() *cli.Registry {
 	r := cli.NewRegistry()
 
 	runCmd := cli.Activity(

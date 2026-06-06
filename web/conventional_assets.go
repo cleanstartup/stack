@@ -20,21 +20,21 @@ func ConventionalAssets(baseDir ...string) Contributor {
 
 func inferredConventionalAssetsDir() string { return CallerDir(2) }
 
-func (a conventionalAssets) Apply(b *Builder) {
-	if b == nil || strings.TrimSpace(a.baseDir) == "" {
+func (a conventionalAssets) Apply(app *WebApp) {
+	if app == nil || strings.TrimSpace(a.baseDir) == "" {
 		return
 	}
-	b.TailwindScan(a.baseDir)
+	app.RegisterTailwindScan(a.baseDir)
 
 	cssFiles, tailwindFiles, jsFiles := discoverConventionalAssets(a.baseDir)
 	for _, path := range cssFiles {
-		b.CSS(FromFile(path))
+		app.RegisterCSS(FromFile(path))
 	}
 	for _, path := range tailwindFiles {
-		b.TailwindCSS(FromFile(path))
+		app.RegisterTailwindCSS(FromFile(path))
 	}
 	for _, path := range jsFiles {
-		b.JS(FromFile(path))
+		app.RegisterJS(FromFile(path))
 	}
 }
 

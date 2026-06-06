@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	web.Run(web.Compose(
+	web.Run(
 		web.ConventionalAssets(),
 		web.Simple(web.RootRef(), func(ctx activity.Context) activity.Result {
 			return web.Page{
@@ -18,7 +18,7 @@ func main() {
 				Body:  demoBody{},
 			}
 		}),
-	))
+	)
 }
 
 type demoBody struct {

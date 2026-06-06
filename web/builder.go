@@ -37,15 +37,6 @@ func NewBuilder() *Builder {
 	}
 }
 
-func (b *Builder) Apply(mods ...Contributor) {
-	for _, contrib := range mods {
-		if contrib == nil {
-			continue
-		}
-		contrib.Apply(b)
-	}
-}
-
 func AddActivity[P any, I any](b *Builder, def *activity.Definition[P, I], resolver activity.Resolver[P, I]) {
 	if b == nil || def == nil || resolver == nil {
 		return

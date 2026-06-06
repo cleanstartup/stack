@@ -79,7 +79,7 @@ func TestBuildUsesExplicitTailwindBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app := New(Compose(TailwindCSS(FromFile(cssPath))))
+	app := New(TailwindCSS(FromFile(cssPath)))
 	result, err := app.Build(context.Background(), BuildConfig{
 		WorkspaceDir:   filepath.Join(tmp, "workspace"),
 		OutputDir:      filepath.Join(tmp, "public"),
