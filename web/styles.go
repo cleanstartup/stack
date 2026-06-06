@@ -6,55 +6,55 @@ import (
 )
 
 const (
-	styleBundleID   = "app"
-	styleBundleFile = "app.css"
+	tailwindBundleID   = "app"
+	tailwindBundleFile = "app.css"
 )
 
-type styleSourceEntry struct {
+type tailwindInputEntry struct {
 	source AssetSource
 }
 
-type StyleRegistry struct {
-	entries []styleSourceEntry
+type TailwindRegistry struct {
+	entries []tailwindInputEntry
 	scans   []string
 	bundle  AssetRef
 }
 
-func NewStyleRegistry() *StyleRegistry {
-	return &StyleRegistry{
-		entries: []styleSourceEntry{},
+func NewTailwindRegistry() *TailwindRegistry {
+	return &TailwindRegistry{
+		entries: []tailwindInputEntry{},
 		scans:   []string{},
 		bundle: AssetRef{
 			Kind:  AssetKindCSS,
-			ID:    styleBundleID,
-			Files: []string{styleBundleFile},
+			ID:    tailwindBundleID,
+			Files: []string{tailwindBundleFile},
 		},
 	}
 }
 
-func (r *StyleRegistry) AddCSS(src AssetSource) AssetRef {
+func (r *TailwindRegistry) AddInput(src AssetSource) AssetRef {
 	if r == nil || src == nil {
 		return AssetRef{}
 	}
-	r.entries = append(r.entries, styleSourceEntry{source: src})
+	r.entries = append(r.entries, tailwindInputEntry{source: src})
 	return r.bundle
 }
 
-func (r *StyleRegistry) AddScan(paths ...string) {
+func (r *TailwindRegistry) AddScan(paths ...string) {
 	if r == nil {
 		return
 	}
 	r.scans = cleanWatchPaths(append(r.scans, paths...))
 }
 
-func (r *StyleRegistry) BundleRef() AssetRef {
+func (r *TailwindRegistry) BundleRef() AssetRef {
 	if r == nil {
 		return AssetRef{}
 	}
 	return r.bundle
 }
 
-func (r *StyleRegistry) CSSSources() []AssetSource {
+func (r *TailwindRegistry) Inputs() []AssetSource {
 	if r == nil {
 		return nil
 	}
@@ -68,7 +68,7 @@ func (r *StyleRegistry) CSSSources() []AssetSource {
 	return out
 }
 
-func (r *StyleRegistry) ScanPaths() []string {
+func (r *TailwindRegistry) ScanPaths() []string {
 	if r == nil {
 		return nil
 	}
@@ -76,13 +76,13 @@ func (r *StyleRegistry) ScanPaths() []string {
 	return cleanWatchPaths(out)
 }
 
-func (r *StyleRegistry) WatchPaths() []string {
+func (r *TailwindRegistry) WatchPaths() []string {
 	if r == nil {
 		return nil
 	}
 	seen := map[string]struct{}{}
 	var paths []string
-	for _, source := range r.CSSSources() {
+	for _, source := range r.Inputs() {
 		if watcher, ok := source.(WatchPathsProvider); ok {
 			for _, path := range watcher.WatchPaths() {
 				path = strings.TrimSpace(path)

@@ -111,8 +111,8 @@ func (e *BuildEngine) Build(ctx context.Context, cfg BuildConfig) (*BuildResult,
 	}
 	if err := copyTreeExcept(workspace.Out, workspace.Src, func(rel string, entry fs.DirEntry) bool {
 		rel = filepath.ToSlash(rel)
-		stylePrefix := "assets/css/"
-		return rel == "assets/css" || strings.HasPrefix(rel, stylePrefix)
+		tailwindPrefix := "tailwind/"
+		return rel == "tailwind" || strings.HasPrefix(rel, tailwindPrefix)
 	}); err != nil {
 		return nil, err
 	}
@@ -338,8 +338,8 @@ func (e *BuildEngine) watchPaths() []string {
 	}
 	seen := map[string]struct{}{}
 	var paths []string
-	if e.builder.styles != nil {
-		for _, p := range e.builder.styles.WatchPaths() {
+	if e.builder.tailwind != nil {
+		for _, p := range e.builder.tailwind.WatchPaths() {
 			p = strings.TrimSpace(p)
 			if p == "" {
 				continue

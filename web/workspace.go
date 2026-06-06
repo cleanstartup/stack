@@ -56,6 +56,13 @@ func (w *Workspace) AssetDir(kind AssetKind, id string) string {
 	return filepath.Join(w.Src, "assets", string(kind), id)
 }
 
+func (w *Workspace) TailwindAssetDir(kind AssetKind, id string) string {
+	if w == nil {
+		return ""
+	}
+	return filepath.Join(w.Src, "tailwind", string(kind), id)
+}
+
 func (w *Workspace) OutputAssetDir(kind AssetKind, id string) string {
 	if w == nil {
 		return ""
@@ -75,6 +82,13 @@ func (w *Workspace) SourceAssetsRoot() string {
 		return ""
 	}
 	return filepath.Join(w.Src, "assets")
+}
+
+func (w *Workspace) SourceTailwindRoot() string {
+	if w == nil {
+		return ""
+	}
+	return filepath.Join(w.Src, "tailwind")
 }
 
 func walkTree(root string, visit func(path string, entry fs.DirEntry) error) error {
