@@ -13,7 +13,7 @@ func main() {
 	web.App(
 		web.ConventionalAssets(),
 		web.Module(
-			web.Simple(
+			web.Activity(
 				web.RootRef(),
 				func(ctx activity.Context) activity.Result {
 					return templ.ComponentFunc(func(_ context.Context, w io.Writer) error {

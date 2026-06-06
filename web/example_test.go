@@ -41,7 +41,7 @@ func ExampleActivity() {
 	r := web.NewRegistry()
 	xy := web.Input("xy")
 
-	a := web.Activity(
+	a := web.RawActivity(
 		"sample.show",
 		func(req *web.Request) int { return req.IntParam(xy) },
 		func(ctx web.Context[int]) activity.Result {

@@ -131,7 +131,7 @@ func TestWebActivitySkipsHandlerWhenRequestFailed(t *testing.T) {
 	xy := web.Input("xy")
 	handlerCalled := false
 
-	a := web.Activity(
+	a := web.RawActivity(
 		"sample.invalid",
 		func(req *web.Request) int {
 			return req.IntParam(xy, func(v int) error {
@@ -167,7 +167,7 @@ func TestWebActivityCallsHandlerWhenRequestValid(t *testing.T) {
 	r := web.NewRegistry()
 	xy := web.Input("xy")
 
-	a := web.Activity(
+	a := web.RawActivity(
 		"sample.valid",
 		func(req *web.Request) int {
 			return req.IntParam(xy, func(v int) error {
@@ -244,7 +244,7 @@ func TestGroupPrefixesRegisteredPaths(t *testing.T) {
 func TestURIUsesRegisteredQualifiedPath(t *testing.T) {
 	web.Reset()
 	group := web.DefaultGroup("wallet")
-	a := web.Simple(
+	a := web.Activity(
 		web.Ref("show"),
 		func(ctx activity.Context) activity.Result { return "ok" },
 	)
@@ -259,7 +259,7 @@ func TestURIUsesRegisteredQualifiedPath(t *testing.T) {
 
 func TestURIOkBeforeRegistration(t *testing.T) {
 	web.Reset()
-	a := web.Simple(
+	a := web.Activity(
 		web.Ref("show"),
 		func(ctx activity.Context) activity.Result { return "ok" },
 	)
@@ -280,7 +280,7 @@ func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 		}
 	})
 
-	a := web.Simple(
+	a := web.Activity(
 		web.Ref("tracked"),
 		func(ctx activity.Context) activity.Result { return "ok" },
 	)
@@ -302,7 +302,7 @@ func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
 	r := web.NewRegistry()
 	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app", Files: []string{"app.css"}}
 	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}})
-	a := web.Simple(
+	a := web.Activity(
 		web.Ref("page"),
 		func(ctx activity.Context) activity.Result {
 			return templBody(func(_ context.Context, w io.Writer) error {
@@ -337,7 +337,7 @@ func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
 
 func TestPageRendersTemplComponentBody(t *testing.T) {
 	r := web.NewRegistry()
-	a := web.Simple(
+	a := web.Activity(
 		web.Ref("templ"),
 		func(ctx activity.Context) activity.Result {
 			return templBody(func(_ context.Context, w io.Writer) error {
@@ -371,7 +371,7 @@ func TestPageRendersDevReloadAndVersionedAssets(t *testing.T) {
 
 	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app", Files: []string{"app.css"}}
 	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}})
-	a := web.Simple(
+	a := web.Activity(
 		web.Ref("dev"),
 		func(ctx activity.Context) activity.Result {
 			return "hello"

@@ -220,7 +220,7 @@ func Input(name string) InputKey {
 	return InputKey{name: name}
 }
 
-func Activity[C any](id string, decode DecodeFunc[C], handler ActivityHandler[C], opts ...ActivityOption[C]) *WebActivity[C] {
+func RawActivity[C any](id string, decode DecodeFunc[C], handler ActivityHandler[C], opts ...ActivityOption[C]) *WebActivity[C] {
 	if strings.TrimSpace(id) == "" {
 		panic("activity id must not be empty")
 	}
@@ -242,7 +242,7 @@ func Activity[C any](id string, decode DecodeFunc[C], handler ActivityHandler[C]
 	return a
 }
 
-func Simple(ref URIRef, handler func(ctx activity.Context) activity.Result, opts ...ActivityOption[struct{}]) *WebActivity[struct{}] {
+func Activity(ref URIRef, handler func(ctx activity.Context) activity.Result, opts ...ActivityOption[struct{}]) *WebActivity[struct{}] {
 	if handler == nil {
 		panic("handler function must not be nil")
 	}
@@ -250,7 +250,7 @@ func Simple(ref URIRef, handler func(ctx activity.Context) activity.Result, opts
 		panic("ref must not be nil")
 	}
 	opts = append(opts, WithRef[struct{}](ref))
-	return Activity(
+	return RawActivity(
 		ref.ID(),
 		func(r *Request) struct{} { return struct{}{} },
 		func(ctx Context[struct{}]) activity.Result {
@@ -258,6 +258,10 @@ func Simple(ref URIRef, handler func(ctx activity.Context) activity.Result, opts
 		},
 		opts...,
 	)
+}
+
+func Simple(ref URIRef, handler func(ctx activity.Context) activity.Result, opts ...ActivityOption[struct{}]) *WebActivity[struct{}] {
+	return Activity(ref, handler, opts...)
 }
 
 func WithTitle[C any](title TitleFunc) ActivityOption[C] {
