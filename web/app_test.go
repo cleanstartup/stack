@@ -26,15 +26,15 @@ func TestBuildMaterializesAssets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	module := web.ModuleFunc(func(b *web.Builder) {
-		def := activity.As[smokeParams, activity.NoInput]("smoke.page")
-		web.AddActivity(b, def, func(params smokeParams) activity.Instance[smokeParams, activity.NoInput] {
+	def := activity.As[smokeParams, activity.NoInput]("smoke.page")
+	module := web.Module(
+		web.Route(def, func(params smokeParams) activity.Instance[smokeParams, activity.NoInput] {
 			return def.Take(params).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
 				return "ok"
 			})
-		})
-		b.CSS(web.FromFile(cssPath))
-	})
+		}),
+		web.CSS(web.FromFile(cssPath)),
+	)
 
 	app := web.New(module)
 	result, err := app.Build(context.Background(), web.BuildConfig{

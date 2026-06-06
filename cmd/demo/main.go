@@ -13,28 +13,20 @@ import (
 )
 
 func main() {
-	if err := web.Run(demoModule()); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func demoModule() web.Module {
-	baseDir := mustModuleDir()
-	assets := web.NewConventionalAssets(baseDir)
-
-	return web.ModuleFunc(func(b *web.Builder) {
-		assets.Register(b)
-
-		def := activity.As[struct{}, activity.NoInput]("root")
-		web.AddActivity(b, def, func(params struct{}) activity.Instance[struct{}, activity.NoInput] {
-			return def.Take(params).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
+	rootDef := activity.As[struct{}, activity.NoInput]("root")
+	if err := web.Run(web.Module(
+		web.ConventionalAssets(mustModuleDir()),
+		web.Route(rootDef, func(params struct{}) activity.Instance[struct{}, activity.NoInput] {
+			return rootDef.Take(params).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
 				return web.Page{
 					Title: "way2go demo",
 					Body:  demoBody{},
 				}
 			})
-		})
-	})
+		}),
+	)); err != nil {
+		log.Fatal(err)
+	}
 }
 
 type demoBody struct {

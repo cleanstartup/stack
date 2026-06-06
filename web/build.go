@@ -66,7 +66,7 @@ type BuildEngine struct {
 	builder *Builder
 }
 
-func NewBuildEngine(mods ...Module) *BuildEngine {
+func NewBuildEngine(mods ...Contributor) *BuildEngine {
 	builder := NewBuilder()
 	builder.Apply(mods...)
 	return &BuildEngine{builder: builder}

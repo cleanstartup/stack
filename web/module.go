@@ -1,35 +1,87 @@
 package web
 
-type Module interface {
+import "github.com/cleanstartup/way2go/activity"
+
+type Contributor interface {
 	Apply(*Builder)
 }
 
-type ModuleFunc func(*Builder)
+type contributorFunc func(*Builder)
 
-func (f ModuleFunc) Apply(b *Builder) {
+func (f contributorFunc) Apply(b *Builder) {
 	if f == nil || b == nil {
 		return
 	}
 	f(b)
 }
 
-type moduleGroup struct {
-	modules []Module
+type ModulePart interface {
+	apply(*Builder)
 }
 
-func (g moduleGroup) Apply(b *Builder) {
-	for _, module := range g.modules {
-		if module == nil {
-			continue
-		}
-		module.Apply(b)
+type modulePartFunc func(*Builder)
+
+func (f modulePartFunc) apply(b *Builder) {
+	if f == nil || b == nil {
+		return
 	}
+	f(b)
 }
 
-func Bind(mods ...Module) Module {
-	return moduleGroup{modules: mods}
+func Module(parts ...ModulePart) Contributor {
+	return contributorFunc(func(b *Builder) {
+		for _, part := range parts {
+			if part == nil {
+				continue
+			}
+			part.apply(b)
+		}
+	})
 }
 
-func Compose(mods ...Module) Module {
-	return Bind(mods...)
+func Include(mods ...Contributor) ModulePart {
+	return modulePartFunc(func(b *Builder) {
+		for _, mod := range mods {
+			if mod == nil {
+				continue
+			}
+			mod.Apply(b)
+		}
+	})
+}
+
+func Route[P any, I any](def *activity.Definition[P, I], resolver activity.Resolver[P, I]) ModulePart {
+	return modulePartFunc(func(b *Builder) {
+		AddActivity(b, def, resolver)
+	})
+}
+
+func CSS(src AssetSource) ModulePart {
+	return modulePartFunc(func(b *Builder) {
+		b.CSS(src)
+	})
+}
+
+func TailwindCSS(src AssetSource) ModulePart {
+	return modulePartFunc(func(b *Builder) {
+		b.TailwindCSS(src)
+	})
+}
+
+func JS(src AssetSource) ModulePart {
+	return modulePartFunc(func(b *Builder) {
+		b.JS(src)
+	})
+}
+
+func File(src AssetSource) ModulePart {
+	return modulePartFunc(func(b *Builder) {
+		b.File(src)
+	})
+}
+
+func TailwindScan(paths ...string) ModulePart {
+	return modulePartFunc(func(b *Builder) {
+		b.TailwindScan(paths...)
+	})
 }

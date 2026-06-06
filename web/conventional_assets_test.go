@@ -24,7 +24,7 @@ func TestConventionalAssetsDiscoverTailwindFragments(t *testing.T) {
 	mustWrite("assets/js/site.js", "console.log('ok')")
 
 	b := NewBuilder()
-	NewConventionalAssets(baseDir).Register(b)
+	ConventionalAssets(baseDir).apply(b)
 
 	if got := len(b.Assets().Entries()); got != 2 {
 		t.Fatalf("expected 2 direct asset entries, got %d", got)

@@ -7,27 +7,21 @@ import (
 	"strings"
 )
 
-type ConventionalAssets struct {
-	BaseDir   string
-	ScanPaths []string
+type conventionalAssets struct {
+	baseDir string
 }
 
-func NewConventionalAssets(baseDir string) ConventionalAssets {
-	return ConventionalAssets{
-		BaseDir:   baseDir,
-		ScanPaths: []string{baseDir},
-	}
+func ConventionalAssets(baseDir string) ModulePart {
+	return conventionalAssets{baseDir: baseDir}
 }
 
-func (a ConventionalAssets) Register(b *Builder) {
-	if b == nil {
+func (a conventionalAssets) apply(b *Builder) {
+	if b == nil || strings.TrimSpace(a.baseDir) == "" {
 		return
 	}
-	for _, path := range a.ScanPaths {
-		b.TailwindScan(path)
-	}
+	b.TailwindScan(a.baseDir)
 
-	cssFiles, tailwindFiles, jsFiles := a.discover()
+	cssFiles, tailwindFiles, jsFiles := discoverConventionalAssets(a.baseDir)
 	for _, path := range cssFiles {
 		b.CSS(FromFile(path))
 	}
@@ -39,15 +33,12 @@ func (a ConventionalAssets) Register(b *Builder) {
 	}
 }
 
-func (a ConventionalAssets) discover() (cssFiles []string, tailwindFiles []string, jsFiles []string) {
-	if strings.TrimSpace(a.BaseDir) == "" {
-		return nil, nil, nil
-	}
+func discoverConventionalAssets(baseDir string) (cssFiles []string, tailwindFiles []string, jsFiles []string) {
 	for _, relDir := range []string{
 		filepath.Join("assets", "css"),
 		filepath.Join("assets", "js"),
 	} {
-		root := filepath.Join(a.BaseDir, relDir)
+		root := filepath.Join(baseDir, relDir)
 		info, err := os.Stat(root)
 		if err != nil || !info.IsDir() {
 			continue

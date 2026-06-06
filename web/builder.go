@@ -29,7 +29,7 @@ func NewBuilder() *Builder {
 	}
 }
 
-func (b *Builder) Apply(mods ...Module) {
+func (b *Builder) Apply(mods ...Contributor) {
 	for _, module := range mods {
 		if module == nil {
 			continue

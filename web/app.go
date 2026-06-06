@@ -15,7 +15,7 @@ type App struct {
 	engine *BuildEngine
 }
 
-func New(mods ...Module) *App {
+func New(mods ...Contributor) *App {
 	return &App{engine: NewBuildEngine(mods...)}
 }
 
@@ -116,7 +116,7 @@ func (a *App) CLI() *cli.Registry {
 	return r
 }
 
-func Serve(addr string, mods ...Module) error {
+func Serve(addr string, mods ...Contributor) error {
 	app := New(mods...)
 	return app.Serve(context.Background(), ServeConfig{
 		Addr:      addr,
@@ -124,7 +124,7 @@ func Serve(addr string, mods ...Module) error {
 	})
 }
 
-func Run(mods ...Module) error {
+func Run(mods ...Contributor) error {
 	app := New(mods...)
 	registry := app.CLI()
 
