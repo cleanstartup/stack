@@ -9,8 +9,6 @@ require (
 	github.com/joho/godotenv v1.5.1
 )
 
-replace github.com/a-h/templ => ./deps/templ
-
 replace github.com/caarlos0/env/v11 => ./deps/env
 
 replace github.com/go-chi/chi/v5 => ./deps/chi
