@@ -50,7 +50,7 @@ func Include(mods ...Contributor) ModulePart {
 	})
 }
 
-func Route[P any, I any](def *activity.Definition[P, I], resolver activity.Resolver[P, I]) ModulePart {
+func BindActivity[P any, I any](def *activity.Definition[P, I], resolver activity.Resolver[P, I]) ModulePart {
 	return modulePartFunc(func(b *Builder) {
 		AddActivity(b, def, resolver)
 	})

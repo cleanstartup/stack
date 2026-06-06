@@ -16,7 +16,7 @@ func main() {
 	rootDef := activity.As[struct{}, activity.NoInput]("root")
 	if err := web.Run(web.Module(
 		web.ConventionalAssets(mustModuleDir()),
-		web.Route(rootDef, func(params struct{}) activity.Instance[struct{}, activity.NoInput] {
+		web.BindActivity(rootDef, func(params struct{}) activity.Instance[struct{}, activity.NoInput] {
 			return rootDef.Take(params).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
 				return web.Page{
 					Title: "way2go demo",
