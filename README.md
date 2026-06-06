@@ -60,6 +60,7 @@ func main() {
 - `web run` serviert nur fertige Assets und erwartet, dass `build` bereits gelaufen ist.
 - `web dev` rebuildet bei Änderungen per Polling und triggert per SSE einen Browser-Reload.
 - Lokale Dependency-Assets können Watch-Pfade mitbringen, z. B. über `web.FromFS(..., watchPath)` oder `web.WithWatchPaths(...)`.
+- Für den älteren `fortego/app`-Stil gibt es Legacy-Shims wie `web.Compose(...)`, `web.Bind(...)`, `web.RegisterAllDefault(...)` und `web.LegacyRun(...)`.
 - Normale CSS-Assets werden direkt als `<link>` ausgeliefert.
 - Tailwind-Assets laufen zentral durch einen Tailwind-Build-Output (`/assets/css/app/app.css`). Das Tailwind-Binary wird automatisch heruntergeladen und im Cache abgelegt, wenn es nicht bereits verfügbar ist.
 - Zusätzliche Tailwind-Scan-Pfade kannst du mit `b.TailwindScan(...)` registrieren.
