@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+@theme {
+
+  --color-blue: blue;
+
+}
+
+@layer base {
+
+  body {
+    @apply bg-blue!;
+  }
+
+}
+
 @layer components {
   .title {
     @apply text-3xl font-bold tracking-tight text-slate-900;
