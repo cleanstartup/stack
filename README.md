@@ -50,3 +50,25 @@ func main() {
 	web.Register(r, showDef, Show)
 }
 ```
+
+## Web Runtime
+
+`web` stellt eine zentrale Runtime mit modularem Build bereit:
+
+- Module registrieren Activities und Assets dezentral.
+- `web build` materialisiert Assets in `.way2go/public`.
+- `web run` serviert nur fertige Assets und erwartet, dass `build` bereits gelaufen ist.
+- `web dev` rebuildet bei Änderungen per Polling.
+- `web.Page` rendert eine minimale HTML-Shell und kann `templ.Component` als Body verwenden.
+
+## Demo
+
+Zum Ausprobieren gibt es jetzt ein kleines Beispiel unter `cmd/demo`:
+
+```bash
+go run ./cmd/demo build
+go run ./cmd/demo run
+go run ./cmd/demo dev
+```
+
+Die Demo registriert eine Activity plus CSS- und JS-Assets, rendert eine `web.Page` und nutzt dieselbe zentrale `web`-Runtime wie die spätere Anwendung.
