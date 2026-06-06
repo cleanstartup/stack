@@ -13,16 +13,13 @@ import (
 )
 
 func main() {
-	rootDef := activity.As[struct{}, activity.NoInput]("root")
-	if err := web.Run(web.Module(
+	if err := web.Run(web.Compose(
 		web.ConventionalAssets(mustModuleDir()),
-		web.BindActivity(rootDef, func(params struct{}) activity.Instance[struct{}, activity.NoInput] {
-			return rootDef.Take(params).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
-				return web.Page{
-					Title: "way2go demo",
-					Body:  demoBody{},
-				}
-			})
+		web.Simple(web.RootRef(), func(ctx activity.Context) activity.Result {
+			return web.Page{
+				Title: "way2go demo",
+				Body:  demoBody{},
+			}
 		}),
 	)); err != nil {
 		log.Fatal(err)

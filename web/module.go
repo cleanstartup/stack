@@ -15,73 +15,39 @@ func (f contributorFunc) Apply(b *Builder) {
 	f(b)
 }
 
-type ModulePart interface {
-	apply(*Builder)
-}
-
-type modulePartFunc func(*Builder)
-
-func (f modulePartFunc) apply(b *Builder) {
-	if f == nil || b == nil {
-		return
-	}
-	f(b)
-}
-
-func Module(parts ...ModulePart) Contributor {
+func Compose(contribs ...Contributor) Contributor {
 	return contributorFunc(func(b *Builder) {
-		for _, part := range parts {
-			if part == nil {
+		for _, contrib := range contribs {
+			if contrib == nil {
 				continue
 			}
-			part.apply(b)
+			contrib.Apply(b)
 		}
 	})
 }
 
-func Include(mods ...Contributor) ModulePart {
-	return modulePartFunc(func(b *Builder) {
-		for _, mod := range mods {
-			if mod == nil {
-				continue
-			}
-			mod.Apply(b)
-		}
-	})
+func Module(contribs ...Contributor) Contributor { return Compose(contribs...) }
+
+func BindActivity[P any, I any](def *activity.Definition[P, I], resolver activity.Resolver[P, I]) Contributor {
+	return contributorFunc(func(b *Builder) { AddActivity(b, def, resolver) })
 }
 
-func BindActivity[P any, I any](def *activity.Definition[P, I], resolver activity.Resolver[P, I]) ModulePart {
-	return modulePartFunc(func(b *Builder) {
-		AddActivity(b, def, resolver)
-	})
+func CSS(src AssetSource) Contributor {
+	return contributorFunc(func(b *Builder) { b.CSS(src) })
 }
 
-func CSS(src AssetSource) ModulePart {
-	return modulePartFunc(func(b *Builder) {
-		b.CSS(src)
-	})
+func TailwindCSS(src AssetSource) Contributor {
+	return contributorFunc(func(b *Builder) { b.TailwindCSS(src) })
 }
 
-func TailwindCSS(src AssetSource) ModulePart {
-	return modulePartFunc(func(b *Builder) {
-		b.TailwindCSS(src)
-	})
+func JS(src AssetSource) Contributor {
+	return contributorFunc(func(b *Builder) { b.JS(src) })
 }
 
-func JS(src AssetSource) ModulePart {
-	return modulePartFunc(func(b *Builder) {
-		b.JS(src)
-	})
+func File(src AssetSource) Contributor {
+	return contributorFunc(func(b *Builder) { b.File(src) })
 }
 
-func File(src AssetSource) ModulePart {
-	return modulePartFunc(func(b *Builder) {
-		b.File(src)
-	})
-}
-
-func TailwindScan(paths ...string) ModulePart {
-	return modulePartFunc(func(b *Builder) {
-		b.TailwindScan(paths...)
-	})
+func TailwindScan(paths ...string) Contributor {
+	return contributorFunc(func(b *Builder) { b.TailwindScan(paths...) })
 }

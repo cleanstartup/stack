@@ -27,7 +27,7 @@ func TestBuildMaterializesAssets(t *testing.T) {
 	}
 
 	def := activity.As[smokeParams, activity.NoInput]("smoke.page")
-	module := web.Module(
+	module := web.Compose(
 		web.BindActivity(def, func(params smokeParams) activity.Instance[smokeParams, activity.NoInput] {
 			return def.Take(params).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
 				return "ok"

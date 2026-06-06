@@ -11,11 +11,11 @@ type conventionalAssets struct {
 	baseDir string
 }
 
-func ConventionalAssets(baseDir string) ModulePart {
+func ConventionalAssets(baseDir string) Contributor {
 	return conventionalAssets{baseDir: baseDir}
 }
 
-func (a conventionalAssets) apply(b *Builder) {
+func (a conventionalAssets) Apply(b *Builder) {
 	if b == nil || strings.TrimSpace(a.baseDir) == "" {
 		return
 	}

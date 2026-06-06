@@ -15,6 +15,14 @@ func (r activityRouteRegistration[P, I]) register(reg *Registry) {
 	Register(reg, r.def, r.resolver)
 }
 
+type webActivityRouteRegistration[C any] struct {
+	activity *WebActivity[C]
+}
+
+func (r webActivityRouteRegistration[C]) register(reg *Registry) {
+	RegisterWebActivity(reg, r.activity)
+}
+
 type Builder struct {
 	routes   []routeRegistration
 	tailwind *TailwindRegistry
@@ -30,11 +38,11 @@ func NewBuilder() *Builder {
 }
 
 func (b *Builder) Apply(mods ...Contributor) {
-	for _, module := range mods {
-		if module == nil {
+	for _, contrib := range mods {
+		if contrib == nil {
 			continue
 		}
-		module.Apply(b)
+		contrib.Apply(b)
 	}
 }
 
@@ -46,6 +54,13 @@ func AddActivity[P any, I any](b *Builder, def *activity.Definition[P, I], resol
 		def:      def,
 		resolver: resolver,
 	})
+}
+
+func AddWebActivity[C any](b *Builder, activity *WebActivity[C]) {
+	if b == nil || activity == nil {
+		return
+	}
+	b.routes = append(b.routes, webActivityRouteRegistration[C]{activity: activity})
 }
 
 func (b *Builder) Assets() *AssetRegistry {
