@@ -131,6 +131,20 @@ func (r *AssetRegistry) Add(kind AssetKind, src AssetSource) AssetRef {
 	if r == nil || src == nil {
 		return AssetRef{}
 	}
+	for _, entry := range r.entries {
+		if entry.Kind == kind && entry.Source != nil && entry.Source.ID() == src.ID() {
+			for _, ref := range r.refs {
+				if ref.Kind == kind && ref.ID == src.ID() {
+					return ref
+				}
+			}
+			ref := AssetRef{Kind: kind, ID: src.ID()}
+			if namer, ok := src.(AssetNamer); ok {
+				ref.Files = append([]string{}, namer.AssetNames()...)
+			}
+			return ref
+		}
+	}
 	r.entries = append(r.entries, AssetEntry{Kind: kind, Source: src})
 	ref := AssetRef{Kind: kind, ID: src.ID()}
 	if namer, ok := src.(AssetNamer); ok {

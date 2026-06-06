@@ -36,6 +36,11 @@ func (r *TailwindRegistry) AddInput(src AssetSource) AssetRef {
 	if r == nil || src == nil {
 		return AssetRef{}
 	}
+	for _, entry := range r.entries {
+		if entry.source != nil && entry.source.ID() == src.ID() {
+			return r.bundle
+		}
+	}
 	r.entries = append(r.entries, tailwindInputEntry{source: src})
 	return r.bundle
 }

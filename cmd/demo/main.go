@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"io"
+	"path/filepath"
 
 	"github.com/a-h/templ"
 	"github.com/cleanstartup/way2go/activity"
@@ -10,9 +11,10 @@ import (
 )
 
 func main() {
+	baseDir := web.CallerDir(0)
 	web.App(
-		web.ConventionalAssets(),
 		web.Module(
+			web.JS(web.FromFile(filepath.Join(baseDir, "assets", "js", "site.js"))),
 			web.Activity(
 				web.RootRef(),
 				func(ctx activity.Context) activity.Result {

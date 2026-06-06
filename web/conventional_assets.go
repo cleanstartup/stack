@@ -11,6 +11,19 @@ type conventionalAssets struct {
 	baseDir string
 }
 
+type styleAssets struct {
+	baseDir string
+}
+
+func Styles(baseDir ...string) Part {
+	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
+		return styleAssets{baseDir: baseDir[0]}
+	}
+	return styleAssets{baseDir: inferredStyleAssetsDir()}
+}
+
+func inferredStyleAssetsDir() string { return CallerDir(2) }
+
 func ConventionalAssets(baseDir ...string) Part {
 	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
 		return conventionalAssets{baseDir: baseDir[0]}
@@ -68,4 +81,19 @@ func discoverConventionalAssets(baseDir string) (cssFiles []string, tailwindFile
 	sort.Strings(tailwindFiles)
 	sort.Strings(jsFiles)
 	return cssFiles, tailwindFiles, jsFiles
+}
+
+func (a styleAssets) Apply(app *WebApp) {
+	if app == nil || strings.TrimSpace(a.baseDir) == "" {
+		return
+	}
+	app.RegisterTailwindScan(a.baseDir)
+
+	cssFiles, tailwindFiles, _ := discoverConventionalAssets(a.baseDir)
+	for _, path := range cssFiles {
+		app.RegisterCSS(FromFile(path))
+	}
+	for _, path := range tailwindFiles {
+		app.RegisterTailwindCSS(FromFile(path))
+	}
 }

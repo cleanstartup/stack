@@ -29,6 +29,12 @@ func New(parts ...Part) *WebApp {
 	return app
 }
 
+func NewWithDefaults(baseDir string, parts ...Part) *WebApp {
+	app := newWebApp()
+	app.Apply(append([]Part{Styles(baseDir)}, parts...)...)
+	return app
+}
+
 func (a *WebApp) Apply(parts ...Part) {
 	if a == nil {
 		return
@@ -159,7 +165,7 @@ func (a *WebApp) CLI() *cli.Registry {
 }
 
 func Serve(addr string, parts ...Part) error {
-	app := New(parts...)
+	app := NewWithDefaults(CallerDir(1), parts...)
 	return app.Serve(context.Background(), ServeConfig{
 		Addr:      addr,
 		OutputDir: defaultOutputDir,
@@ -167,7 +173,7 @@ func Serve(addr string, parts ...Part) error {
 }
 
 func ExecuteCLI(parts ...Part) error {
-	app := New(parts...)
+	app := NewWithDefaults(CallerDir(1), parts...)
 	registry := app.CLI()
 
 	args := os.Args[1:]
@@ -190,8 +196,24 @@ func ExecuteCLI(parts ...Part) error {
 }
 
 func App(parts ...Part) {
-	if err := ExecuteCLI(parts...); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+	app := NewWithDefaults(CallerDir(1), parts...)
+	registry := app.CLI()
+
+	args := os.Args[1:]
+	if len(args) == 0 {
+		args = []string{"run"}
+	}
+
+	result := registry.Execute(args)
+	if result.ExitCode != 0 {
+		message := strings.TrimSpace(result.Stderr)
+		if message == "" {
+			message = strings.TrimSpace(result.Stdout)
+		}
+		if message == "" {
+			message = "web command failed"
+		}
+		_, _ = fmt.Fprintln(os.Stderr, message)
 		os.Exit(1)
 	}
 }
