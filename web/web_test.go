@@ -217,41 +217,6 @@ func TestRegisterSupportsRootActivity(t *testing.T) {
 	}
 }
 
-func TestLegacyComposeAndBindRegisterActivities(t *testing.T) {
-	web.Reset()
-
-	home := web.Simple(
-		web.RootRef(),
-		func(ctx activity.Context) activity.Result { return "home" },
-	)
-	docs := web.Simple(
-		web.RootRef(),
-		func(ctx activity.Context) activity.Result { return "docs" },
-	)
-
-	web.RegisterAllDefault(web.Compose(home, web.Bind("docs", docs)))
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	web.DefaultHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
-	}
-	if rec.Body.String() != "home" {
-		t.Fatalf("unexpected home response: %q", rec.Body.String())
-	}
-
-	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/docs", nil)
-	web.DefaultHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
-	}
-	if rec.Body.String() != "docs" {
-		t.Fatalf("unexpected docs response: %q", rec.Body.String())
-	}
-}
-
 func TestGroupPrefixesRegisteredPaths(t *testing.T) {
 	r := web.NewRegistry()
 	group := r.Group("wallet")

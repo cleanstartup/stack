@@ -15,47 +15,18 @@ func (f contributorFunc) Apply(app *WebApp) {
 	f(app)
 }
 
-type LegacyModule interface {
-	register(*Registry)
-}
-
-type legacyModuleFunc func(*Registry)
-
-func (f legacyModuleFunc) register(r *Registry) {
-	if f == nil || r == nil {
-		return
-	}
-	f(r)
-}
-
-type legacyGroup struct {
-	path    string
-	modules []LegacyModule
-}
-
-func (g *legacyGroup) register(r *Registry) {
-	if g == nil || r == nil {
-		return
-	}
-	target := r
-	if g.path != "" {
-		target = r.Group(g.path)
-	}
-	for _, module := range g.modules {
-		if module == nil {
-			continue
+func Compose(contribs ...Contributor) Contributor {
+	return contributorFunc(func(app *WebApp) {
+		for _, contrib := range contribs {
+			if contrib == nil {
+				continue
+			}
+			contrib.Apply(app)
 		}
-		module.register(target)
-	}
+	})
 }
 
-func Bind(path string, modules ...LegacyModule) LegacyModule {
-	return &legacyGroup{path: path, modules: modules}
-}
-
-func Compose(modules ...LegacyModule) LegacyModule { return Bind("", modules...) }
-
-func Module(modules ...LegacyModule) LegacyModule { return Compose(modules...) }
+func Module(contribs ...Contributor) Contributor { return Compose(contribs...) }
 
 func BindActivity[P any, I any](def *activity.Definition[P, I], resolver activity.Resolver[P, I]) Contributor {
 	return contributorFunc(func(app *WebApp) { AddActivity(app.builder, def, resolver) })
