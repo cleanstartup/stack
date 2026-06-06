@@ -39,11 +39,8 @@ func (a conventionalAssets) Apply(app *WebApp) {
 	}
 	app.RegisterTailwindScan(a.baseDir)
 
-	cssFiles, tailwindFiles, jsFiles := discoverConventionalAssets(a.baseDir)
+	cssFiles, jsFiles := discoverConventionalAssets(a.baseDir)
 	for _, path := range cssFiles {
-		app.RegisterCSS(FromFile(path))
-	}
-	for _, path := range tailwindFiles {
 		app.RegisterTailwindCSS(FromFile(path))
 	}
 	for _, path := range jsFiles {
@@ -51,7 +48,7 @@ func (a conventionalAssets) Apply(app *WebApp) {
 	}
 }
 
-func discoverConventionalAssets(baseDir string) (cssFiles []string, tailwindFiles []string, jsFiles []string) {
+func discoverConventionalAssets(baseDir string) (cssFiles []string, jsFiles []string) {
 	for _, relDir := range []string{
 		filepath.Join("assets", "css"),
 		filepath.Join("assets", "js"),
@@ -67,8 +64,6 @@ func discoverConventionalAssets(baseDir string) (cssFiles []string, tailwindFile
 			}
 			name := filepath.Base(path)
 			switch {
-			case strings.HasSuffix(name, ".tailwind.css"):
-				tailwindFiles = append(tailwindFiles, path)
 			case strings.HasSuffix(name, ".css"):
 				cssFiles = append(cssFiles, path)
 			case strings.HasSuffix(name, ".js"):
@@ -78,9 +73,8 @@ func discoverConventionalAssets(baseDir string) (cssFiles []string, tailwindFile
 		})
 	}
 	sort.Strings(cssFiles)
-	sort.Strings(tailwindFiles)
 	sort.Strings(jsFiles)
-	return cssFiles, tailwindFiles, jsFiles
+	return cssFiles, jsFiles
 }
 
 func (a styleAssets) Apply(app *WebApp) {
@@ -89,11 +83,8 @@ func (a styleAssets) Apply(app *WebApp) {
 	}
 	app.RegisterTailwindScan(a.baseDir)
 
-	cssFiles, tailwindFiles, _ := discoverConventionalAssets(a.baseDir)
+	cssFiles, _ := discoverConventionalAssets(a.baseDir)
 	for _, path := range cssFiles {
-		app.RegisterCSS(FromFile(path))
-	}
-	for _, path := range tailwindFiles {
 		app.RegisterTailwindCSS(FromFile(path))
 	}
 }

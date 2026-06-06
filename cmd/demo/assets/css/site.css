@@ -18,3 +18,31 @@ body {
   margin-top: 0.5rem;
   color: #64748b;
 }
+
+@layer components {
+  .card {
+    @apply mx-auto mt-12 max-w-xl rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-200;
+  }
+
+  .title {
+    @apply text-3xl font-bold tracking-tight text-slate-900;
+  }
+
+  .lead {
+    @apply mt-4 text-base leading-7 text-slate-700;
+  }
+
+  .hint {
+    @apply mt-3 text-sm text-slate-500;
+  }
+}
+
+@theme {
+  --color-main: yellow;
+}
+
+@layer base {
+  html {
+    @apply p-20 bg-main;
+  }
+}

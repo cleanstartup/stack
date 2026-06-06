@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestConventionalAssetsDiscoverTailwindFragments(t *testing.T) {
+func TestConventionalAssetsDiscoverStylesAndScripts(t *testing.T) {
 	baseDir := t.TempDir()
 
 	mustWrite := func(rel string, content string) {
@@ -20,17 +20,16 @@ func TestConventionalAssetsDiscoverTailwindFragments(t *testing.T) {
 	}
 
 	mustWrite("assets/css/site.css", "body{color:red}")
-	mustWrite("assets/css/site.tailwind.css", "@layer components {.title {@apply text-3xl font-bold;}}")
 	mustWrite("assets/js/site.js", "console.log('ok')")
 
 	app := newWebApp()
 	ConventionalAssets(baseDir).Apply(app)
 
-	if got := len(app.builder.Assets().Entries()); got != 2 {
-		t.Fatalf("expected 2 direct asset entries, got %d", got)
+	if got := len(app.builder.Assets().Entries()); got != 1 {
+		t.Fatalf("expected 1 direct asset entry, got %d", got)
 	}
 	if got := len(app.builder.Styles().Inputs()); got != 1 {
-		t.Fatalf("expected 1 tailwind input, got %d", got)
+		t.Fatalf("expected 1 css input, got %d", got)
 	}
 	if got := len(app.builder.Styles().ScanPaths()); got != 1 {
 		t.Fatalf("expected 1 tailwind scan path, got %d", got)

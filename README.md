@@ -61,7 +61,7 @@ func main() {
 - `web dev` rebuildet bei Änderungen per Polling und triggert per SSE einen Browser-Reload.
 - Lokale Dependency-Assets können Watch-Pfade mitbringen, z. B. über `web.FromFS(..., watchPath)` oder `web.WithWatchPaths(...)`.
 - Das app-weite Styles-Set wird automatisch aus `assets/css` der aufrufenden App angewendet; darin landen alle `*.css` Dateien im zentralen Tailwind-Build.
-- Tailwind-Assets laufen zentral durch einen Tailwind-Build-Output (`/assets/css/app/app.css`). Das Tailwind-Binary wird automatisch heruntergeladen und im Cache abgelegt, wenn es nicht bereits verfügbar ist.
+- Der Styles-Build läuft zentral über einen Tailwind-Output (`/assets/css/app/app.css`). Das Tailwind-Binary wird automatisch heruntergeladen und im Cache abgelegt, wenn es nicht bereits verfügbar ist.
 - Zusätzliche Tailwind-Scan-Pfade kannst du mit `web.TailwindScan(...)` registrieren.
 - Die Demo zeigt das Styles-Default-Set in `cmd/demo/assets/css/*.css` plus ein explizit registriertes JS-Asset. Das Tailwind-Binary wird automatisch geladen; du kannst es bei Bedarf über die `WAY2GO_TAILWIND_*`-Variablen überschreiben.
 - Einfache Web-Activities können direkt `templ.Component` oder Text zurückgeben; den Seitentitel setzt du über `web.WithStaticTitle(...)`. Die HTML-Shell und die globalen CSS/JS-Assets werden dabei von `web` automatisch injiziert. `web.Page` bleibt für Spezialfälle verfügbar.
