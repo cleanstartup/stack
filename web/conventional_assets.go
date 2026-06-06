@@ -11,9 +11,14 @@ type conventionalAssets struct {
 	baseDir string
 }
 
-func ConventionalAssets(baseDir string) Contributor {
-	return conventionalAssets{baseDir: baseDir}
+func ConventionalAssets(baseDir ...string) Contributor {
+	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
+		return conventionalAssets{baseDir: baseDir[0]}
+	}
+	return conventionalAssets{baseDir: inferredConventionalAssetsDir()}
 }
+
+func inferredConventionalAssetsDir() string { return CallerDir(2) }
 
 func (a conventionalAssets) Apply(b *Builder) {
 	if b == nil || strings.TrimSpace(a.baseDir) == "" {

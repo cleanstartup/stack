@@ -4,8 +4,6 @@ import (
 	"context"
 	"io"
 	"log"
-	"path/filepath"
-	"runtime"
 
 	"github.com/a-h/templ"
 	"github.com/cleanstartup/way2go/activity"
@@ -14,7 +12,7 @@ import (
 
 func main() {
 	if err := web.Run(web.Compose(
-		web.ConventionalAssets(mustModuleDir()),
+		web.ConventionalAssets(),
 		web.Simple(web.RootRef(), func(ctx activity.Context) activity.Result {
 			return web.Page{
 				Title: "way2go demo",
@@ -35,11 +33,3 @@ func (d demoBody) Render(_ context.Context, w io.Writer) error {
 }
 
 var _ templ.Component = demoBody{}
-
-func mustModuleDir() string {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("unable to resolve demo module directory")
-	}
-	return filepath.Dir(file)
-}
