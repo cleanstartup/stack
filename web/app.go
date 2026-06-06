@@ -31,7 +31,7 @@ func New(parts ...Part) *WebApp {
 
 func NewWithDefaults(baseDir string, parts ...Part) *WebApp {
 	app := newWebApp()
-	app.Apply(append([]Part{Styles(baseDir)}, parts...)...)
+	app.Apply(append([]Part{Styles(baseDir), Components(baseDir)}, parts...)...)
 	return app
 }
 
@@ -55,6 +55,10 @@ func (a *WebApp) RegisterTailwindCSS(src AssetSource) AssetRef {
 	return a.builder.TailwindCSS(src)
 }
 
+func (a *WebApp) RegisterStencil(src AssetSource) AssetRef {
+	return a.builder.Stencil(src)
+}
+
 func (a *WebApp) RegisterJS(src AssetSource) AssetRef {
 	return a.builder.JS(src)
 }
@@ -65,6 +69,10 @@ func (a *WebApp) RegisterFile(src AssetSource) AssetRef {
 
 func (a *WebApp) RegisterTailwindScan(paths ...string) {
 	a.builder.TailwindScan(paths...)
+}
+
+func (a *WebApp) RegisterStencilScan(paths ...string) {
+	a.builder.StencilScan(paths...)
 }
 
 func (a *WebApp) Build(ctx context.Context, cfg BuildConfig) (*BuildResult, error) {

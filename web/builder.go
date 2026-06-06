@@ -26,6 +26,7 @@ func (r webActivityRouteRegistration[C]) register(reg *Registry) {
 type Builder struct {
 	routes   []routeRegistration
 	tailwind *TailwindRegistry
+	stencil  *StencilRegistry
 	assets   *AssetRegistry
 }
 
@@ -33,6 +34,7 @@ func NewBuilder() *Builder {
 	return &Builder{
 		routes:   []routeRegistration{},
 		tailwind: NewTailwindRegistry(),
+		stencil:  NewStencilRegistry(),
 		assets:   NewAssetRegistry(),
 	}
 }
@@ -85,6 +87,13 @@ func (b *Builder) TailwindCSS(src AssetSource) AssetRef {
 	return b.tailwind.AddInput(src)
 }
 
+func (b *Builder) Stencil(src AssetSource) AssetRef {
+	if b == nil || b.stencil == nil {
+		return AssetRef{}
+	}
+	return b.stencil.AddInput(src)
+}
+
 func (b *Builder) JS(src AssetSource) AssetRef   { return b.Add(AssetKindJS, src) }
 func (b *Builder) File(src AssetSource) AssetRef { return b.Add(AssetKindFile, src) }
 
@@ -95,11 +104,25 @@ func (b *Builder) TailwindScan(paths ...string) {
 	b.tailwind.AddScan(paths...)
 }
 
+func (b *Builder) StencilScan(paths ...string) {
+	if b == nil || b.stencil == nil {
+		return
+	}
+	b.stencil.AddScan(paths...)
+}
+
 func (b *Builder) Styles() *TailwindRegistry {
 	if b == nil {
 		return nil
 	}
 	return b.tailwind
+}
+
+func (b *Builder) Components() *StencilRegistry {
+	if b == nil {
+		return nil
+	}
+	return b.stencil
 }
 
 func (b *Builder) Manifest() AssetManifest {
@@ -112,6 +135,9 @@ func (b *Builder) Manifest() AssetManifest {
 	}
 	if b.tailwind != nil && len(b.tailwind.Inputs()) > 0 {
 		manifest.Styles = append(manifest.Styles, b.tailwind.BundleRef())
+	}
+	if b.stencil != nil && len(b.stencil.Inputs()) > 0 {
+		manifest.Scripts = append(manifest.Scripts, b.stencil.BundleRef())
 	}
 	return manifest
 }

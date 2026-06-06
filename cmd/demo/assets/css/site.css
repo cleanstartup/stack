@@ -19,6 +19,10 @@ body {
   color: #64748b;
 }
 
+.button {
+  @apply mt-4 inline-flex cursor-pointer items-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700;
+}
+
 @layer components {
   .card {
     @apply mx-auto mt-12 max-w-xl rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-200;

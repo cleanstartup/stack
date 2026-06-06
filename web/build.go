@@ -29,6 +29,7 @@ type BuildConfig struct {
 	TailwindVersion      string
 	TailwindCacheDir     string
 	TailwindDownloadBase string
+	StencilBinary        string
 }
 
 type ServeConfig struct {
@@ -119,6 +120,9 @@ func (e *BuildEngine) Build(ctx context.Context, cfg BuildConfig) (*BuildResult,
 		return nil, err
 	}
 	if err := e.buildStyleBundle(ctx, workspace, cfg); err != nil {
+		return nil, err
+	}
+	if err := e.buildStencilBundle(ctx, workspace, cfg); err != nil {
 		return nil, err
 	}
 
@@ -343,6 +347,19 @@ func (e *BuildEngine) watchPaths() []string {
 	var paths []string
 	if e.builder.tailwind != nil {
 		for _, p := range e.builder.tailwind.WatchPaths() {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if _, exists := seen[p]; exists {
+				continue
+			}
+			seen[p] = struct{}{}
+			paths = append(paths, p)
+		}
+	}
+	if e.builder.stencil != nil {
+		for _, p := range e.builder.stencil.WatchPaths() {
 			p = strings.TrimSpace(p)
 			if p == "" {
 				continue

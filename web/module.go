@@ -42,6 +42,10 @@ func TailwindCSS(src AssetSource) Part {
 	return partFunc(func(app *WebApp) { app.RegisterTailwindCSS(src) })
 }
 
+func Stencil(src AssetSource) Part {
+	return partFunc(func(app *WebApp) { app.RegisterStencil(src) })
+}
+
 func JS(src AssetSource) Part {
 	return partFunc(func(app *WebApp) { app.RegisterJS(src) })
 }
@@ -52,4 +56,8 @@ func File(src AssetSource) Part {
 
 func TailwindScan(paths ...string) Part {
 	return partFunc(func(app *WebApp) { app.RegisterTailwindScan(paths...) })
+}
+
+func StencilScan(paths ...string) Part {
+	return partFunc(func(app *WebApp) { app.RegisterStencilScan(paths...) })
 }

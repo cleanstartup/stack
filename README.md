@@ -62,11 +62,13 @@ func main() {
 - Lokale Dependency-Assets können Watch-Pfade mitbringen, z. B. über `web.FromFS(..., watchPath)` oder `web.WithWatchPaths(...)`.
 - Das app-weite Styles-Set wird automatisch aus `assets/css` der aufrufenden App angewendet; darin landen alle `*.css` Dateien im zentralen Tailwind-Build.
 - Der Styles-Build läuft zentral über einen Tailwind-Output (`/assets/css/app/app.css`). Das Tailwind-Binary wird automatisch heruntergeladen und im Cache abgelegt, wenn es nicht bereits verfügbar ist.
+- Die Komponenten-Konvention greift automatisch `assets/components`; dort landen `*.tsx` für Stencil-Komponenten und `*.ts` für Hilfslogik.
+- Der Stencil-Build erzeugt einen zentralen JS-Output (`/assets/js/app/app.esm.js`). Das CLI wird bei Bedarf über `npx` aufgerufen; du kannst das via `WAY2GO_STENCIL_BINARY` überschreiben.
 - Zusätzliche Tailwind-Scan-Pfade kannst du mit `web.TailwindScan(...)` registrieren.
-- Die Demo zeigt das Styles-Default-Set in `cmd/demo/assets/css/*.css` plus ein explizit registriertes JS-Asset. Das Tailwind-Binary wird automatisch geladen; du kannst es bei Bedarf über die `WAY2GO_TAILWIND_*`-Variablen überschreiben.
-- Einfache Web-Activities können direkt `templ.Component` oder Text zurückgeben; den Seitentitel setzt du über `web.WithStaticTitle(...)`. Die HTML-Shell und die globalen CSS/JS-Assets werden dabei von `web` automatisch injiziert. `web.Page` bleibt für Spezialfälle verfügbar.
+- Die Demo zeigt das Styles-Default-Set in `cmd/demo/assets/css/*.css` plus eine Stencil-Komponente in `cmd/demo/assets/components/*.tsx`. Das Tailwind-Binary wird automatisch geladen; du kannst es bei Bedarf über die `WAY2GO_TAILWIND_*`-Variablen überschreiben.
+- Einfache Web-Activities können direkt `templ.Component` oder Text zurückgeben; den Seitentitel setzt du über `web.WithStaticTitle(...)`. Die HTML-Shell und die globalen CSS-/JS-Assets werden dabei von `web` automatisch injiziert. `web.Page` bleibt für Spezialfälle verfügbar.
 
-`WAY2GO_TAILWIND_BINARY`, `WAY2GO_TAILWIND_VERSION`, `WAY2GO_TAILWIND_CACHE_DIR` und `WAY2GO_TAILWIND_DOWNLOAD_BASE` überschreiben die Default-Auflösung bei Bedarf.
+`WAY2GO_TAILWIND_BINARY`, `WAY2GO_TAILWIND_VERSION`, `WAY2GO_TAILWIND_CACHE_DIR`, `WAY2GO_TAILWIND_DOWNLOAD_BASE` und `WAY2GO_STENCIL_BINARY` überschreiben die Default-Auflösung bei Bedarf.
 
 ## Demo
 
@@ -78,4 +80,4 @@ go run ./cmd/demo run
 go run ./cmd/demo dev
 ```
 
-Die Demo registriert eine Activity plus ein JS-Asset direkt über `web.App(web.Module(web.JS(...), web.Activity(..., web.WithStaticTitle(...))))`, während die Styles automatisch aus `assets/css` der Demo übernommen werden; sie gibt direkt ein `templ.Component` zurück und nutzt dieselbe zentrale `web`-Runtime wie die spätere Anwendung.
+Die Demo registriert eine Activity, während Styles und Komponenten automatisch aus `assets/css` bzw. `assets/components` der Demo übernommen werden; sie gibt direkt ein `templ.Component` zurück und nutzt dieselbe zentrale `web`-Runtime wie die spätere Anwendung.

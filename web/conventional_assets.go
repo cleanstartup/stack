@@ -15,6 +15,10 @@ type styleAssets struct {
 	baseDir string
 }
 
+type componentAssets struct {
+	baseDir string
+}
+
 func Styles(baseDir ...string) Part {
 	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
 		return styleAssets{baseDir: baseDir[0]}
@@ -23,6 +27,15 @@ func Styles(baseDir ...string) Part {
 }
 
 func inferredStyleAssetsDir() string { return CallerDir(2) }
+
+func Components(baseDir ...string) Part {
+	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
+		return componentAssets{baseDir: baseDir[0]}
+	}
+	return componentAssets{baseDir: inferredComponentAssetsDir()}
+}
+
+func inferredComponentAssetsDir() string { return CallerDir(2) }
 
 func ConventionalAssets(baseDir ...string) Part {
 	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
@@ -87,4 +100,17 @@ func (a styleAssets) Apply(app *WebApp) {
 	for _, path := range cssFiles {
 		app.RegisterTailwindCSS(FromFile(path))
 	}
+}
+
+func (a componentAssets) Apply(app *WebApp) {
+	if app == nil || strings.TrimSpace(a.baseDir) == "" {
+		return
+	}
+	componentsDir := filepath.Join(a.baseDir, "assets", "components")
+	info, err := os.Stat(componentsDir)
+	if err != nil || !info.IsDir() {
+		return
+	}
+	app.RegisterStencilScan(componentsDir)
+	app.RegisterStencil(FromDir(componentsDir))
 }
