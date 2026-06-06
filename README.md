@@ -62,7 +62,7 @@ func main() {
 - Lokale Dependency-Assets können Watch-Pfade mitbringen, z. B. über `web.FromFS(..., watchPath)` oder `web.WithWatchPaths(...)`.
 - Das app-weite Styles-Set wird automatisch aus `assets/css` der aufrufenden App angewendet; darin landen alle `*.css` Dateien im zentralen Tailwind-Build.
 - Der Styles-Build läuft zentral über einen Tailwind-Output (`/assets/css/app/app.css`). Das Tailwind-Binary wird automatisch heruntergeladen und im Cache abgelegt, wenn es nicht bereits verfügbar ist.
-- Die Komponenten-Konvention greift automatisch `assets/components`; dort landen `*.tsx` für Stencil-Komponenten und `*.ts` für Hilfslogik.
+- Die Komponenten-Konvention greift automatisch `assets/components`; dort landen `*.tsx` für Stencil-Komponenten und `*.ts` für Hilfslogik, die von Komponenten importiert werden kann.
 - Der Stencil-Build erzeugt einen zentralen JS-Output (`/assets/js/way2go/way2go.esm.js`). Das CLI wird bei Bedarf über `npm exec` nachgeladen; du kannst das via `WAY2GO_STENCIL_BINARY` überschreiben.
 - Zusätzliche Tailwind-Scan-Pfade kannst du mit `web.TailwindScan(...)` registrieren.
 - Die Demo zeigt das Styles-Default-Set in `cmd/demo/assets/css/*.css` plus eine Stencil-Komponente in `cmd/demo/assets/components/*.tsx`. Das Tailwind-Binary wird automatisch geladen; du kannst es bei Bedarf über die `WAY2GO_TAILWIND_*`-Variablen überschreiben.

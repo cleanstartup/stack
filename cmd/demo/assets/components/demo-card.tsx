@@ -1,4 +1,5 @@
 import { Component, State, h } from '@stencil/core';
+import { DemoCopy } from './lib/demo-copy';
 
 @Component({
   tag: 'demo-card',
@@ -15,9 +16,9 @@ export class DemoCard {
   render() {
     return (
       <section class="card">
-        <h1 class="title">hello from way2go</h1>
-        <p class="lead">This page loads global styles and Stencil components.</p>
-        <p class="hint">{this.clicked ? 'clicked!' : 'Open the console and click the button.'}</p>
+        <h1 class="title">{DemoCopy.headline()}</h1>
+        <p class="lead">{DemoCopy.intro()}</p>
+        <p class="hint">{DemoCopy.hint(this.clicked)}</p>
         <button class="button" onClick={this.handleClick}>Click me</button>
       </section>
     );
