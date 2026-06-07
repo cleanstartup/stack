@@ -19,8 +19,8 @@ func TestComponentsDiscoverStencilSources(t *testing.T) {
 		}
 	}
 
-	mustWrite("assets/components/demo-card.tsx", "export const demo = true\n")
-	mustWrite("assets/components/helpers/state.ts", "export const state = true\n")
+	mustWrite("demo-card.tsx", "export const demo = true\n")
+	mustWrite("demo-copy.ts", "export const state = true\n")
 
 	app := newWebApp()
 	Components(baseDir).Apply(app)
@@ -31,7 +31,7 @@ func TestComponentsDiscoverStencilSources(t *testing.T) {
 	if got := len(app.builder.Components().ScanPaths()); got != 1 {
 		t.Fatalf("expected 1 stencil scan path, got %d", got)
 	}
-	if got := app.builder.Components().ScanPaths()[0]; got != filepath.Join(baseDir, "assets", "components") {
-		t.Fatalf("expected scan path %q, got %q", filepath.Join(baseDir, "assets", "components"), got)
+	if got := app.builder.Components().ScanPaths()[0]; got != baseDir {
+		t.Fatalf("expected scan path %q, got %q", baseDir, got)
 	}
 }

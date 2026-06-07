@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 func (e *BuildEngine) buildStencilBundle(ctx context.Context, workspace *Workspace, cfg BuildConfig) error {
@@ -18,11 +19,22 @@ func (e *BuildEngine) buildStencilBundle(ctx context.Context, workspace *Workspa
 		return nil
 	}
 
+	cacheRoot := filepath.Join(filepath.Dir(workspace.Root), "stencil-cache")
+	start := time.Now()
+	fmt.Fprintf(os.Stderr, "[way2go] stencil build start inputs=%d cache=%s\n", len(e.builder.stencil.Inputs()), cacheRoot)
 	stencilWorkspace := &Workspace{
-		Root: filepath.Join(workspace.Temp, "stencil"),
-		Src:  filepath.Join(workspace.Temp, "stencil", "src"),
-		Out:  filepath.Join(workspace.Temp, "stencil", "dist"),
-		Temp: filepath.Join(workspace.Temp, "stencil", "tmp"),
+		Root: cacheRoot,
+		Src:  filepath.Join(cacheRoot, "src"),
+		Out:  filepath.Join(cacheRoot, "dist"),
+		Temp: filepath.Join(cacheRoot, "tmp"),
+	}
+	if err := os.MkdirAll(stencilWorkspace.Root, 0o755); err != nil {
+		return err
+	}
+	for _, dir := range []string{stencilWorkspace.Src, stencilWorkspace.Out, stencilWorkspace.Temp} {
+		if err := os.RemoveAll(dir); err != nil {
+			return err
+		}
 	}
 	if err := stencilWorkspace.Prepare(); err != nil {
 		return err
@@ -85,6 +97,7 @@ func (e *BuildEngine) buildStencilBundle(ctx context.Context, workspace *Workspa
 			return err
 		}
 	}
+	fmt.Fprintf(os.Stderr, "[way2go] stencil build complete duration=%s output=%s\n", time.Since(start).Round(time.Millisecond), outputDir)
 
 	return nil
 }
@@ -177,8 +190,10 @@ func ensureStencilDependencies(ctx context.Context, workDir string) error {
 	}
 	marker := filepath.Join(workDir, "node_modules", "@stencil", "core", "package.json")
 	if info, err := os.Stat(marker); err == nil && !info.IsDir() {
+		fmt.Fprintf(os.Stderr, "[way2go] stencil deps cache hit %s\n", workDir)
 		return nil
 	}
+	fmt.Fprintf(os.Stderr, "[way2go] stencil deps install %s\n", workDir)
 	cmd := exec.CommandContext(ctx, "npm", "install", "--no-package-lock", "--ignore-scripts")
 	cmd.Dir = workDir
 	output, err := cmd.CombinedOutput()
