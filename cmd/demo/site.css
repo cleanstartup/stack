@@ -42,7 +42,7 @@ body {
 }
 
 @theme {
-  --color-main: yellow;
+  --color-main: green;
 }
 
 @layer base {

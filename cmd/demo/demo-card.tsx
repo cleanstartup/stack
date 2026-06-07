@@ -1,5 +1,5 @@
 import { Component, State, h } from '@stencil/core';
-import { DemoCopy } from './lib/demo-copy';
+import { DemoCopy } from './demo-copy';
 
 @Component({
   tag: 'demo-card',
