@@ -57,6 +57,7 @@ func main() {
 
 - Module registrieren Activities und Assets dezentral.
 - Alle CLI-Einstiege unterstützen `--help`; unbekannte Commands zeigen automatisch die Hilfe statt nur einen Fehler. Ein Aufruf ohne Command zeigt ebenfalls die Hilfe an.
+- Kommando-Hilfetexte kannst du deklarativ mit `cli.WithHelp("...")` an der jeweiligen Activity definieren.
 - `web build` materialisiert Assets in `.way2go/public`.
 - `web run` serviert nur fertige Assets und erwartet, dass `build` bereits gelaufen ist.
 - `web dev` startet einen `templ`-Supervisor für Go-/templ-Änderungen und kombiniert ihn mit den Tailwind- und Stencil-Watch-Workern für die Asset-Pipeline. Der Browser läuft dabei über den templ-Proxy; CSS-/JS-Änderungen werden weiterhin über den internen Dev-Reload ausgelöst.

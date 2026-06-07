@@ -176,8 +176,8 @@ func TestHelpFlagsShowUsage(t *testing.T) {
 	root := cli.NewRegistry()
 	wallet := root.Group("wallet")
 
-	cli.RegisterActivity(root, cli.Simple("run", func(ctx activity.Context) cli.Result { return cli.Done() }))
-	cli.RegisterActivity(wallet, cli.Simple("show", func(ctx activity.Context) cli.Result { return cli.Done() }))
+	cli.RegisterActivity(root, cli.Simple("run", func(ctx activity.Context) cli.Result { return cli.Done() }, cli.WithHelp[struct{}]("start the server")))
+	cli.RegisterActivity(wallet, cli.Simple("show", func(ctx activity.Context) cli.Result { return cli.Done() }, cli.WithHelp[struct{}]("show wallet details")))
 
 	res := root.Execute([]string{"--help"})
 	if res.ExitCode != 0 {
@@ -186,7 +186,7 @@ func TestHelpFlagsShowUsage(t *testing.T) {
 	if !strings.Contains(res.Stdout, "Subcommands:") || !strings.Contains(res.Stdout, "wallet") {
 		t.Fatalf("expected root help, got %q", res.Stdout)
 	}
-	if !strings.Contains(res.Stdout, "Commands:") || !strings.Contains(res.Stdout, "run") {
+	if !strings.Contains(res.Stdout, "Commands:") || !strings.Contains(res.Stdout, "run - start the server") {
 		t.Fatalf("expected command list, got %q", res.Stdout)
 	}
 	if !strings.Contains(res.Stdout, "Use --help on any command") {
@@ -207,6 +207,9 @@ func TestHelpFlagsShowUsage(t *testing.T) {
 	}
 	if !strings.Contains(res.Stdout, "Usage: run [flags]") {
 		t.Fatalf("expected command help, got %q", res.Stdout)
+	}
+	if !strings.Contains(res.Stdout, "start the server") {
+		t.Fatalf("expected command summary, got %q", res.Stdout)
 	}
 }
 

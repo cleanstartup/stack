@@ -26,6 +26,7 @@ type RuntimeContext struct {
 
 type Registry struct {
 	commands map[string]func(args []string) Result
+	help     map[string]string
 	byID     map[string]string
 	mounts   map[string]*Registry
 }
@@ -57,6 +58,7 @@ type ActivityOption[C any] func(a *CliActivity[C])
 
 type CliActivity[C any] struct {
 	id          string
+	help        string
 	decode      DecodeFunc[C]
 	handler     ActivityHandler[C]
 	middlewares []ActivityMiddleware[C]
@@ -76,6 +78,7 @@ type stringParamConfig struct {
 func NewRegistry() *Registry {
 	return &Registry{
 		commands: map[string]func(args []string) Result{},
+		help:     map[string]string{},
 		byID:     map[string]string{},
 		mounts:   map[string]*Registry{},
 	}
@@ -152,6 +155,15 @@ func WithMiddleware[C any](mw ActivityMiddleware[C]) ActivityOption[C] {
 	}
 }
 
+func WithHelp[C any](text string) ActivityOption[C] {
+	return func(a *CliActivity[C]) {
+		if a == nil {
+			return
+		}
+		a.help = strings.TrimSpace(text)
+	}
+}
+
 func (a *CliActivity[C]) ID() string {
 	if a == nil {
 		return ""
@@ -189,6 +201,7 @@ func RegisterActivity[C any](r *Registry, a *CliActivity[C]) {
 		result := exec(hctx)
 		return ctx.merge(result)
 	}
+	r.help[a.id] = strings.TrimSpace(a.help)
 	r.byID[a.id] = a.id
 }
 
@@ -606,7 +619,7 @@ func (r *Registry) Help() Result {
 		lines = append(lines, "")
 		lines = append(lines, "Commands:")
 		for _, name := range sortedKeys(r.commands) {
-			lines = append(lines, "  "+name)
+			lines = append(lines, formatHelpEntry(name, r.help[name]))
 		}
 	}
 	lines = append(lines, "")
@@ -619,11 +632,24 @@ func (r *Registry) commandHelp(name string) Result {
 	if name == "" {
 		return r.Help()
 	}
+	summary := strings.TrimSpace(r.help[name])
+	if summary == "" {
+		summary = "Use --help to show the available commands."
+	}
 	return Text(strings.Join([]string{
 		"Usage: " + name + " [flags]",
 		"",
-		"Use --help to show the available commands.",
+		summary,
 	}, "\n"))
+}
+
+func formatHelpEntry(name, summary string) string {
+	name = strings.TrimSpace(name)
+	summary = strings.TrimSpace(summary)
+	if summary == "" {
+		return "  " + name
+	}
+	return "  " + name + " - " + summary
 }
 
 func sortedKeys[V any](m map[string]V) []string {
