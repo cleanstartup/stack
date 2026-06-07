@@ -58,7 +58,7 @@ func main() {
 - Module registrieren Activities und Assets dezentral.
 - `web build` materialisiert Assets in `.way2go/public`.
 - `web run` serviert nur fertige Assets und erwartet, dass `build` bereits gelaufen ist.
-- `web dev` startet Tailwind- und Stencil-Watch-Worker, beobachtet deren Outputs und triggert nach dem Settling per SSE einen Browser-Reload.
+- `web dev` startet einen `templ`-Supervisor für Go-/templ-Änderungen und kombiniert ihn mit den Tailwind- und Stencil-Watch-Workern für die Asset-Pipeline. Der Browser läuft dabei über den templ-Proxy; CSS-/JS-Änderungen werden weiterhin über den internen Dev-Reload ausgelöst.
 - Lokale Dependency-Assets können Watch-Pfade mitbringen, z. B. über `web.FromFS(..., watchPath)` oder `web.WithWatchPaths(...)`.
 - Das app-weite Styles-Set wird automatisch aus allen `*.css` Dateien im Go-Modul der aufrufenden App angewendet, egal ob sie direkt im Demo-/Paketverzeichnis oder in Unterordnern liegen.
 - Der Styles-Build läuft zentral über einen Tailwind-Output (`/assets/css/app/app.css`). Das Tailwind-Binary wird automatisch heruntergeladen und im Cache abgelegt, wenn es nicht bereits verfügbar ist.
@@ -68,7 +68,7 @@ func main() {
 - Die Demo zeigt das Styles-Default-Set über flach abgelegte `cmd/demo/*.css`-Dateien plus eine Stencil-Komponente mit TS-Helper im selben Verzeichnis. Das Tailwind-Binary wird automatisch geladen; du kannst es bei Bedarf über die `WAY2GO_TAILWIND_*`-Variablen überschreiben.
 - Einfache Web-Activities können direkt `templ.Component` oder Text zurückgeben; den Seitentitel setzt du über `web.WithStaticTitle(...)`. Die HTML-Shell und die globalen CSS-/JS-Assets werden dabei von `web` automatisch injiziert. `web.Page` bleibt für Spezialfälle verfügbar.
 
-`WAY2GO_TAILWIND_BINARY`, `WAY2GO_TAILWIND_VERSION`, `WAY2GO_TAILWIND_CACHE_DIR`, `WAY2GO_TAILWIND_DOWNLOAD_BASE` und `WAY2GO_STENCIL_BINARY` überschreiben die Default-Auflösung bei Bedarf.
+`WAY2GO_TAILWIND_BINARY`, `WAY2GO_TAILWIND_VERSION`, `WAY2GO_TAILWIND_CACHE_DIR`, `WAY2GO_TAILWIND_DOWNLOAD_BASE` und `WAY2GO_STENCIL_BINARY` überschreiben die Default-Auflösung bei Bedarf. Der Dev-Mode nutzt `templ generate --watch --proxy=... --cmd=...` als Supervisor für Go-/templ-Dateien; der innere Child-Mode (`--child`) bleibt für die Asset-Watcher zuständig.
 
 ## Demo
 
