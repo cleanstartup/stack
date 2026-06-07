@@ -124,5 +124,5 @@ func assetManifestFromContext(ctx context.Context) AssetManifest {
 }
 
 func devLiveReloadScriptURL() string {
-	return "/__way2go/dev/events"
+	return "/__stack/dev/events"
 }

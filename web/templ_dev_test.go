@@ -22,8 +22,8 @@ func TestDevChildCommandIncludesChildFlag(t *testing.T) {
 
 	got := devChildCommand("/repo", "/repo/cmd/demo", DevConfig{
 		Addr:         ":8081",
-		WorkspaceDir: ".way2go/workspace",
-		OutputDir:    ".way2go/public",
+		WorkspaceDir: ".stack/workspace",
+		OutputDir:    ".stack/public",
 		PollInterval: 500 * time.Millisecond,
 	})
 
@@ -33,10 +33,10 @@ func TestDevChildCommandIncludesChildFlag(t *testing.T) {
 	if !strings.Contains(got, "--addr=:8081") {
 		t.Fatalf("expected addr flag, got %q", got)
 	}
-	if !strings.Contains(got, "--workspace=.way2go/workspace") {
+	if !strings.Contains(got, "--workspace=.stack/workspace") {
 		t.Fatalf("expected workspace flag, got %q", got)
 	}
-	if !strings.Contains(got, "--output=.way2go/public") {
+	if !strings.Contains(got, "--output=.stack/public") {
 		t.Fatalf("expected output flag, got %q", got)
 	}
 	if !strings.Contains(got, "--poll=500ms") {

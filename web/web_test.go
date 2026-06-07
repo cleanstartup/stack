@@ -301,7 +301,7 @@ func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
 	r := web.NewRegistry()
 	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app", Files: []string{"app.css"}}
-	scriptRef := web.AssetRef{Kind: web.AssetKindJS, ID: "way2go", Files: []string{"way2go.esm.js"}}
+	scriptRef := web.AssetRef{Kind: web.AssetKindJS, ID: "stack", Files: []string{"stack.esm.js"}}
 	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}, Scripts: []web.AssetRef{scriptRef}})
 	a := web.Activity(
 		web.Ref("page"),
@@ -331,7 +331,7 @@ func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
 	if !strings.Contains(body, "<link rel=\"stylesheet\" href=\"/assets/css/app/app.css\">") {
 		t.Fatalf("expected stylesheet link, got %q", body)
 	}
-	if !strings.Contains(body, "<script type=\"module\" src=\"/assets/js/way2go/way2go.esm.js\">") {
+	if !strings.Contains(body, "<script type=\"module\" src=\"/assets/js/stack/stack.esm.js\">") {
 		t.Fatalf("expected module script, got %q", body)
 	}
 	if !strings.Contains(body, "<main>hello</main>") {
@@ -394,7 +394,7 @@ func TestPageRendersDevReloadAndVersionedAssets(t *testing.T) {
 	if !strings.Contains(body, "<title>dev</title>") {
 		t.Fatalf("expected title, got %q", body)
 	}
-	if !strings.Contains(body, "/__way2go/dev/events") {
+	if !strings.Contains(body, "/__stack/dev/events") {
 		t.Fatalf("expected dev reload script, got %q", body)
 	}
 }
@@ -408,7 +408,7 @@ func TestDevEventsEndpointIsMounted(t *testing.T) {
 	rec := httptest.NewRecorder()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	req := httptest.NewRequest(http.MethodGet, "/__way2go/dev/events", nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/__stack/dev/events", nil).WithContext(ctx)
 	r.Handler().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK && rec.Code != 0 {

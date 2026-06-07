@@ -89,7 +89,7 @@ func (e *BuildEngine) tailwindInput(workspace *Workspace) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			out.WriteString("\n/* way2go: ")
+			out.WriteString("\n/* stack: ")
 			out.WriteString(filepath.ToSlash(contentPath))
 			out.WriteString(" */\n")
 			out.Write(content)
@@ -105,7 +105,7 @@ func (e *BuildEngine) tailwindInput(workspace *Workspace) (string, error) {
 func newTailwindWorkspace(cacheRoot string) *Workspace {
 	cacheRoot = strings.TrimSpace(cacheRoot)
 	if cacheRoot == "" {
-		cacheRoot = filepath.Join(".way2go", "tailwind-cache")
+		cacheRoot = filepath.Join(".stack", "tailwind-cache")
 	}
 	return &Workspace{
 		Root: cacheRoot,
@@ -156,13 +156,13 @@ func resolveTailwindBinary(ctx context.Context, cfg BuildConfig) (string, error)
 	if path := strings.TrimSpace(cfg.TailwindBinary); path != "" {
 		return path, nil
 	}
-	if path := strings.TrimSpace(os.Getenv("WAY2GO_TAILWIND_BINARY")); path != "" {
+	if path := strings.TrimSpace(os.Getenv("STACK_TAILWIND_BINARY")); path != "" {
 		return path, nil
 	}
 
 	version := strings.TrimSpace(cfg.TailwindVersion)
 	if version == "" {
-		version = strings.TrimSpace(os.Getenv("WAY2GO_TAILWIND_VERSION"))
+		version = strings.TrimSpace(os.Getenv("STACK_TAILWIND_VERSION"))
 	}
 	if version == "" {
 		version = "latest"
@@ -170,19 +170,19 @@ func resolveTailwindBinary(ctx context.Context, cfg BuildConfig) (string, error)
 
 	cacheDir := strings.TrimSpace(cfg.TailwindCacheDir)
 	if cacheDir == "" {
-		cacheDir = strings.TrimSpace(os.Getenv("WAY2GO_TAILWIND_CACHE_DIR"))
+		cacheDir = strings.TrimSpace(os.Getenv("STACK_TAILWIND_CACHE_DIR"))
 	}
 	if cacheDir == "" {
 		if userCacheDir, err := os.UserCacheDir(); err == nil && strings.TrimSpace(userCacheDir) != "" {
-			cacheDir = filepath.Join(userCacheDir, "way2go", "tailwind")
+			cacheDir = filepath.Join(userCacheDir, "stack", "tailwind")
 		} else {
-			cacheDir = filepath.Join(os.TempDir(), "way2go", "tailwind")
+			cacheDir = filepath.Join(os.TempDir(), "stack", "tailwind")
 		}
 	}
 
 	downloadBase := strings.TrimSpace(cfg.TailwindDownloadBase)
 	if downloadBase == "" {
-		downloadBase = strings.TrimSpace(os.Getenv("WAY2GO_TAILWIND_DOWNLOAD_BASE"))
+		downloadBase = strings.TrimSpace(os.Getenv("STACK_TAILWIND_DOWNLOAD_BASE"))
 	}
 	if downloadBase == "" {
 		downloadBase = tailwindDefaultDownloadBase
@@ -250,7 +250,7 @@ func downloadTailwindBinary(ctx context.Context, cacheDir, version, downloadBase
 	if err != nil {
 		return "", err
 	}
-	request.Header.Set("User-Agent", "way2go-web")
+	request.Header.Set("User-Agent", "stack-web")
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
@@ -277,7 +277,7 @@ func downloadTailwindBinary(ctx context.Context, cacheDir, version, downloadBase
 }
 
 func resolveLatestTailwindVersion(ctx context.Context) (string, error) {
-	apiBase := strings.TrimSpace(os.Getenv("WAY2GO_TAILWIND_API_BASE"))
+	apiBase := strings.TrimSpace(os.Getenv("STACK_TAILWIND_API_BASE"))
 	if apiBase == "" {
 		apiBase = tailwindDefaultAPIBase
 	}
@@ -286,7 +286,7 @@ func resolveLatestTailwindVersion(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	request.Header.Set("User-Agent", "way2go-web")
+	request.Header.Set("User-Agent", "stack-web")
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {

@@ -1,6 +1,6 @@
 export class DemoCopy {
   static headline() {
-    return "hello from way2go";
+    return "hello from stack";
   }
 
   static intro() {

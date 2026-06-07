@@ -42,7 +42,7 @@ func TestNewWithDefaultsAppliesStylesAndComponentsFromBaseDir(t *testing.T) {
 	if got := len(app.builder.Manifest().Scripts); got != 1 {
 		t.Fatalf("expected one script bundle in manifest, got %d", got)
 	}
-	if got := app.builder.Manifest().Scripts[0].URL(); got != "/assets/js/way2go/way2go.esm.js" {
+	if got := app.builder.Manifest().Scripts[0].URL(); got != "/assets/js/stack/stack.esm.js" {
 		t.Fatalf("expected stencil bundle url, got %q", got)
 	}
 }

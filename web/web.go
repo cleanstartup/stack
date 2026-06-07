@@ -613,7 +613,7 @@ func (r *Registry) RegisterDevEndpoints(state *DevState) {
 	if r == nil || state == nil {
 		return
 	}
-	r.router.Get("/__way2go/dev/events", state.ServeHTTP)
+	r.router.Get("/__stack/dev/events", state.ServeHTTP)
 }
 
 func prefixedPath(prefix string, path string) string {

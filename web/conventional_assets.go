@@ -88,7 +88,7 @@ func discoverModuleFiles(baseDir string, extensions ...string) []string {
 	}
 	skipDirs := map[string]struct{}{
 		".git":         {},
-		".way2go":      {},
+		".stack":       {},
 		"node_modules": {},
 		"dist":         {},
 		"build":        {},

@@ -10,7 +10,7 @@ export class DemoCard {
 
   private handleClick = () => {
     this.clicked = true;
-    console.log('hello from way2go');
+    console.log('hello from stack');
   };
 
   render() {

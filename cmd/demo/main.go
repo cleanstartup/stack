@@ -20,7 +20,7 @@ func main() {
 						return err
 					})
 				},
-				web.WithStaticTitle("way2go demo"),
+				web.WithStaticTitle("stack demo"),
 			),
 		),
 	)

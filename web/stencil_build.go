@@ -21,7 +21,7 @@ func (e *BuildEngine) buildStencilBundle(ctx context.Context, workspace *Workspa
 
 	cacheRoot := filepath.Join(filepath.Dir(workspace.Root), "stencil-cache")
 	start := time.Now()
-	fmt.Fprintf(os.Stderr, "[way2go] stencil build start inputs=%d cache=%s\n", len(e.builder.stencil.Inputs()), cacheRoot)
+	fmt.Fprintf(os.Stderr, "[stack] stencil build start inputs=%d cache=%s\n", len(e.builder.stencil.Inputs()), cacheRoot)
 	stencilWorkspace := &Workspace{
 		Root: cacheRoot,
 		Src:  filepath.Join(cacheRoot, "src"),
@@ -97,7 +97,7 @@ func (e *BuildEngine) buildStencilBundle(ctx context.Context, workspace *Workspa
 			return err
 		}
 	}
-	fmt.Fprintf(os.Stderr, "[way2go] stencil build complete duration=%s output=%s\n", time.Since(start).Round(time.Millisecond), outputDir)
+	fmt.Fprintf(os.Stderr, "[stack] stencil build complete duration=%s output=%s\n", time.Since(start).Round(time.Millisecond), outputDir)
 
 	return nil
 }
@@ -106,7 +106,7 @@ func resolveStencilBinary(cfg BuildConfig) (string, error) {
 	if path := strings.TrimSpace(cfg.StencilBinary); path != "" {
 		return path, nil
 	}
-	if path := strings.TrimSpace(os.Getenv("WAY2GO_STENCIL_BINARY")); path != "" {
+	if path := strings.TrimSpace(os.Getenv("STACK_STENCIL_BINARY")); path != "" {
 		return path, nil
 	}
 	return "npm", nil
@@ -142,7 +142,7 @@ func stencilConfigSource() string {
 	return `import type { Config } from '@stencil/core';
 
 export const config: Config = {
-  namespace: 'way2go',
+  namespace: 'stack',
   srcDir: 'src/assets/js',
   outputTargets: [
     {
@@ -174,7 +174,7 @@ func stencilTSConfigSource() string {
 
 func stencilPackageSource() string {
 	data, _ := json.MarshalIndent(map[string]any{
-		"name":    "way2go-stencil-workspace",
+		"name":    "stack-stencil-workspace",
 		"private": true,
 		"version": "0.0.0",
 		"devDependencies": map[string]string{
@@ -190,10 +190,10 @@ func ensureStencilDependencies(ctx context.Context, workDir string) error {
 	}
 	marker := filepath.Join(workDir, "node_modules", "@stencil", "core", "package.json")
 	if info, err := os.Stat(marker); err == nil && !info.IsDir() {
-		fmt.Fprintf(os.Stderr, "[way2go] stencil deps cache hit %s\n", workDir)
+		fmt.Fprintf(os.Stderr, "[stack] stencil deps cache hit %s\n", workDir)
 		return nil
 	}
-	fmt.Fprintf(os.Stderr, "[way2go] stencil deps install %s\n", workDir)
+	fmt.Fprintf(os.Stderr, "[stack] stencil deps install %s\n", workDir)
 	cmd := exec.CommandContext(ctx, "npm", "install", "--no-package-lock", "--ignore-scripts")
 	cmd.Dir = workDir
 	output, err := cmd.CombinedOutput()

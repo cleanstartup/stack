@@ -16,7 +16,7 @@ type Workspace struct {
 
 func NewWorkspace(root string) (*Workspace, error) {
 	if stringsTrim(root) == "" {
-		root = filepath.Join(".way2go", "workspace")
+		root = filepath.Join(".stack", "workspace")
 	}
 	abs, err := filepath.Abs(root)
 	if err == nil {

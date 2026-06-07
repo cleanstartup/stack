@@ -1,13 +1,12 @@
-# way2go
+# stack
 
-`way2go` is a small Go foundation for building activities, web handlers, and CLIs with a shared model.
+`stack` is a small Go foundation for building activities, web handlers, and CLIs with a shared model.
 
 ## Packages
 
 - `activity`: typed activity definitions, instances, URI building, and execution helpers
-- `web`: HTTP registration, routing, and request decoding
-- `cli`: command registration, parsing, and execution
-- `auth`: optional session helpers for the core packages
+- `web`: HTTP registration, routing, asset pipelines, and request decoding
+- `cli`: command registration, parsing, help text, and execution
 - `config`: env-based config loading with `.env` support
 
 ## Import
@@ -53,29 +52,29 @@ func main() {
 
 ## Web Runtime
 
-`web` stellt eine zentrale Runtime mit modularem Build bereit:
+`web` provides a central runtime with a modular build pipeline:
 
-- Module registrieren Activities und Assets dezentral.
-- Alle CLI-Einstiege unterstützen `--help`; unbekannte Commands zeigen automatisch die Hilfe statt nur einen Fehler. Ein Aufruf ohne Command zeigt ebenfalls die Hilfe an.
-- Kommando-Hilfetexte kannst du deklarativ mit `cli.WithHelp("...")` an der jeweiligen Activity definieren.
-- `web build` materialisiert Assets in `.way2go/public`.
-- `web run` serviert nur fertige Assets und erwartet, dass `build` bereits gelaufen ist.
-- `web dev` startet einen `templ`-Supervisor für Go-/templ-Änderungen und kombiniert ihn mit den Tailwind- und Stencil-Watch-Workern für die Asset-Pipeline. Der Browser läuft dabei über den templ-Proxy; CSS-/JS-Änderungen werden weiterhin über den internen Dev-Reload ausgelöst.
-- Die Web-Commands tragen eigene Help-Texte: `run`, `build` und `dev` erklären sich über `--help` und werden im CLI-Listing kurz beschrieben.
-- Lokale Dependency-Assets können Watch-Pfade mitbringen, z. B. über `web.FromFS(..., watchPath)` oder `web.WithWatchPaths(...)`.
-- Das app-weite Styles-Set wird automatisch aus allen `*.css` Dateien im Go-Modul der aufrufenden App angewendet, egal ob sie direkt im Demo-/Paketverzeichnis oder in Unterordnern liegen.
-- Der Styles-Build läuft zentral über einen Tailwind-Output (`/assets/css/app/app.css`). Das Tailwind-Binary wird automatisch heruntergeladen und im Cache abgelegt, wenn es nicht bereits verfügbar ist.
-- Die Komponenten-Konvention greift automatisch alle `*.tsx` und `*.ts` Dateien im Go-Modul; Stencil-Komponenten und Hilfslogik können so quer durch das Modul organisiert werden, auch in einer flachen Struktur direkt unter dem jeweiligen Paket- oder Demo-Verzeichnis.
-- Der Stencil-Build erzeugt einen zentralen JS-Output (`/assets/js/way2go/way2go.esm.js`). Das CLI wird bei Bedarf über `npm exec` nachgeladen; du kannst das via `WAY2GO_STENCIL_BINARY` überschreiben.
-- Zusätzliche Tailwind-Scan-Pfade kannst du mit `web.TailwindScan(...)` registrieren.
-- Die Demo zeigt das Styles-Default-Set über flach abgelegte `cmd/demo/*.css`-Dateien plus eine Stencil-Komponente mit TS-Helper im selben Verzeichnis. Das Tailwind-Binary wird automatisch geladen; du kannst es bei Bedarf über die `WAY2GO_TAILWIND_*`-Variablen überschreiben.
-- Einfache Web-Activities können direkt `templ.Component` oder Text zurückgeben; den Seitentitel setzt du über `web.WithStaticTitle(...)`. Die HTML-Shell und die globalen CSS-/JS-Assets werden dabei von `web` automatisch injiziert. `web.Page` bleibt für Spezialfälle verfügbar.
+- Modules register activities and assets independently.
+- All CLI entry points support `--help`; unknown commands print help instead of only failing. Calling the binary without a command also shows help.
+- Command help text can be declared declaratively with `cli.WithHelp("...")` on each activity.
+- `web build` materializes assets into `.stack/public`.
+- `web run` serves already-built assets and expects `build` to have run first.
+- `web dev` starts a `templ` supervisor for Go/templ changes and combines it with Tailwind and Stencil watch workers for the asset pipeline. The browser runs through the templ proxy; CSS/JS changes are still handled through the internal dev reload.
+- Web commands have their own help text: `run`, `build`, and `dev` explain themselves via `--help` and show up in the CLI listing.
+- Local dependency assets can bring watch paths, for example through `web.FromFS(..., watchPath)` or `web.WithWatchPaths(...)`.
+- The app-wide style set is collected automatically from all `*.css` files in the calling Go module, whether they live directly in the demo/package directory or deeper in subdirectories.
+- The styles build runs through a single Tailwind output (`/assets/css/app/app.css`). The Tailwind binary is downloaded automatically and cached if it is not already available.
+- The component convention automatically picks up all `*.tsx` and `*.ts` files in the Go module; Stencil components and helper logic can therefore be organized anywhere in the module, including a flat layout directly under a package or demo directory.
+- The Stencil build produces a central JS output (`/assets/js/stack/stack.esm.js`). The CLI is fetched on demand through `npm exec`; you can override that via `STACK_STENCIL_BINARY`.
+- Additional Tailwind scan paths can be registered with `web.TailwindScan(...)`.
+- The demo shows the default style set through flat `cmd/demo/*.css` files plus a Stencil component with a TS helper in the same directory. The Tailwind binary is downloaded automatically; you can override it via the `STACK_TAILWIND_*` variables.
+- Simple web activities can return `templ.Component` or plain text directly; set the page title with `web.WithStaticTitle(...)`. The HTML shell and the global CSS/JS assets are injected automatically by `web`. `web.Page` remains available for special cases.
 
-`WAY2GO_TAILWIND_BINARY`, `WAY2GO_TAILWIND_VERSION`, `WAY2GO_TAILWIND_CACHE_DIR`, `WAY2GO_TAILWIND_DOWNLOAD_BASE` und `WAY2GO_STENCIL_BINARY` überschreiben die Default-Auflösung bei Bedarf. Der Dev-Mode nutzt `templ generate --watch --proxy=... --cmd=...` als Supervisor für Go-/templ-Dateien; der innere Child-Mode (`--child`) bleibt für die Asset-Watcher zuständig.
+`STACK_TAILWIND_BINARY`, `STACK_TAILWIND_VERSION`, `STACK_TAILWIND_CACHE_DIR`, `STACK_TAILWIND_DOWNLOAD_BASE`, and `STACK_STENCIL_BINARY` override the default resolution when needed. The dev mode uses `templ generate --watch --proxy=... --cmd=...` as a supervisor for Go/templ files; the inner child mode (`--child`) is responsible for the asset watchers.
 
 ## Demo
 
-Zum Ausprobieren gibt es jetzt ein kleines Beispiel unter `cmd/demo`:
+A small example lives in `cmd/demo`:
 
 ```bash
 go run ./cmd/demo build
@@ -83,13 +82,13 @@ go run ./cmd/demo run
 go run ./cmd/demo dev
 ```
 
-Die Demo registriert eine Activity; Styles und Komponenten werden automatisch aus dem lokalen Demo-Modul übernommen. Für externe Dependencies gilt: `web.Styles(baseDir)` und `web.Components(baseDir)` brauchen einen passenden Modul-Root, damit `way2go` die CSS-/TS-/TSX-Dateien im Dependency-Checkout finden kann. Für die lokale Demo ist das nicht nötig; dort greifen die Defaults automatisch.
+The demo registers a single activity; styles and components are picked up automatically from the local demo module. For external dependencies, `web.Styles(baseDir)` and `web.Components(baseDir)` need an explicit module root so `stack` can discover the CSS/TS/TSX files in the dependency checkout. For the local demo that is not necessary; the defaults are applied automatically.
 
-## Externe Module
+## External Modules
 
-Wenn ein Modul aus einer Dependency kommt, gib seinen Root explizit an, damit `way2go` die Assets findet. Die üblichen Bausteine sind:
+If a module comes from a dependency, pass its root explicitly so `stack` can find the assets. The usual building blocks are:
 
-- `web.Styles(baseDir)` für `*.css`
-- `web.Components(baseDir)` für `*.ts` und `*.tsx`
+- `web.Styles(baseDir)` for `*.css`
+- `web.Components(baseDir)` for `*.ts` and `*.tsx`
 
-Für das lokale Hauptpaket erkennt `web.App(...)` die Konventionen automatisch. Externe Module sollten ihre Parts dagegen selbst mit dem passenden Root zusammensetzen oder die Helper direkt mit einem Root aufrufen.
+For the local main package, `web.App(...)` discovers the conventions automatically. External modules should compose their parts with the appropriate root or call the helpers directly with a root.

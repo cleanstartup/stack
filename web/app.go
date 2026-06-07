@@ -335,7 +335,7 @@ func (a *WebApp) DevWithTempl(ctx context.Context, cfg DevConfig) error {
 	cmd.Dir = moduleDir
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
-	fmt.Fprintf(os.Stderr, "[way2go] templ dev supervisor start cmd=%s dir=%s proxy=%s\n", strings.Join(templArgs, " "), cmd.Dir, proxyURL)
+	fmt.Fprintf(os.Stderr, "[stack] templ dev supervisor start cmd=%s dir=%s proxy=%s\n", strings.Join(templArgs, " "), cmd.Dir, proxyURL)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("templ dev supervisor failed: %w", err)
 	}
