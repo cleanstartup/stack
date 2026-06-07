@@ -167,6 +167,47 @@ func TestUnknownCommand(t *testing.T) {
 	if !strings.Contains(res.Stderr, "unknown command") {
 		t.Fatalf("unexpected stderr: %q", res.Stderr)
 	}
+	if !strings.Contains(res.Stderr, "Use --help") {
+		t.Fatalf("expected help output, got %q", res.Stderr)
+	}
+}
+
+func TestHelpFlagsShowUsage(t *testing.T) {
+	root := cli.NewRegistry()
+	wallet := root.Group("wallet")
+
+	cli.RegisterActivity(root, cli.Simple("run", func(ctx activity.Context) cli.Result { return cli.Done() }))
+	cli.RegisterActivity(wallet, cli.Simple("show", func(ctx activity.Context) cli.Result { return cli.Done() }))
+
+	res := root.Execute([]string{"--help"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d", res.ExitCode)
+	}
+	if !strings.Contains(res.Stdout, "Subcommands:") || !strings.Contains(res.Stdout, "wallet") {
+		t.Fatalf("expected root help, got %q", res.Stdout)
+	}
+	if !strings.Contains(res.Stdout, "Commands:") || !strings.Contains(res.Stdout, "run") {
+		t.Fatalf("expected command list, got %q", res.Stdout)
+	}
+	if !strings.Contains(res.Stdout, "Use --help on any command") {
+		t.Fatalf("expected generic help hint, got %q", res.Stdout)
+	}
+
+	res = root.Execute([]string{"wallet", "--help"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d", res.ExitCode)
+	}
+	if !strings.Contains(res.Stdout, "Usage: <command> [subcommand] [flags]") {
+		t.Fatalf("expected mount help, got %q", res.Stdout)
+	}
+
+	res = root.Execute([]string{"run", "--help"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d", res.ExitCode)
+	}
+	if !strings.Contains(res.Stdout, "Usage: run [flags]") {
+		t.Fatalf("expected command help, got %q", res.Stdout)
+	}
 }
 
 func TestStringParamRequired(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -227,21 +228,37 @@ func (r *Registry) Execute(args []string) Result {
 		return Error("registry is nil")
 	}
 	if len(args) == 0 {
-		return Error("missing command")
+		return r.Help()
+	}
+	if isHelpRequest(args) {
+		return r.Help()
 	}
 
 	if mounted, ok := r.mounts[args[0]]; ok {
 		if len(args) == 1 {
-			return Error(fmt.Sprintf("missing command for mount '%s'", args[0]))
+			return mounted.Help()
+		}
+		if isHelpRequest(args[1:]) {
+			return mounted.Help()
 		}
 		return mounted.Execute(args[1:])
 	}
 
 	if cmd, ok := r.commands[args[0]]; ok {
+		if containsHelpFlag(args[1:]) {
+			return r.commandHelp(args[0])
+		}
 		return cmd(args[1:])
 	}
 
-	return Error(fmt.Sprintf("unknown command '%s'", args[0]))
+	help := r.Help()
+	if help.Stdout == "" {
+		return Error(fmt.Sprintf("unknown command '%s'", args[0]))
+	}
+	return Result{
+		ExitCode: 1,
+		Stderr:   fmt.Sprintf("unknown command '%s'\n\n%s", args[0], strings.TrimSpace(help.Stdout)),
+	}
 }
 
 func Done() Result {
@@ -549,4 +566,74 @@ func promptString(in io.Reader, out io.Writer, prompt string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(value), nil
+}
+
+func isHelpRequest(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "help", "--help", "-h", "-help":
+		return true
+	}
+	return false
+}
+
+func containsHelpFlag(args []string) bool {
+	for _, arg := range args {
+		switch arg {
+		case "--help", "-h", "-help":
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Registry) Help() Result {
+	if r == nil {
+		return Error("registry is nil")
+	}
+	var lines []string
+	lines = append(lines, "Usage: <command> [subcommand] [flags]")
+	if len(r.mounts) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, "Subcommands:")
+		for _, name := range sortedKeys(r.mounts) {
+			lines = append(lines, "  "+name)
+		}
+	}
+	if len(r.commands) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, "Commands:")
+		for _, name := range sortedKeys(r.commands) {
+			lines = append(lines, "  "+name)
+		}
+	}
+	lines = append(lines, "")
+	lines = append(lines, "Use --help on any command to show help.")
+	return Text(strings.Join(lines, "\n"))
+}
+
+func (r *Registry) commandHelp(name string) Result {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return r.Help()
+	}
+	return Text(strings.Join([]string{
+		"Usage: " + name + " [flags]",
+		"",
+		"Use --help to show the available commands.",
+	}, "\n"))
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
