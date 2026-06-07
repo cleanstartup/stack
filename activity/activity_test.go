@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cleanstartup/way2go/activity"
+	"github.com/cleanstartup/stack/activity"
 )
 
 type showParams struct {

@@ -1,4 +1,4 @@
-module github.com/cleanstartup/way2go
+module github.com/cleanstartup/stack
 
 go 1.25.2
 

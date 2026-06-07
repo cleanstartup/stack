@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cleanstartup/way2go/cli"
+	"github.com/cleanstartup/stack/cli"
 )
 
 type WebApp struct {

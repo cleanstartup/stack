@@ -3,7 +3,7 @@ package activity_test
 import (
 	"fmt"
 
-	"github.com/cleanstartup/way2go/activity"
+	"github.com/cleanstartup/stack/activity"
 )
 
 type accountShowParams struct {

@@ -14,8 +14,8 @@
 
 ```go
 import (
-	"github.com/cleanstartup/way2go/activity"
-	"github.com/cleanstartup/way2go/web"
+	"github.com/cleanstartup/stack/activity"
+	"github.com/cleanstartup/stack/web"
 )
 ```
 
@@ -27,8 +27,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/cleanstartup/way2go/activity"
-	"github.com/cleanstartup/way2go/web"
+	"github.com/cleanstartup/stack/activity"
+	"github.com/cleanstartup/stack/web"
 )
 
 type ShowParams struct {

@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cleanstartup/way2go/activity"
+	"github.com/cleanstartup/stack/activity"
 )
 
 type Result struct {

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/cleanstartup/way2go/activity"
-	"github.com/cleanstartup/way2go/web"
+	"github.com/cleanstartup/stack/activity"
+	"github.com/cleanstartup/stack/web"
 )
 
 type pageParams struct {

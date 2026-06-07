@@ -5,8 +5,8 @@ import (
 	"io"
 
 	"github.com/a-h/templ"
-	"github.com/cleanstartup/way2go/activity"
-	"github.com/cleanstartup/way2go/web"
+	"github.com/cleanstartup/stack/activity"
+	"github.com/cleanstartup/stack/web"
 )
 
 func main() {

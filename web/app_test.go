@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cleanstartup/way2go/activity"
-	"github.com/cleanstartup/way2go/web"
+	"github.com/cleanstartup/stack/activity"
+	"github.com/cleanstartup/stack/web"
 )
 
 type smokeParams struct {

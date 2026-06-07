@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cleanstartup/way2go/activity"
-	"github.com/cleanstartup/way2go/cli"
+	"github.com/cleanstartup/stack/activity"
+	"github.com/cleanstartup/stack/cli"
 )
 
 func TestActivityDecodeAndExecute(t *testing.T) {

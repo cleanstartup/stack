@@ -1,6 +1,6 @@
 package web
 
-import "github.com/cleanstartup/way2go/activity"
+import "github.com/cleanstartup/stack/activity"
 
 type Part interface {
 	Apply(*WebApp)

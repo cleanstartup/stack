@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cleanstartup/way2go/activity"
+	"github.com/cleanstartup/stack/activity"
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
