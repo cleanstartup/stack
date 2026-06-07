@@ -201,10 +201,16 @@ func ExecuteCLI(parts ...Part) error {
 
 	args := os.Args[1:]
 	if len(args) == 0 {
-		args = []string{"run"}
+		args = []string{"--help"}
 	}
 
 	result := registry.Execute(args)
+	if strings.TrimSpace(result.Stdout) != "" {
+		_, _ = fmt.Fprint(os.Stdout, result.Stdout)
+		if !strings.HasSuffix(result.Stdout, "\n") {
+			_, _ = fmt.Fprintln(os.Stdout)
+		}
+	}
 	if result.ExitCode != 0 {
 		message := strings.TrimSpace(result.Stderr)
 		if message == "" {
@@ -224,10 +230,16 @@ func App(parts ...Part) {
 
 	args := os.Args[1:]
 	if len(args) == 0 {
-		args = []string{"run"}
+		args = []string{"--help"}
 	}
 
 	result := registry.Execute(args)
+	if strings.TrimSpace(result.Stdout) != "" {
+		_, _ = fmt.Fprint(os.Stdout, result.Stdout)
+		if !strings.HasSuffix(result.Stdout, "\n") {
+			_, _ = fmt.Fprintln(os.Stdout)
+		}
+	}
 	if result.ExitCode != 0 {
 		message := strings.TrimSpace(result.Stderr)
 		if message == "" {
