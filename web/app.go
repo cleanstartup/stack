@@ -123,6 +123,7 @@ func (a *WebApp) CLI() *cli.Registry {
 			}
 			return cli.Done()
 		},
+		cli.WithHelp[runCommandInput]("serve the already built web app"),
 	)
 	cli.RegisterActivity(r, runCmd)
 
@@ -144,6 +145,7 @@ func (a *WebApp) CLI() *cli.Registry {
 			}
 			return cli.Textf("built %d assets into %s", len(result.Assets), result.OutputDir)
 		},
+		cli.WithHelp[buildCommandInput]("materialize assets into the output directory"),
 	)
 	cli.RegisterActivity(r, buildCmd)
 
@@ -181,6 +183,7 @@ func (a *WebApp) CLI() *cli.Registry {
 			}
 			return cli.Done()
 		},
+		cli.WithHelp[devCommandInput]("run the templ supervisor and asset watch loop"),
 	)
 	cli.RegisterActivity(r, devCmd)
 

@@ -61,6 +61,7 @@ func main() {
 - `web build` materialisiert Assets in `.way2go/public`.
 - `web run` serviert nur fertige Assets und erwartet, dass `build` bereits gelaufen ist.
 - `web dev` startet einen `templ`-Supervisor für Go-/templ-Änderungen und kombiniert ihn mit den Tailwind- und Stencil-Watch-Workern für die Asset-Pipeline. Der Browser läuft dabei über den templ-Proxy; CSS-/JS-Änderungen werden weiterhin über den internen Dev-Reload ausgelöst.
+- Die Web-Commands tragen eigene Help-Texte: `run`, `build` und `dev` erklären sich über `--help` und werden im CLI-Listing kurz beschrieben.
 - Lokale Dependency-Assets können Watch-Pfade mitbringen, z. B. über `web.FromFS(..., watchPath)` oder `web.WithWatchPaths(...)`.
 - Das app-weite Styles-Set wird automatisch aus allen `*.css` Dateien im Go-Modul der aufrufenden App angewendet, egal ob sie direkt im Demo-/Paketverzeichnis oder in Unterordnern liegen.
 - Der Styles-Build läuft zentral über einen Tailwind-Output (`/assets/css/app/app.css`). Das Tailwind-Binary wird automatisch heruntergeladen und im Cache abgelegt, wenn es nicht bereits verfügbar ist.
