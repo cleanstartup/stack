@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -253,6 +254,91 @@ func (s dirAssetSource) Materialize(ws *Workspace, kind AssetKind) ([]string, er
 }
 
 func (s dirAssetSource) WatchPaths() []string { return []string{s.path} }
+
+type fileSetAssetSource struct {
+	id    string
+	root  string
+	files []string
+}
+
+func FromFiles(root string, files ...string) AssetSource {
+	cleaned := make([]string, 0, len(files))
+	for _, file := range files {
+		file = filepath.Clean(strings.TrimSpace(file))
+		if file == "" {
+			continue
+		}
+		cleaned = append(cleaned, file)
+	}
+	sort.Strings(cleaned)
+	return fileSetAssetSource{
+		id:    assetID(root + "|" + strings.Join(cleaned, "|")),
+		root:  filepath.Clean(strings.TrimSpace(root)),
+		files: cleaned,
+	}
+}
+
+func (s fileSetAssetSource) ID() string { return s.id }
+
+func (s fileSetAssetSource) AssetNames() []string {
+	names := make([]string, 0, len(s.files))
+	for _, file := range s.files {
+		rel, err := filepath.Rel(s.root, file)
+		if err != nil {
+			rel = filepath.Base(file)
+		}
+		names = append(names, filepath.ToSlash(rel))
+	}
+	sort.Strings(names)
+	return names
+}
+
+func (s fileSetAssetSource) Materialize(ws *Workspace, kind AssetKind) ([]string, error) {
+	if ws == nil {
+		return nil, fmt.Errorf("workspace is nil")
+	}
+	dstDir := ws.AssetDir(kind, s.ID())
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, file := range s.files {
+		rel, err := filepath.Rel(s.root, file)
+		if err != nil {
+			rel = filepath.Base(file)
+		}
+		rel = filepath.ToSlash(rel)
+		target := filepath.Join(dstDir, filepath.FromSlash(rel))
+		if err := copyFile(target, file); err != nil {
+			return nil, err
+		}
+		names = append(names, rel)
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+func (s fileSetAssetSource) WatchPaths() []string {
+	paths := make([]string, 0, len(s.files)*2)
+	seen := map[string]struct{}{}
+	for _, file := range s.files {
+		file = filepath.Clean(file)
+		if file != "" {
+			if _, exists := seen[file]; !exists {
+				seen[file] = struct{}{}
+				paths = append(paths, file)
+			}
+		}
+		dir := filepath.Dir(file)
+		if dir != "." && dir != "" {
+			if _, exists := seen[dir]; !exists {
+				seen[dir] = struct{}{}
+				paths = append(paths, dir)
+			}
+		}
+	}
+	return cleanWatchPaths(paths)
+}
 
 type fsAssetSource struct {
 	id         string

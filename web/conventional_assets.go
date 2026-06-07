@@ -21,7 +21,7 @@ type componentAssets struct {
 
 func Styles(baseDir ...string) Part {
 	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
-		return styleAssets{baseDir: baseDir[0]}
+		return styleAssets{baseDir: moduleRoot(baseDir[0])}
 	}
 	return styleAssets{baseDir: inferredStyleAssetsDir()}
 }
@@ -30,7 +30,7 @@ func inferredStyleAssetsDir() string { return CallerDir(2) }
 
 func Components(baseDir ...string) Part {
 	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
-		return componentAssets{baseDir: baseDir[0]}
+		return componentAssets{baseDir: moduleRoot(baseDir[0])}
 	}
 	return componentAssets{baseDir: inferredComponentAssetsDir()}
 }
@@ -39,7 +39,7 @@ func inferredComponentAssetsDir() string { return CallerDir(2) }
 
 func ConventionalAssets(baseDir ...string) Part {
 	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
-		return conventionalAssets{baseDir: baseDir[0]}
+		return conventionalAssets{baseDir: moduleRoot(baseDir[0])}
 	}
 	return conventionalAssets{baseDir: inferredConventionalAssetsDir()}
 }
@@ -52,42 +52,10 @@ func (a conventionalAssets) Apply(app *WebApp) {
 	}
 	app.RegisterTailwindScan(a.baseDir)
 
-	cssFiles, jsFiles := discoverConventionalAssets(a.baseDir)
-	for _, path := range cssFiles {
-		app.RegisterTailwindCSS(FromFile(path))
+	cssFiles := discoverModuleFiles(a.baseDir, ".css")
+	if len(cssFiles) > 0 {
+		app.RegisterTailwindCSS(FromFiles(a.baseDir, cssFiles...))
 	}
-	for _, path := range jsFiles {
-		app.RegisterJS(FromFile(path))
-	}
-}
-
-func discoverConventionalAssets(baseDir string) (cssFiles []string, jsFiles []string) {
-	for _, relDir := range []string{
-		filepath.Join("assets", "css"),
-		filepath.Join("assets", "js"),
-	} {
-		root := filepath.Join(baseDir, relDir)
-		info, err := os.Stat(root)
-		if err != nil || !info.IsDir() {
-			continue
-		}
-		_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-			if err != nil || entry == nil || entry.IsDir() {
-				return err
-			}
-			name := filepath.Base(path)
-			switch {
-			case strings.HasSuffix(name, ".css"):
-				cssFiles = append(cssFiles, path)
-			case strings.HasSuffix(name, ".js"):
-				jsFiles = append(jsFiles, path)
-			}
-			return nil
-		})
-	}
-	sort.Strings(cssFiles)
-	sort.Strings(jsFiles)
-	return cssFiles, jsFiles
 }
 
 func (a styleAssets) Apply(app *WebApp) {
@@ -96,9 +64,9 @@ func (a styleAssets) Apply(app *WebApp) {
 	}
 	app.RegisterTailwindScan(a.baseDir)
 
-	cssFiles, _ := discoverConventionalAssets(a.baseDir)
-	for _, path := range cssFiles {
-		app.RegisterTailwindCSS(FromFile(path))
+	cssFiles := discoverModuleFiles(a.baseDir, ".css")
+	if len(cssFiles) > 0 {
+		app.RegisterTailwindCSS(FromFiles(a.baseDir, cssFiles...))
 	}
 }
 
@@ -106,11 +74,67 @@ func (a componentAssets) Apply(app *WebApp) {
 	if app == nil || strings.TrimSpace(a.baseDir) == "" {
 		return
 	}
-	componentsDir := filepath.Join(a.baseDir, "assets", "components")
-	info, err := os.Stat(componentsDir)
-	if err != nil || !info.IsDir() {
+	tsFiles := discoverModuleFiles(a.baseDir, ".ts", ".tsx")
+	if len(tsFiles) == 0 {
 		return
 	}
-	app.RegisterStencilScan(componentsDir)
-	app.RegisterStencil(FromDir(componentsDir))
+	app.RegisterStencilScan(a.baseDir)
+	app.RegisterStencil(FromFiles(a.baseDir, tsFiles...))
+}
+
+func discoverModuleFiles(baseDir string, extensions ...string) []string {
+	if strings.TrimSpace(baseDir) == "" || len(extensions) == 0 {
+		return nil
+	}
+	skipDirs := map[string]struct{}{
+		".git":         {},
+		".way2go":      {},
+		"node_modules": {},
+		"dist":         {},
+		"build":        {},
+		"coverage":     {},
+		"vendor":       {},
+	}
+	var files []string
+	_ = filepath.WalkDir(baseDir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry == nil {
+			return err
+		}
+		if entry.IsDir() {
+			if path != baseDir {
+				if _, skip := skipDirs[filepath.Base(path)]; skip {
+					return filepath.SkipDir
+				}
+			}
+			return nil
+		}
+		name := strings.ToLower(filepath.Base(path))
+		for _, ext := range extensions {
+			if strings.HasSuffix(name, ext) {
+				files = append(files, path)
+				break
+			}
+		}
+		return nil
+	})
+	sort.Strings(files)
+	return files
+}
+
+func moduleRoot(baseDir string) string {
+	baseDir = strings.TrimSpace(baseDir)
+	if baseDir == "" {
+		return ""
+	}
+	current := baseDir
+	for {
+		if _, err := os.Stat(filepath.Join(current, "go.mod")); err == nil {
+			return current
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return baseDir
+		}
+		current = parent
+	}
 }

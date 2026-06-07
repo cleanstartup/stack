@@ -8,18 +8,16 @@ import (
 
 func TestNewWithDefaultsAppliesStylesAndComponentsFromBaseDir(t *testing.T) {
 	tmp := t.TempDir()
-	cssDir := filepath.Join(tmp, "assets", "css")
-	componentsDir := filepath.Join(tmp, "assets", "components")
-	if err := os.MkdirAll(cssDir, 0o755); err != nil {
+	if err := os.MkdirAll(tmp, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(componentsDir, 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "site.css"), []byte("body { color: red; }"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(cssDir, "site.css"), []byte("body { color: red; }"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "demo-card.tsx"), []byte("export const demo = true;\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(componentsDir, "demo-card.tsx"), []byte("export const demo = true;\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "demo-copy.ts"), []byte("export const demo = true;\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -38,8 +36,8 @@ func TestNewWithDefaultsAppliesStylesAndComponentsFromBaseDir(t *testing.T) {
 		t.Fatalf("expected one stencil input, got %d", got)
 	}
 	componentPaths := app.builder.Components().ScanPaths()
-	if len(componentPaths) != 1 || componentPaths[0] != filepath.Join(tmp, "assets", "components") {
-		t.Fatalf("expected components scan path %q, got %#v", filepath.Join(tmp, "assets", "components"), componentPaths)
+	if len(componentPaths) != 1 || componentPaths[0] != tmp {
+		t.Fatalf("expected components scan path %q, got %#v", tmp, componentPaths)
 	}
 	if got := len(app.builder.Manifest().Scripts); got != 1 {
 		t.Fatalf("expected one script bundle in manifest, got %d", got)

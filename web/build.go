@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -89,14 +90,18 @@ func (e *BuildEngine) Build(ctx context.Context, cfg BuildConfig) (*BuildResult,
 			workspace.Out = cfg.OutputDir
 		}
 	}
+	publishDir := workspace.Out
+	stagingOut := workspace.Out + ".next"
+	workspace.Out = stagingOut
+
+	start := time.Now()
+	fmt.Fprintf(os.Stderr, "[way2go] build start workspace=%s output=%s\n", workspace.Root, publishDir)
 
 	if err := os.RemoveAll(workspace.Root); err != nil {
 		return nil, err
 	}
-	if workspace.Out != filepath.Join(workspace.Root, "out") {
-		if err := os.RemoveAll(workspace.Out); err != nil {
-			return nil, err
-		}
+	if err := os.RemoveAll(stagingOut); err != nil {
+		return nil, err
 	}
 	if err := workspace.Prepare(); err != nil {
 		return nil, err
@@ -130,12 +135,17 @@ func (e *BuildEngine) Build(ctx context.Context, cfg BuildConfig) (*BuildResult,
 	if err != nil {
 		return nil, err
 	}
+	if err := publishBuiltOutput(workspace.Out, publishDir); err != nil {
+		return nil, err
+	}
+	workspace.Out = publishDir
+	fmt.Fprintf(os.Stderr, "[way2go] build complete assets=%d duration=%s output=%s\n", len(assets), time.Since(start).Round(time.Millisecond), publishDir)
 
 	return &BuildResult{
 		WorkspaceDir: workspace.Root,
 		SourceDir:    workspace.Src,
-		OutputDir:    workspace.Out,
-		AssetsDir:    workspace.OutputAssetsRoot(),
+		OutputDir:    publishDir,
+		AssetsDir:    filepath.Join(publishDir, "assets"),
 		Assets:       assets,
 	}, nil
 }
@@ -249,7 +259,7 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 		cfg.DevState = NewDevState()
 	}
 	if cfg.PollInterval <= 0 {
-		cfg.PollInterval = time.Second
+		cfg.PollInterval = 250 * time.Millisecond
 	}
 	if cfg.OutputDir == "" {
 		cfg.OutputDir = defaultOutputDir
@@ -260,6 +270,13 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	if cfg.Addr == "" {
 		cfg.Addr = defaultAddr
 	}
+	workspaceAbs, err := filepath.Abs(cfg.WorkspaceDir)
+	if err != nil {
+		workspaceAbs = cfg.WorkspaceDir
+	}
+	tailwindCacheRoot := filepath.Join(filepath.Dir(workspaceAbs), "tailwind-cache")
+	tailwindWorkspace := newTailwindWorkspace(tailwindCacheRoot)
+	stencilCacheRoot := filepath.Join(filepath.Dir(workspaceAbs), "stencil-cache")
 
 	if _, err := e.Build(ctx, BuildConfig{
 		WorkspaceDir: cfg.WorkspaceDir,
@@ -270,6 +287,15 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	if cfg.DevState != nil {
 		cfg.DevState.MarkBuilt()
 	}
+
+	watchCtx, watchCancel := context.WithCancel(ctx)
+	defer watchCancel()
+
+	workers, err := e.startWatchWorkers(watchCtx, tailwindCacheRoot, stencilCacheRoot, cfg.OutputDir)
+	if err != nil {
+		return err
+	}
+	defer stopWatchWorkers(workers)
 
 	serveCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -285,11 +311,29 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 		})
 	}()
 
-	paths := e.watchPaths()
+	paths := e.devOutputWatchPaths(cfg.OutputDir, stencilCacheRoot)
+	fmt.Fprintf(os.Stderr, "[way2go] dev watching %d roots\n", len(paths))
+	for _, path := range paths {
+		fmt.Fprintf(os.Stderr, "[way2go]   watch %s\n", path)
+	}
 	snapshot, err := snapshotPaths(paths)
 	if err != nil {
 		return err
 	}
+	sourcePaths := e.devSourceWatchPaths()
+	if len(sourcePaths) > 0 {
+		fmt.Fprintf(os.Stderr, "[way2go] dev mirroring %d source roots\n", len(sourcePaths))
+		for _, path := range sourcePaths {
+			fmt.Fprintf(os.Stderr, "[way2go]   mirror %s\n", path)
+		}
+	}
+	sourceSnapshot, err := snapshotPaths(sourcePaths)
+	if err != nil {
+		return err
+	}
+	dirty := false
+	stencilDirty := false
+	var lastChange time.Time
 
 	ticker := time.NewTicker(cfg.PollInterval)
 	defer ticker.Stop()
@@ -302,26 +346,425 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 		case err := <-errCh:
 			return err
 		case <-ticker.C:
+			if len(sourcePaths) > 0 {
+				currentSource, err := snapshotPaths(sourcePaths)
+				if err != nil {
+					return err
+				}
+				if !snapshotsEqual(sourceSnapshot, currentSource) {
+					changed := diffSnapshotPaths(sourceSnapshot, currentSource)
+					fmt.Fprintf(os.Stderr, "[way2go] dev sources changed: %s\n", strings.Join(changed, ", "))
+					tailwindTouched := false
+					stencilTouched := false
+					for _, path := range changed {
+						if e.devTailwindSourceChanged(path) {
+							fmt.Fprintf(os.Stderr, "[way2go] dev tailwind source touched: %s\n", path)
+							tailwindTouched = true
+						}
+						if e.devStencilSourceChanged(path) {
+							fmt.Fprintf(os.Stderr, "[way2go] dev stencil source touched: %s\n", path)
+							stencilTouched = true
+						}
+					}
+					if tailwindTouched {
+						if err := e.rebuildTailwindBundle(ctx, cfg, tailwindWorkspace); err != nil {
+							fmt.Fprintln(os.Stderr, "[way2go] dev tailwind rebuild failed:", err)
+							continue
+						}
+					}
+					if stencilTouched {
+						if err := e.syncStencilSourceMirror(cfg.WorkspaceDir); err != nil {
+							fmt.Fprintln(os.Stderr, "[way2go] dev stencil source sync failed:", err)
+							continue
+						}
+					}
+					sourceSnapshot = currentSource
+				}
+			}
 			current, err := snapshotPaths(paths)
 			if err != nil {
 				return err
 			}
-			if snapshotsEqual(snapshot, current) {
+			if !snapshotsEqual(snapshot, current) {
+				changed := diffSnapshotPaths(snapshot, current)
+				fmt.Fprintf(os.Stderr, "[way2go] dev output changed: %s\n", strings.Join(changed, ", "))
+				for _, path := range changed {
+					if strings.HasPrefix(path, filepath.Join(stencilCacheRoot, "dist")) {
+						stencilDirty = true
+						break
+					}
+				}
+				snapshot = current
+				dirty = true
+				lastChange = time.Now()
 				continue
 			}
-			if _, err := e.Build(ctx, BuildConfig{
-				WorkspaceDir: cfg.WorkspaceDir,
-				OutputDir:    cfg.OutputDir,
-			}); err != nil {
-				fmt.Fprintln(os.Stderr, "web dev build failed:", err)
+			if !dirty {
 				continue
 			}
+			if time.Since(lastChange) < cfg.PollInterval {
+				continue
+			}
+			if stencilDirty {
+				if err := e.syncDevOutputs(cfg.OutputDir, stencilCacheRoot); err != nil {
+					fmt.Fprintln(os.Stderr, "[way2go] dev output sync failed:", err)
+					continue
+				}
+			}
+			fmt.Fprintf(os.Stderr, "[way2go] dev output settled, broadcasting reload\n")
 			if cfg.DevState != nil {
 				cfg.DevState.Broadcast()
 			}
-			snapshot = current
+			dirty = false
+			stencilDirty = false
 		}
 	}
+}
+
+type watchWorker struct {
+	name   string
+	cmd    *exec.Cmd
+	doneCh chan error
+}
+
+func startCommandWatch(ctx context.Context, name string, workDir string, binaryPath string, args ...string) (watchWorker, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	cmd := exec.CommandContext(ctx, binaryPath, args...)
+	if strings.TrimSpace(workDir) != "" {
+		cmd.Dir = workDir
+	}
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		return watchWorker{}, fmt.Errorf("%s watch start failed via %s: %w", name, binaryPath, err)
+	}
+	worker := watchWorker{
+		name:   name,
+		cmd:    cmd,
+		doneCh: make(chan error, 1),
+	}
+	go func() {
+		worker.doneCh <- cmd.Wait()
+	}()
+	return worker, nil
+}
+
+func stopWatchWorkers(workers []watchWorker) {
+	for _, worker := range workers {
+		if worker.cmd != nil && worker.cmd.Process != nil {
+			_ = worker.cmd.Process.Kill()
+		}
+	}
+	for _, worker := range workers {
+		if worker.doneCh == nil {
+			continue
+		}
+		select {
+		case <-worker.doneCh:
+		default:
+		}
+	}
+}
+
+func (e *BuildEngine) startWatchWorkers(ctx context.Context, tailwindCacheRoot, stencilCacheRoot, outputDir string) ([]watchWorker, error) {
+	var workers []watchWorker
+
+	if e.builder != nil && e.builder.tailwind != nil && len(e.builder.tailwind.Inputs()) > 0 {
+		inputPath := filepath.Join(tailwindCacheRoot, "tailwind.input.css")
+		if err := e.syncTailwindInput(newTailwindWorkspace(tailwindCacheRoot), inputPath); err != nil {
+			return nil, err
+		}
+		outputPath := filepath.Join(outputDir, "assets", "css", "app", tailwindBundleFile)
+		binaryPath, err := resolveTailwindBinary(ctx, BuildConfig{})
+		if err != nil {
+			return nil, err
+		}
+		worker, err := startCommandWatch(ctx, "tailwind", "", binaryPath, tailwindWatchArgs(inputPath, outputPath)...)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[way2go] tailwind watch started input=%s output=%s\n", inputPath, outputPath)
+		workers = append(workers, worker)
+	}
+
+	if e.builder != nil && e.builder.stencil != nil && len(e.builder.stencil.Inputs()) > 0 {
+		binaryPath, err := resolveStencilBinary(BuildConfig{})
+		if err != nil {
+			return nil, err
+		}
+		worker, err := startCommandWatch(ctx, "stencil", stencilCacheRoot, binaryPath, stencilWatchArgs(binaryPath)...)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[way2go] stencil watch started cache=%s\n", stencilCacheRoot)
+		workers = append(workers, worker)
+	}
+
+	return workers, nil
+}
+
+func (e *BuildEngine) devSourceWatchPaths() []string {
+	if e == nil || e.builder == nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	var paths []string
+	if e.builder.tailwind != nil {
+		for _, source := range e.builder.tailwind.Inputs() {
+			sourcePaths, err := tailwindSourcePaths(source)
+			if err != nil {
+				continue
+			}
+			for _, path := range sourcePaths {
+				path = strings.TrimSpace(path)
+				if path == "" {
+					continue
+				}
+				if _, exists := seen[path]; exists {
+					continue
+				}
+				seen[path] = struct{}{}
+				paths = append(paths, path)
+			}
+		}
+	}
+	if e.builder.stencil != nil {
+		for _, source := range e.builder.stencil.Inputs() {
+			sourcePaths, err := tailwindSourcePaths(source)
+			if err != nil {
+				continue
+			}
+			for _, path := range sourcePaths {
+				path = strings.TrimSpace(path)
+				if path == "" {
+					continue
+				}
+				if _, exists := seen[path]; exists {
+					continue
+				}
+				seen[path] = struct{}{}
+				paths = append(paths, path)
+			}
+		}
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func (e *BuildEngine) syncStencilSourceMirror(workspaceDir string) error {
+	if e == nil || e.builder == nil || e.builder.stencil == nil {
+		return nil
+	}
+	workspaceAbs, err := filepath.Abs(workspaceDir)
+	if err != nil {
+		workspaceAbs = workspaceDir
+	}
+	cacheRoot := filepath.Join(filepath.Dir(workspaceAbs), "stencil-cache")
+	stencilWorkspace := &Workspace{
+		Root: cacheRoot,
+		Src:  filepath.Join(cacheRoot, "src"),
+		Out:  filepath.Join(cacheRoot, "dist"),
+		Temp: filepath.Join(cacheRoot, "tmp"),
+	}
+	if err := os.MkdirAll(stencilWorkspace.Root, 0o755); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(stencilWorkspace.Src); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(stencilWorkspace.Src, 0o755); err != nil {
+		return err
+	}
+	for _, source := range e.builder.stencil.Inputs() {
+		if source == nil {
+			continue
+		}
+		if _, err := source.Materialize(stencilWorkspace, AssetKindJS); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (e *BuildEngine) syncTailwindInput(workspace *Workspace, inputPath string) error {
+	if workspace == nil {
+		return fmt.Errorf("tailwind workspace is nil")
+	}
+	if err := os.MkdirAll(workspace.Src, 0o755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(inputPath), 0o755); err != nil {
+		return err
+	}
+	input, err := e.tailwindInput(workspace)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(inputPath, []byte(input), 0o644)
+}
+
+func (e *BuildEngine) rebuildTailwindBundle(ctx context.Context, cfg DevConfig, workspace *Workspace) error {
+	if e == nil || e.builder == nil || e.builder.tailwind == nil || workspace == nil {
+		return nil
+	}
+	if len(e.builder.tailwind.Inputs()) == 0 {
+		return nil
+	}
+	inputPath := filepath.Join(workspace.Root, "tailwind.input.css")
+	if err := e.syncTailwindInput(workspace, inputPath); err != nil {
+		return err
+	}
+	binaryPath, err := resolveTailwindBinary(ctx, BuildConfig{})
+	if err != nil {
+		return err
+	}
+	outputPath := filepath.Join(cfg.OutputDir, "assets", "css", "app", tailwindBundleFile)
+	fmt.Fprintf(os.Stderr, "[way2go] dev tailwind rebuild input=%s output=%s\n", inputPath, outputPath)
+	return runTailwind(ctx, binaryPath, inputPath, outputPath)
+}
+
+func (e *BuildEngine) devTailwindSourceChanged(path string) bool {
+	if e == nil || e.builder == nil || e.builder.tailwind == nil {
+		return false
+	}
+	if strings.EqualFold(filepath.Ext(path), ".css") {
+		return true
+	}
+	for _, source := range e.builder.tailwind.Inputs() {
+		paths, err := tailwindSourcePaths(source)
+		if err != nil {
+			continue
+		}
+		for _, candidate := range paths {
+			if sourcePathMatches(candidate, path) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (e *BuildEngine) devStencilSourceChanged(path string) bool {
+	if e == nil || e.builder == nil || e.builder.stencil == nil {
+		return false
+	}
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == ".ts" || ext == ".tsx" {
+		return true
+	}
+	for _, source := range e.builder.stencil.Inputs() {
+		paths, err := tailwindSourcePaths(source)
+		if err != nil {
+			continue
+		}
+		for _, candidate := range paths {
+			if sourcePathMatches(candidate, path) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func sourcePathMatches(candidate, changed string) bool {
+	candidate = filepath.Clean(strings.TrimSpace(candidate))
+	changed = filepath.Clean(strings.TrimSpace(changed))
+	if candidate == "" || changed == "" {
+		return false
+	}
+	if candidate == changed {
+		return true
+	}
+	prefix := candidate + string(filepath.Separator)
+	return strings.HasPrefix(changed, prefix)
+}
+
+func tailwindWatchArgs(inputPath, outputPath string) []string {
+	return []string{"-i", inputPath, "-o", outputPath, "--watch", "--minify"}
+}
+
+func stencilWatchArgs(binaryPath string) []string {
+	base := strings.ToLower(filepath.Base(binaryPath))
+	switch base {
+	case "npm":
+		return []string{"exec", "--yes", "--package=@stencil/core", "--", "stencil", "build", "--watch"}
+	case "npx":
+		return []string{"--yes", "stencil", "build", "--watch"}
+	default:
+		return []string{"build", "--watch"}
+	}
+}
+
+func (e *BuildEngine) devOutputWatchPaths(outputDir, stencilCacheRoot string) []string {
+	var paths []string
+	tailwindOutput := filepath.Join(outputDir, "assets", "css", "app", tailwindBundleFile)
+	if _, err := os.Stat(tailwindOutput); err == nil {
+		paths = append(paths, tailwindOutput)
+	}
+	stencilOutput := filepath.Join(stencilCacheRoot, "dist")
+	if _, err := os.Stat(stencilOutput); err == nil {
+		paths = append(paths, stencilOutput)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func (e *BuildEngine) syncDevOutputs(outputDir, stencilCacheRoot string) error {
+	stencilSource := filepath.Join(stencilCacheRoot, "dist", stencilBundleID)
+	stencilDest := filepath.Join(outputDir, "assets", "js", stencilBundleID)
+	if info, err := os.Stat(stencilSource); err == nil && info.IsDir() {
+		if err := os.RemoveAll(stencilDest); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(stencilDest, 0o755); err != nil {
+			return err
+		}
+		if err := copyTree(stencilDest, stencilSource); err != nil {
+			return err
+		}
+	}
+
+	loaderSource := filepath.Join(stencilCacheRoot, "dist", "loader")
+	loaderDest := filepath.Join(outputDir, "assets", "js", stencilBundleID, "loader")
+	if info, err := os.Stat(loaderSource); err == nil && info.IsDir() {
+		if err := os.RemoveAll(loaderDest); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(loaderDest, 0o755); err != nil {
+			return err
+		}
+		if err := copyTree(loaderDest, loaderSource); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func diffSnapshotPaths(before, after map[string]fileSignature) []string {
+	seen := map[string]struct{}{}
+	var changed []string
+	for path, left := range before {
+		right, ok := after[path]
+		if !ok || right != left {
+			if _, exists := seen[path]; !exists {
+				seen[path] = struct{}{}
+				changed = append(changed, path)
+			}
+		}
+	}
+	for path, right := range after {
+		left, ok := before[path]
+		if !ok || right != left {
+			if _, exists := seen[path]; !exists {
+				seen[path] = struct{}{}
+				changed = append(changed, path)
+			}
+		}
+	}
+	sort.Strings(changed)
+	return changed
 }
 
 func (e *BuildEngine) materializeAssets(workspace *Workspace) error {
@@ -421,6 +864,36 @@ func collectAssets(root string) ([]MaterializedAsset, error) {
 	return assets, nil
 }
 
+func publishBuiltOutput(stagingDir, publishDir string) error {
+	stagingDir = strings.TrimSpace(stagingDir)
+	publishDir = strings.TrimSpace(publishDir)
+	if stagingDir == "" || publishDir == "" {
+		return nil
+	}
+	if stagingDir == publishDir {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(publishDir), 0o755); err != nil {
+		return err
+	}
+
+	backupDir := publishDir + ".old"
+	_ = os.RemoveAll(backupDir)
+	if _, err := os.Stat(publishDir); err == nil {
+		if err := os.Rename(publishDir, backupDir); err != nil {
+			return err
+		}
+	}
+	if err := os.Rename(stagingDir, publishDir); err != nil {
+		if _, statErr := os.Stat(backupDir); statErr == nil {
+			_ = os.Rename(backupDir, publishDir)
+		}
+		return err
+	}
+	_ = os.RemoveAll(backupDir)
+	return nil
+}
+
 type fileSignature struct {
 	Size    int64
 	ModTime int64
@@ -428,6 +901,15 @@ type fileSignature struct {
 
 func snapshotPaths(paths []string) (map[string]fileSignature, error) {
 	snapshot := map[string]fileSignature{}
+	skipDirs := map[string]struct{}{
+		".git":         {},
+		".way2go":      {},
+		"node_modules": {},
+		"dist":         {},
+		"build":        {},
+		"coverage":     {},
+		"vendor":       {},
+	}
 	for _, root := range paths {
 		info, err := os.Stat(root)
 		if err != nil {
@@ -437,6 +919,11 @@ func snapshotPaths(paths []string) (map[string]fileSignature, error) {
 			err = filepath.WalkDir(root, func(current string, entry fs.DirEntry, err error) error {
 				if err != nil {
 					return err
+				}
+				if entry.IsDir() && current != root {
+					if _, skip := skipDirs[filepath.Base(current)]; skip {
+						return filepath.SkipDir
+					}
 				}
 				if entry.IsDir() {
 					return nil
