@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -36,16 +37,9 @@ func (e *BuildEngine) buildStyleBundle(ctx context.Context, workspace *Workspace
 		return err
 	}
 	outputPath := filepath.Join(outputDir, tailwindBundleFile)
-	inputPath := filepath.Join(workspace.Temp, "tailwind.input.css")
-	if err := os.MkdirAll(filepath.Dir(inputPath), 0o755); err != nil {
-		return err
-	}
-
-	input, err := e.tailwindInput(workspace, inputPath)
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(inputPath, []byte(input), 0o644); err != nil {
+	tailwindWorkspace := newTailwindWorkspace(filepath.Join(filepath.Dir(workspace.Root), "tailwind-cache"))
+	inputPath := filepath.Join(tailwindWorkspace.Root, "tailwind.input.css")
+	if err := e.syncTailwindInput(tailwindWorkspace, inputPath); err != nil {
 		return err
 	}
 
@@ -56,24 +50,24 @@ func (e *BuildEngine) buildStyleBundle(ctx context.Context, workspace *Workspace
 	return runTailwind(ctx, binaryPath, inputPath, outputPath)
 }
 
-func (e *BuildEngine) tailwindInput(workspace *Workspace, inputPath string) (string, error) {
-	if e == nil || e.builder == nil || e.builder.tailwind == nil || workspace == nil {
+func (e *BuildEngine) tailwindInput(workspace *Workspace) (string, error) {
+	if e == nil || e.builder == nil || e.builder.tailwind == nil {
 		return "", nil
 	}
-	var out strings.Builder
+	if workspace == nil {
+		return "", fmt.Errorf("tailwind workspace is nil")
+	}
+	var out bytes.Buffer
 	out.WriteString(`@import "tailwindcss";`)
 	out.WriteString("\n")
 
 	for _, scanPath := range e.builder.tailwind.ScanPaths() {
-		rel, err := filepath.Rel(filepath.Dir(inputPath), scanPath)
-		if err != nil {
-			rel = scanPath
-		}
-		if strings.TrimSpace(rel) == "" {
+		scanPath = strings.TrimSpace(scanPath)
+		if scanPath == "" {
 			continue
 		}
 		out.WriteString(`@source "`)
-		out.WriteString(filepath.ToSlash(rel))
+		out.WriteString(filepath.ToSlash(scanPath))
 		out.WriteString(`";`)
 		out.WriteString("\n")
 	}
@@ -82,24 +76,68 @@ func (e *BuildEngine) tailwindInput(workspace *Workspace, inputPath string) (str
 		if source == nil {
 			continue
 		}
-		names, err := materializeTailwindSource(source, workspace, AssetKindCSS)
+		paths, err := materializeTailwindSource(source, workspace, AssetKindCSS)
 		if err != nil {
 			return "", err
 		}
-		sourceDir := workspace.TailwindAssetDir(AssetKindCSS, source.ID())
-		for _, name := range names {
-			rel, err := filepath.Rel(filepath.Dir(inputPath), filepath.Join(sourceDir, name))
-			if err != nil {
-				rel = filepath.Join(sourceDir, name)
+		for _, sourcePath := range paths {
+			if strings.TrimSpace(sourcePath) == "" {
+				continue
 			}
-			out.WriteString(`@import "`)
-			out.WriteString(filepath.ToSlash(rel))
-			out.WriteString(`";`)
-			out.WriteString("\n")
+			contentPath := filepath.Join(workspace.AssetDir(AssetKindCSS, source.ID()), filepath.FromSlash(sourcePath))
+			content, err := os.ReadFile(contentPath)
+			if err != nil {
+				return "", err
+			}
+			out.WriteString("\n/* way2go: ")
+			out.WriteString(filepath.ToSlash(contentPath))
+			out.WriteString(" */\n")
+			out.Write(content)
+			if len(content) == 0 || content[len(content)-1] != '\n' {
+				out.WriteString("\n")
+			}
 		}
 	}
 
 	return out.String(), nil
+}
+
+func newTailwindWorkspace(cacheRoot string) *Workspace {
+	cacheRoot = strings.TrimSpace(cacheRoot)
+	if cacheRoot == "" {
+		cacheRoot = filepath.Join(".way2go", "tailwind-cache")
+	}
+	return &Workspace{
+		Root: cacheRoot,
+		Src:  filepath.Join(cacheRoot, "src"),
+		Out:  filepath.Join(cacheRoot, "dist"),
+		Temp: filepath.Join(cacheRoot, "tmp"),
+	}
+}
+
+func tailwindSourcePaths(source AssetSource) ([]string, error) {
+	if source == nil {
+		return nil, nil
+	}
+	switch typed := source.(type) {
+	case watchedAssetSource:
+		return tailwindSourcePaths(typed.source)
+	case fileAssetSource:
+		return []string{typed.path}, nil
+	case dirAssetSource:
+		return []string{typed.path}, nil
+	case fileSetAssetSource:
+		return append([]string{}, typed.files...), nil
+	case fsAssetSource:
+		if len(typed.watchPaths) > 0 {
+			return append([]string{}, typed.watchPaths...), nil
+		}
+		return nil, nil
+	case generatedAssetSource:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unsupported tailwind source %T", source)
+	}
 }
 
 func runTailwind(ctx context.Context, binaryPath, inputPath, outputPath string) error {
@@ -348,7 +386,7 @@ func materializeTailwindSource(source AssetSource, workspace *Workspace, kind As
 	case watchedAssetSource:
 		return materializeTailwindSource(typed.source, workspace, kind)
 	case fileAssetSource:
-		dstDir := workspace.TailwindAssetDir(kind, typed.ID())
+		dstDir := workspace.AssetDir(kind, typed.ID())
 		if err := os.MkdirAll(dstDir, 0o755); err != nil {
 			return nil, err
 		}
@@ -358,13 +396,13 @@ func materializeTailwindSource(source AssetSource, workspace *Workspace, kind As
 		}
 		return []string{name}, nil
 	case dirAssetSource:
-		dstDir := workspace.TailwindAssetDir(kind, typed.ID())
+		dstDir := workspace.AssetDir(kind, typed.ID())
 		if err := os.MkdirAll(dstDir, 0o755); err != nil {
 			return nil, err
 		}
 		return copyDir(dstDir, typed.path)
 	case fsAssetSource:
-		dstDir := workspace.TailwindAssetDir(kind, typed.ID())
+		dstDir := workspace.AssetDir(kind, typed.ID())
 		if err := os.MkdirAll(dstDir, 0o755); err != nil {
 			return nil, err
 		}
@@ -374,7 +412,7 @@ func materializeTailwindSource(source AssetSource, workspace *Workspace, kind As
 		}
 		return copyFS(dstDir, sub)
 	case generatedAssetSource:
-		dstDir := workspace.TailwindAssetDir(kind, typed.ID())
+		dstDir := workspace.AssetDir(kind, typed.ID())
 		if err := os.MkdirAll(dstDir, 0o755); err != nil {
 			return nil, err
 		}

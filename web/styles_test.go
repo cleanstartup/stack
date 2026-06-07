@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -45,6 +46,35 @@ func TestTailwindReturnsBundleRef(t *testing.T) {
 	}
 	if ref.URL() != "/assets/css/app/app.css" {
 		t.Fatalf("expected tailwind bundle url, got %q", ref.URL())
+	}
+}
+
+func TestTailwindInputUsesMirroredSourcePaths(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cssPath := filepath.Join(tmp, "site.css")
+	if err := os.WriteFile(cssPath, []byte("@apply text-slate-900;\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := New(TailwindCSS(FromFile(cssPath)))
+	cache := newTailwindWorkspace(filepath.Join(tmp, "tailwind-cache"))
+
+	input, err := app.engine.tailwindInput(cache)
+	if err != nil {
+		t.Fatalf("tailwind input failed: %v", err)
+	}
+
+	mirroredPath := filepath.Join(cache.AssetDir(AssetKindCSS, assetID(cssPath)), filepath.Base(cssPath))
+	if _, err := os.Stat(mirroredPath); err != nil {
+		t.Fatalf("expected mirrored css source at %s: %v", mirroredPath, err)
+	}
+	if !strings.Contains(input, "/* way2go: "+filepath.ToSlash(mirroredPath)+" */") {
+		t.Fatalf("expected mirrored css marker in input, got %q", input)
+	}
+	if !strings.Contains(input, "@apply text-slate-900;") {
+		t.Fatalf("expected css content in input, got %q", input)
 	}
 }
 

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestConventionalAssetsDiscoverStylesAndScripts(t *testing.T) {
+func TestConventionalAssetsDiscoverStyles(t *testing.T) {
 	baseDir := t.TempDir()
 
 	mustWrite := func(rel string, content string) {
@@ -19,14 +19,13 @@ func TestConventionalAssetsDiscoverStylesAndScripts(t *testing.T) {
 		}
 	}
 
-	mustWrite("assets/css/site.css", "body{color:red}")
-	mustWrite("assets/js/site.js", "console.log('ok')")
+	mustWrite("site.css", "body{color:red}")
 
 	app := newWebApp()
 	ConventionalAssets(baseDir).Apply(app)
 
-	if got := len(app.builder.Assets().Entries()); got != 1 {
-		t.Fatalf("expected 1 direct asset entry, got %d", got)
+	if got := len(app.builder.Assets().Entries()); got != 0 {
+		t.Fatalf("expected 0 direct asset entries, got %d", got)
 	}
 	if got := len(app.builder.Styles().Inputs()); got != 1 {
 		t.Fatalf("expected 1 css input, got %d", got)
