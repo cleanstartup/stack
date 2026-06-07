@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,8 +15,10 @@ import (
 )
 
 type WebApp struct {
-	builder *Builder
-	engine  *BuildEngine
+	builder   *Builder
+	engine    *BuildEngine
+	baseDir   string
+	moduleDir string
 }
 
 func newWebApp() *WebApp {
@@ -31,6 +36,8 @@ func New(parts ...Part) *WebApp {
 
 func NewWithDefaults(baseDir string, parts ...Part) *WebApp {
 	app := newWebApp()
+	app.baseDir = strings.TrimSpace(baseDir)
+	app.moduleDir = moduleRoot(baseDir)
 	app.Apply(append([]Part{Styles(baseDir), Components(baseDir)}, parts...)...)
 	return app
 }
@@ -153,15 +160,23 @@ func (a *WebApp) CLI() *cli.Registry {
 				WorkspaceDir: stringParam(inv, defaultWorkspaceDir, "workspace", "w"),
 				OutputDir:    stringParam(inv, defaultOutputDir, "output", "o"),
 				PollInterval: interval,
+				Child:        boolParam(inv, false, "child"),
 			}
 		},
 		func(ctx cli.Context[devCommandInput]) cli.Result {
-			if err := a.Dev(context.Background(), DevConfig{
+			cfg := DevConfig{
 				Addr:         ctx.Data().Addr,
 				WorkspaceDir: ctx.Data().WorkspaceDir,
 				OutputDir:    ctx.Data().OutputDir,
 				PollInterval: ctx.Data().PollInterval,
-			}); err != nil {
+			}
+			var err error
+			if ctx.Data().Child {
+				err = a.Dev(context.Background(), cfg)
+			} else {
+				err = a.DevWithTempl(context.Background(), cfg)
+			}
+			if err != nil {
 				return cli.Error(err.Error())
 			}
 			return cli.Done()
@@ -243,6 +258,7 @@ type devCommandInput struct {
 	WorkspaceDir string
 	OutputDir    string
 	PollInterval time.Duration
+	Child        bool
 }
 
 func stringParam(inv *cli.Invocation, fallback string, name string, aliases ...string) string {
@@ -255,4 +271,123 @@ func stringParam(inv *cli.Invocation, fallback string, name string, aliases ...s
 		return fallback
 	}
 	return value
+}
+
+func boolParam(inv *cli.Invocation, fallback bool, name string, aliases ...string) bool {
+	if inv == nil {
+		return fallback
+	}
+	key := cli.Param(name, aliases...)
+	value := strings.TrimSpace(inv.StringParam(key))
+	if value == "" {
+		return fallback
+	}
+	switch strings.ToLower(value) {
+	case "1", "t", "true", "y", "yes", "on":
+		return true
+	case "0", "f", "false", "n", "no", "off":
+		return false
+	default:
+		return fallback
+	}
+}
+
+func (a *WebApp) DevWithTempl(ctx context.Context, cfg DevConfig) error {
+	if a == nil || a.engine == nil {
+		return fmt.Errorf("build engine is nil")
+	}
+	moduleDir := strings.TrimSpace(a.moduleDir)
+	if strings.TrimSpace(moduleDir) == "" {
+		moduleDir = moduleRoot(a.baseDir)
+	}
+	if strings.TrimSpace(moduleDir) == "" {
+		moduleDir = CallerDir(1)
+	}
+	if strings.TrimSpace(moduleDir) == "" {
+		moduleDir = "."
+	}
+	childCmd := devChildCommand(moduleDir, a.baseDir, cfg)
+	proxyURL := templProxyURL(cfg.Addr)
+	templArgs := []string{
+		"run",
+		"github.com/a-h/templ/cmd/templ@v0.3.943",
+		"generate",
+		"--watch",
+		"--proxy=" + proxyURL,
+		"--cmd=" + childCmd,
+	}
+	cmd := exec.CommandContext(ctx, "go", templArgs...)
+	cmd.Dir = moduleDir
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	fmt.Fprintf(os.Stderr, "[way2go] templ dev supervisor start cmd=%s dir=%s proxy=%s\n", strings.Join(templArgs, " "), cmd.Dir, proxyURL)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("templ dev supervisor failed: %w", err)
+	}
+	return nil
+}
+
+func devChildCommand(moduleDir, baseDir string, cfg DevConfig) string {
+	moduleDir = strings.TrimSpace(moduleDir)
+	baseDir = strings.TrimSpace(baseDir)
+	target := "."
+	if moduleDir != "" && baseDir != "" {
+		if rel, err := filepath.Rel(moduleDir, baseDir); err == nil && strings.TrimSpace(rel) != "" {
+			target = rel
+		}
+	}
+	targetArg := "."
+	if target != "." {
+		targetArg = "./" + filepath.ToSlash(target)
+	}
+	addr := strings.TrimSpace(cfg.Addr)
+	if addr == "" {
+		addr = defaultAddr
+	}
+	workspace := strings.TrimSpace(cfg.WorkspaceDir)
+	if workspace == "" {
+		workspace = defaultWorkspaceDir
+	}
+	output := strings.TrimSpace(cfg.OutputDir)
+	if output == "" {
+		output = defaultOutputDir
+	}
+	poll := cfg.PollInterval.String()
+	if cfg.PollInterval <= 0 {
+		poll = (250 * time.Millisecond).String()
+	}
+	return strings.Join([]string{
+		"go",
+		"run",
+		targetArg,
+		"dev",
+		"--child",
+		"--addr=" + addr,
+		"--workspace=" + workspace,
+		"--output=" + output,
+		"--poll=" + poll,
+	}, " ")
+}
+
+func templProxyURL(addr string) string {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		addr = defaultAddr
+	}
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil || strings.TrimSpace(port) == "" {
+		if strings.HasPrefix(addr, ":") {
+			port = strings.TrimPrefix(addr, ":")
+		} else {
+			port = strings.TrimSpace(addr)
+		}
+	}
+	host = strings.TrimSpace(host)
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	if strings.TrimSpace(port) == "" {
+		port = strings.TrimPrefix(defaultAddr, ":")
+	}
+	return "http://" + host + ":" + port
 }
