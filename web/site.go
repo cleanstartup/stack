@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const defaultHugoVersion = "0.162.1"
+
 func (a *WebApp) buildSite(ctx context.Context, cfg BuildConfig) (*BuildResult, error) {
 	if a == nil || a.engine == nil {
 		return nil, fmt.Errorf("target is nil")
@@ -435,7 +437,7 @@ func resolveHugoBinary(ctx context.Context, cfg BuildConfig) (string, error) {
 		version = strings.TrimSpace(os.Getenv("STACK_HUGO_VERSION"))
 	}
 	if version == "" {
-		version = "latest"
+		version = defaultHugoVersion
 	}
 
 	binDir := filepath.Join(cacheDir, version, "bin")
@@ -451,11 +453,12 @@ func resolveHugoBinary(ctx context.Context, cfg BuildConfig) (string, error) {
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		return "", err
 	}
-	pkg := "github.com/gohugoio/hugo@latest"
-	if version != "latest" {
-		pkg = "github.com/gohugoio/hugo@" + version
+	pkg := "github.com/gohugoio/hugo@" + version
+	if version == defaultHugoVersion {
+		fmt.Fprintf(os.Stderr, "[stack] installing pinned hugo version %s via go pkg=%s bin=%s\n", version, pkg, binDir)
+	} else {
+		fmt.Fprintf(os.Stderr, "[stack] installing hugo via go pkg=%s bin=%s\n", pkg, binDir)
 	}
-	fmt.Fprintf(os.Stderr, "[stack] installing hugo via go pkg=%s bin=%s\n", pkg, binDir)
 	cmd := exec.CommandContext(ctx, "go", "install", pkg)
 	cmd.Env = append(os.Environ(), "GOBIN="+binDir)
 	output, err := cmd.CombinedOutput()
