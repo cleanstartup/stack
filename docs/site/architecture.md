@@ -44,12 +44,10 @@ Current demo defaults:
 
 The reusable site contract lives in `site/`, while `cmd/site` is only the runnable harness:
 
-- `site/content/` for Hugo content
 - `site/layouts/` for shell templates and partial resolution
-- `site/static/` for mirrored build artifacts
-- `site/site.css` for site-specific presentation overrides
+- `site/go.mod` for the Hugo module identity
 
-The runnable harness stays in `cmd/site/` and only points at the `site/` directory.
+The runnable harness stays in `cmd/site/` and points at the `site/` module automatically.
 
 The same Tailwind and Stencil bundles are shared with the app target.
 

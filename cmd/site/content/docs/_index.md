@@ -26,4 +26,3 @@ It keeps Hugo templates explicit:
 - docs section: `layout = documentation`, `type = article`
 
 This section is intentionally small for now, but it gives us a stable place to grow the Hugo structure as the site and brand layers expand.
-

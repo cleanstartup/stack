@@ -13,6 +13,7 @@ import (
 )
 
 const defaultHugoVersion = "0.162.1"
+const siteModuleImportPath = "github.com/cleanstartup/stack/site"
 
 func (a *WebApp) buildSite(ctx context.Context, cfg BuildConfig) (*BuildResult, error) {
 	if a == nil || a.engine == nil {
@@ -42,7 +43,11 @@ func (a *WebApp) buildSite(ctx context.Context, cfg BuildConfig) (*BuildResult, 
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return nil, err
 	}
-	if err := runHugoBuild(ctx, sourceDir, outputDir, cfg); err != nil {
+	configFiles, err := siteConfigFiles(sourceDir, filepath.Dir(outputDir))
+	if err != nil {
+		return nil, err
+	}
+	if err := runHugoBuild(ctx, sourceDir, outputDir, cfg, configFiles...); err != nil {
 		return nil, err
 	}
 	assetsResult, err := a.engine.BuildAssets(ctx, BuildConfig{
@@ -135,6 +140,10 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 	}
 	assetOutputDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets")
 	assetMirrorDir := filepath.Join(sourceDir, "static", "assets")
+	configFiles, err := siteConfigFiles(sourceDir, filepath.Dir(assetOutputDir))
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(assetOutputDir, 0o755); err != nil {
 		return err
 	}
@@ -327,6 +336,9 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 		"--source", sourceDir,
 		"--disableFastRender",
 	}
+	if len(configFiles) > 0 {
+		args = append(args, "--config", strings.Join(configFiles, ","))
+	}
 	if baseURL := baseURLFromAddr(host, port); baseURL != "" {
 		args = append(args, "--baseURL", baseURL)
 	}
@@ -392,7 +404,7 @@ func mirrorSiteAssets(sourceDir, mirrorDir string) error {
 	return copyTree(mirrorDir, sourceAssetsDir)
 }
 
-func runHugoBuild(ctx context.Context, sourceDir, outputDir string, cfg BuildConfig) error {
+func runHugoBuild(ctx context.Context, sourceDir, outputDir string, cfg BuildConfig, configFiles ...string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -402,6 +414,9 @@ func runHugoBuild(ctx context.Context, sourceDir, outputDir string, cfg BuildCon
 	}
 	args := []string{
 		"--destination", outputDir,
+	}
+	if len(configFiles) > 0 {
+		args = append(args, "--config", strings.Join(configFiles, ","))
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = sourceDir
@@ -470,6 +485,57 @@ func resolveHugoBinary(ctx context.Context, cfg BuildConfig) (string, error) {
 		return binaryPath, nil
 	}
 	return "", fmt.Errorf("hugo install completed but binary was not found at %s", binaryPath)
+}
+
+func siteConfigFiles(sourceDir, moduleRoot string) ([]string, error) {
+	sourceDir = strings.TrimSpace(sourceDir)
+	moduleRoot = strings.TrimSpace(moduleRoot)
+	if sourceDir == "" || moduleRoot == "" {
+		return nil, fmt.Errorf("site config paths are required")
+	}
+
+	files := make([]string, 0, 2)
+	consumerConfig := filepath.Join(sourceDir, "hugo.toml")
+	if info, err := os.Stat(consumerConfig); err == nil && !info.IsDir() {
+		files = append(files, consumerConfig)
+	}
+
+	moduleConfig, err := writeSiteModuleConfig(moduleRoot)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, moduleConfig)
+	return files, nil
+}
+
+func writeSiteModuleConfig(moduleRoot string) (string, error) {
+	moduleDir := siteModuleDir()
+	if moduleDir == "" {
+		return "", fmt.Errorf("site module directory not found")
+	}
+	if err := os.MkdirAll(moduleRoot, 0o755); err != nil {
+		return "", err
+	}
+	configPath := filepath.Join(moduleRoot, "site.module.hugo.toml")
+	content := strings.Join([]string{
+		"[module]",
+		"replacements = \"" + siteModuleImportPath + " -> " + filepath.ToSlash(moduleDir) + "\"",
+		"  [[module.imports]]",
+		"  path = \"" + siteModuleImportPath + "\"",
+		"",
+	}, "\n")
+	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+		return "", err
+	}
+	return configPath, nil
+}
+
+func siteModuleDir() string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(filepath.Dir(file)), "site")
 }
 
 func hugoModuleVersion(version string) string {

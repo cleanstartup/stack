@@ -29,7 +29,7 @@ type: article
 
 ## Template Structure
 
-The site source keeps the lookup chain small and readable:
+The site module keeps the lookup chain small and readable:
 
 - `site/layouts/index.html` renders the home page
 - `site/layouts/_default/list.html` renders section/list pages
@@ -45,7 +45,7 @@ Hugo renders the HTML, while the stack still owns the CSS and JS outputs:
 
 - Tailwind writes `assets/css/app/app.css`
 - Stencil writes `assets/js/stack/stack.esm.js`
-- `site dev` mirrors the generated assets into `site/static/assets`
+- `site dev` mirrors the generated assets into `cmd/site/static/assets`
 
 This lets Hugo serve the final site directly during development without giving up the shared asset pipeline.
 

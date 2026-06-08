@@ -13,4 +13,3 @@ export class DemoCopy {
       : "The component stays interactive even on the static site.";
   }
 }
-
