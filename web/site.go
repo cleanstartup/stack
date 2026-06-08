@@ -43,7 +43,7 @@ func (a *WebApp) buildSite(ctx context.Context, cfg BuildConfig) (*BuildResult, 
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return nil, err
 	}
-	configFiles, err := siteConfigFiles(sourceDir, filepath.Dir(outputDir))
+	configFiles, err := siteConfigFiles(sourceDir, filepath.Dir(outputDir), a.HugoModules()...)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 	}
 	assetOutputDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets")
 	assetMirrorDir := filepath.Join(sourceDir, "static", "assets")
-	configFiles, err := siteConfigFiles(sourceDir, filepath.Dir(assetOutputDir))
+	configFiles, err := siteConfigFiles(sourceDir, filepath.Dir(assetOutputDir), a.HugoModules()...)
 	if err != nil {
 		return err
 	}
@@ -487,7 +487,7 @@ func resolveHugoBinary(ctx context.Context, cfg BuildConfig) (string, error) {
 	return "", fmt.Errorf("hugo install completed but binary was not found at %s", binaryPath)
 }
 
-func siteConfigFiles(sourceDir, moduleRoot string) ([]string, error) {
+func siteConfigFiles(sourceDir, moduleRoot string, modules ...HugoModule) ([]string, error) {
 	sourceDir = strings.TrimSpace(sourceDir)
 	moduleRoot = strings.TrimSpace(moduleRoot)
 	if sourceDir == "" || moduleRoot == "" {
@@ -500,7 +500,7 @@ func siteConfigFiles(sourceDir, moduleRoot string) ([]string, error) {
 		files = append(files, consumerConfig)
 	}
 
-	moduleConfig, err := writeSiteModuleConfig(moduleRoot)
+	moduleConfig, err := writeSiteModuleConfig(moduleRoot, modules...)
 	if err != nil {
 		return nil, err
 	}
@@ -508,26 +508,80 @@ func siteConfigFiles(sourceDir, moduleRoot string) ([]string, error) {
 	return files, nil
 }
 
-func writeSiteModuleConfig(moduleRoot string) (string, error) {
-	moduleDir := siteModuleDir()
-	if moduleDir == "" {
-		return "", fmt.Errorf("site module directory not found")
-	}
+func writeSiteModuleConfig(moduleRoot string, modules ...HugoModule) (string, error) {
 	if err := os.MkdirAll(moduleRoot, 0o755); err != nil {
 		return "", err
 	}
 	configPath := filepath.Join(moduleRoot, "site.module.hugo.toml")
-	content := strings.Join([]string{
-		"[module]",
-		"replacements = \"" + siteModuleImportPath + " -> " + filepath.ToSlash(moduleDir) + "\"",
-		"  [[module.imports]]",
-		"  path = \"" + siteModuleImportPath + "\"",
-		"",
-	}, "\n")
+	content, err := hugoModuleConfig(modules...)
+	if err != nil {
+		return "", err
+	}
 	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
 		return "", err
 	}
 	return configPath, nil
+}
+
+func siteHugoModule() HugoModule {
+	return HugoModule{
+		ImportPath:  siteModuleImportPath,
+		ReplacePath: siteModuleDir(),
+	}
+}
+
+func hugoModuleConfig(modules ...HugoModule) (string, error) {
+	normalized := normalizeHugoModules(modules...)
+	if len(normalized) == 0 {
+		return "", fmt.Errorf("no hugo modules configured")
+	}
+
+	var b strings.Builder
+	b.WriteString("[module]\n")
+	if replacements := hugoModuleReplacements(normalized...); replacements != "" {
+		b.WriteString("replacements = \"")
+		b.WriteString(replacements)
+		b.WriteString("\"\n")
+	}
+	for _, mod := range normalized {
+		b.WriteString("  [[module.imports]]\n")
+		b.WriteString("  path = \"")
+		b.WriteString(mod.ImportPath)
+		b.WriteString("\"\n")
+	}
+	return b.String(), nil
+}
+
+func normalizeHugoModules(modules ...HugoModule) []HugoModule {
+	if len(modules) == 0 {
+		return nil
+	}
+	out := make([]HugoModule, 0, len(modules))
+	seen := make(map[string]struct{}, len(modules))
+	for _, mod := range modules {
+		mod.ImportPath = strings.TrimSpace(mod.ImportPath)
+		mod.ReplacePath = strings.TrimSpace(mod.ReplacePath)
+		if mod.ImportPath == "" {
+			continue
+		}
+		if _, ok := seen[mod.ImportPath]; ok {
+			continue
+		}
+		out = append(out, mod)
+		seen[mod.ImportPath] = struct{}{}
+	}
+	return out
+}
+
+func hugoModuleReplacements(modules ...HugoModule) string {
+	parts := make([]string, 0, len(modules))
+	for _, mod := range modules {
+		if strings.TrimSpace(mod.ReplacePath) == "" {
+			continue
+		}
+		parts = append(parts, mod.ImportPath+" -> "+filepath.ToSlash(mod.ReplacePath))
+	}
+	return strings.Join(parts, ",")
 }
 
 func siteModuleDir() string {

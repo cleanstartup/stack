@@ -51,6 +51,21 @@ The runnable harness stays in `cmd/site/` and points at the `site/` module autom
 
 The same Tailwind and Stencil bundles are shared with the app target.
 
+## Module Contract
+
+The stack treats a module as a reusable bundle rather than a loose list of assets.
+`web.Module(...)` is the low-level bundler for `Part`s, and the same value can additionally contribute Hugo module metadata via `WithHugo(...)`.
+
+That means a future `branding.Module()` can expose:
+
+- Stencil components
+- CSS inputs
+- Hugo showcase content
+- layout/type templates
+- the Hugo module import metadata the site target needs
+
+`web.Site(...)` collects that metadata automatically, so consumer repos do not have to wire Hugo modules manually.
+
 ## Change Policy
 
 When changing the site contract, update in the same change:

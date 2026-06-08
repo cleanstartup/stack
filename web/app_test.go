@@ -52,6 +52,28 @@ func TestBuildMaterializesAssets(t *testing.T) {
 	}
 }
 
+func TestWebAppCollectsHugoModulesFromModules(t *testing.T) {
+	tmp := t.TempDir()
+	cssPath := filepath.Join(tmp, "style.css")
+	if err := os.WriteFile(cssPath, []byte("body{color:red}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := web.New(web.Module(
+		web.CSS(web.FromFile(cssPath)),
+	).WithHugo(
+		web.HugoModule{ImportPath: "github.com/cleanstartup/branding", ReplacePath: "/tmp/branding"},
+	))
+
+	modules := app.HugoModules()
+	if len(modules) != 1 {
+		t.Fatalf("expected one collected hugo module, got %d", len(modules))
+	}
+	if modules[0].ImportPath != "github.com/cleanstartup/branding" {
+		t.Fatalf("unexpected import path: %q", modules[0].ImportPath)
+	}
+}
+
 func TestWebCLIHelpIncludesCommandSummaries(t *testing.T) {
 	app := web.New()
 

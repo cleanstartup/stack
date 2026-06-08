@@ -23,6 +23,8 @@ import (
 - `web.App(...)` for Go web apps with Tailwind and Stencil
 - `web.Site(...)` for static sites rendered by Hugo with the same Tailwind and Stencil asset pipeline
 
+`web.Module(...)` bundles multiple `Part`s into a reusable unit. If you add Hugo module metadata with `WithHugo(...)`, `web.Site(...)` will collect it automatically.
+
 ## Example
 
 ```go
@@ -102,6 +104,7 @@ If Hugo is not already installed, the stack will build it on demand via `go inst
 The default Hugo version is pinned to `0.162.1` in code and resolved as the Hugo module tag `v0.162.1`. It can be overridden when needed.
 `go run ./cmd/site dev` starts `hugo server` and keeps the generated CSS and JS mirrored into `cmd/site/static/assets`, while the stack Hugo module is injected automatically from `site/`.
 The reusable Hugo contract lives under `site/`; `cmd/site/` is just the local consumer demo.
+Any consumer module can contribute its own Hugo module metadata by using `web.Module(...).WithHugo(...)`.
 
 Environment overrides:
 
@@ -122,6 +125,7 @@ If a module comes from a dependency, pass its root explicitly so `stack` can fin
 
 - `web.Styles(baseDir)` for `*.css`
 - `web.Components(baseDir)` for `*.ts` and `*.tsx`
+- `web.Module(...)` to bundle multiple parts into one reusable module
 
 For the local main package, `web.App(...)` discovers the conventions automatically. External modules should compose their parts with the appropriate root or call the helpers directly with a root.
 `web.Site(...)` follows the same asset conventions but renders the page tree through Hugo.

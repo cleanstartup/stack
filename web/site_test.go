@@ -7,18 +7,25 @@ import (
 	"testing"
 )
 
-func TestSiteConfigFilesInjectsModuleImport(t *testing.T) {
+func TestSiteConfigFilesInjectsModuleImports(t *testing.T) {
 	tmp := t.TempDir()
 	sourceDir := filepath.Join(tmp, "consumer")
 	moduleRoot := filepath.Join(tmp, "workspace")
+	brandingRoot := filepath.Join(tmp, "branding")
 	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(brandingRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(sourceDir, "hugo.toml"), []byte("title = \"demo\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	files, err := siteConfigFiles(sourceDir, moduleRoot)
+	files, err := siteConfigFiles(sourceDir, moduleRoot,
+		siteHugoModule(),
+		HugoModule{ImportPath: "github.com/cleanstartup/branding", ReplacePath: brandingRoot},
+	)
 	if err != nil {
 		t.Fatalf("siteConfigFiles failed: %v", err)
 	}
@@ -34,9 +41,15 @@ func TestSiteConfigFilesInjectsModuleImport(t *testing.T) {
 	}
 	body := string(data)
 	if !strings.Contains(body, siteModuleImportPath) {
-		t.Fatalf("expected module import path in config, got %q", body)
+		t.Fatalf("expected stack module import path in config, got %q", body)
+	}
+	if !strings.Contains(body, "github.com/cleanstartup/branding") {
+		t.Fatalf("expected branding module import path in config, got %q", body)
 	}
 	if !strings.Contains(body, "replacements =") {
 		t.Fatalf("expected module replacements in config, got %q", body)
+	}
+	if !strings.Contains(body, filepath.ToSlash(brandingRoot)) {
+		t.Fatalf("expected branding replace path in config, got %q", body)
 	}
 }

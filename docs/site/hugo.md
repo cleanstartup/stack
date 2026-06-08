@@ -8,6 +8,8 @@ description: Hugo-specific conventions for the stack site target.
 This document describes how Hugo is used inside the stack `site` target.
 The goal is not to invent a second rendering engine, but to keep the brand-style contract explicit in Hugo terms.
 
+The stack injects its own Hugo module automatically and can collect additional module metadata from any bundled `web.Module` values.
+
 ## Front Matter
 
 The demo uses two explicit front matter fields:

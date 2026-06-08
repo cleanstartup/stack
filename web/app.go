@@ -15,11 +15,16 @@ import (
 )
 
 type WebApp struct {
-	builder   *Builder
-	engine    *BuildEngine
-	baseDir   string
-	moduleDir string
-	target    TargetKind
+	builder     *Builder
+	engine      *BuildEngine
+	baseDir     string
+	moduleDir   string
+	target      TargetKind
+	hugoModules []HugoModule
+}
+
+type hugoModuleProvider interface {
+	HugoModules() []HugoModule
 }
 
 func newWebApp(target ...TargetKind) *WebApp {
@@ -42,6 +47,7 @@ func New(parts ...Part) *WebApp {
 func NewSite(parts ...Part) *WebApp {
 	app := newWebApp(TargetSite)
 	app.Apply(parts...)
+	app.registerHugoModules(siteHugoModule())
 	return app
 }
 
@@ -58,6 +64,7 @@ func NewSiteWithDefaults(baseDir string, parts ...Part) *WebApp {
 	app.baseDir = strings.TrimSpace(baseDir)
 	app.moduleDir = moduleRoot(baseDir)
 	app.Apply(append([]Part{Styles(baseDir), Components(baseDir)}, parts...)...)
+	app.registerHugoModules(siteHugoModule())
 	return app
 }
 
@@ -69,8 +76,43 @@ func (a *WebApp) Apply(parts ...Part) {
 		if part == nil {
 			continue
 		}
+		if module, ok := part.(hugoModuleProvider); ok {
+			a.registerHugoModules(module.HugoModules()...)
+		}
 		part.Apply(a)
 	}
+}
+
+func (a *WebApp) registerHugoModules(mods ...HugoModule) {
+	if a == nil || len(mods) == 0 {
+		return
+	}
+	existing := make(map[string]struct{}, len(a.hugoModules))
+	for _, mod := range a.hugoModules {
+		if strings.TrimSpace(mod.ImportPath) == "" {
+			continue
+		}
+		existing[mod.ImportPath] = struct{}{}
+	}
+	for _, mod := range mods {
+		if strings.TrimSpace(mod.ImportPath) == "" {
+			continue
+		}
+		if _, ok := existing[mod.ImportPath]; ok {
+			continue
+		}
+		a.hugoModules = append(a.hugoModules, mod)
+		existing[mod.ImportPath] = struct{}{}
+	}
+}
+
+func (a *WebApp) HugoModules() []HugoModule {
+	if a == nil || len(a.hugoModules) == 0 {
+		return nil
+	}
+	out := make([]HugoModule, 0, len(a.hugoModules))
+	out = append(out, a.hugoModules...)
+	return out
 }
 
 func (a *WebApp) RegisterCSS(src AssetSource) AssetRef {
