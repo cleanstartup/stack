@@ -1,0 +1,30 @@
+{{- $page := .page | default . -}}
+{{- $layout := .layout | default "" -}}
+{{- if eq $layout "" -}}
+  {{- $layout = $page.Params.layout | default $page.Layout | default "" -}}
+{{- end -}}
+{{- if and (eq $layout "") $page.CurrentSection -}}
+  {{- $layout = $page.CurrentSection.Params.layout | default $page.CurrentSection.Layout | default "" -}}
+{{- end -}}
+{{- if and (eq $layout "") (gt (len $page.RegularPages) 0) -}}
+  {{- $firstPage := index $page.RegularPages 0 -}}
+  {{- with $firstPage.CurrentSection -}}
+    {{- $layout = .Params.layout | default .Layout | default "" -}}
+  {{- end -}}
+{{- end -}}
+{{- $layout = $layout | default "site" | lower -}}
+
+{{- $type := .type | default "" -}}
+{{- if eq $type "" -}}
+  {{- $type = $page.Params.type | default "" -}}
+{{- end -}}
+{{- if and (eq $type "") $page.CurrentSection -}}
+  {{- $type = $page.CurrentSection.Params.type | default "" -}}
+{{- end -}}
+{{- if and (eq $page.Kind "term") (eq $page.Data.Plural "categories") -}}
+  {{- $type = "intro" -}}
+{{- end -}}
+{{- $type = $type | default "document" | lower -}}
+
+{{- $layoutPartial := printf "layouts/%s/content.hugo.html" $layout -}}
+{{- partial $layoutPartial (dict "Page" $page "Layout" $layout "Type" $type) -}}

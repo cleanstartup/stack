@@ -1,5 +1,1 @@
-{{ $page := . }}
-{{ $layout := default (cond $page.IsHome "site" "documentation") $page.Params.layout }}
-{{ $type := default (cond $page.IsHome "landing" "article") $page.Params.type }}
-{{ partial (printf "layouts/%s.hugo.html" $layout) (dict "Page" $page "Layout" $layout "Type" $type) }}
-
+{{- partial "render-layout.hugo.html" (dict "page" .) -}}

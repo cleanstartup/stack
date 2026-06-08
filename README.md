@@ -21,9 +21,10 @@ import (
 `web` exposes two target entrypoints:
 
 - `web.App(...)` for Go web apps with Tailwind and Stencil
-- `web.Site(...)` for static sites rendered by Hugo with the same Tailwind and Stencil asset pipeline
+- `web.Site(...)` for Hugo-backed sites with the same Tailwind and Stencil asset pipeline
 
-`web.Module(...)` bundles multiple `Part`s into a reusable unit. If you add Hugo module metadata with `WithHugo(...)`, `web.Site(...)` will collect it automatically.
+`web.Module(...)` bundles multiple `Part`s into a reusable unit.
+`web.Content(baseDir, patterns...)` materializes matching Markdown files into a temporary Hugo module, and `web.Layouts(baseDir, patterns...)` does the same for Hugo layout and type files.
 
 ## Example
 
@@ -72,8 +73,8 @@ func main() {
 - The app-wide style set is collected automatically from all `*.css` files in the calling Go module, whether they live directly in the demo/package directory or deeper in subdirectories.
 - The styles build runs through a single Tailwind output (`/assets/css/app/app.css`). The Tailwind binary is downloaded automatically and cached if it is not already available.
 - The component convention automatically picks up all `*.tsx` and `*.ts` files in the Go module; Stencil components and helper logic can therefore be organized anywhere in the module, including a flat layout directly under a package or demo directory.
-- If the base directory is also a Hugo site root with `hugo.toml`, convention discovery stays scoped to that site directory instead of walking up to the parent Go module root.
-- `web.Showcases(baseDir)` materializes nearby `*.showcase.md` files into a temporary Hugo module so component docs can live next to the component source while still rendering through the site target.
+- `web.Content(baseDir, patterns...)` materializes matching content files into a temporary Hugo module so repo-local docs can live next to the source while still rendering through the site target.
+- `web.Layouts(baseDir, patterns...)` materializes matching Hugo layout files into a temporary Hugo module so consumer repos can declare site templates explicitly.
 - The Stencil build produces a central JS output (`/assets/js/stack/stack.esm.js`). The CLI is fetched on demand through `npm exec`; you can override that via `STACK_STENCIL_BINARY`.
 - Additional Tailwind scan paths can be registered with `web.TailwindScan(...)`.
 - The demo shows the default style set through flat `cmd/demo/*.css` files plus a Stencil component with a TS helper in the same directory. The Tailwind binary is downloaded automatically; you can override it via the `STACK_TAILWIND_*` variables.
@@ -93,7 +94,7 @@ go run ./cmd/demo dev
 
 The demo registers a single activity; styles and components are picked up automatically from the local demo module. For external dependencies, `web.Styles(baseDir)` and `web.Components(baseDir)` need an explicit module root so `stack` can discover the CSS/TS/TSX files in the dependency checkout. For the local demo that is not necessary; the defaults are applied automatically.
 
-A Hugo-backed site demo harness lives in `cmd/site`, while the reusable Hugo module lives in `site/`:
+A Hugo-backed site demo harness lives in `cmd/site`:
 
 ```bash
 go run ./cmd/site build
@@ -104,9 +105,9 @@ go run ./cmd/site dev
 The site demo renders content through Hugo while using the same Tailwind and Stencil asset pipeline.
 If Hugo is not already installed, the stack will build it on demand via `go install` and cache the binary locally.
 The default Hugo version is pinned to `0.162.1` in code and resolved as the Hugo module tag `v0.162.1`. It can be overridden when needed.
-`go run ./cmd/site dev` starts `hugo server` and keeps the generated CSS and JS mirrored into the temporary site-assets module under `.stack/site-assets-module/static/assets`, while the stack Hugo module is injected automatically from `site/`.
-The reusable Hugo contract lives under `site/`; `cmd/site/` is just the local consumer demo.
-Any consumer module can contribute its own Hugo module metadata by using `web.Module(...).WithHugo(...)`.
+`go run ./cmd/site dev` starts `hugo server` and keeps the generated CSS and JS mirrored into the temporary site-assets module under `.stack/site-assets-module/static/assets`, while the stack Hugo module is injected automatically from the stack package.
+Consumer modules contribute content and render templates via `web.Content(...)` and `web.Layouts(...)`.
+The site entrypoint can also provide Hugo settings explicitly via `web.SiteConfig(...)` instead of a local `hugo.toml`.
 
 Environment overrides:
 
@@ -129,9 +130,11 @@ If a module comes from a dependency, pass its root explicitly so `stack` can fin
 - `web.Styles(baseDir)` for `*.css`
 - `web.Components(baseDir)` for `*.ts` and `*.tsx`
 - `web.Module(...)` to bundle multiple parts into one reusable module
+- `web.Content(baseDir, patterns...)` for Markdown content
+- `web.Layouts(baseDir, patterns...)` for Hugo layouts and types
 
 For the local main package, `web.App(...)` discovers the conventions automatically. External modules should compose their parts with the appropriate root or call the helpers directly with a root.
-`web.Site(...)` follows the same asset conventions but renders the page tree through Hugo.
+`web.Site(...)` follows the same asset conventions but renders the page tree through Hugo. It does not assume any specific content structure; the consumer decides which Markdown files, layouts, and site settings should be included.
 
 The site contract and Hugo conventions now live in `docs/site/`:
 

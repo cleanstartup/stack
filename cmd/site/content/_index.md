@@ -1,8 +1,6 @@
 ---
 title: stack site demo
 description: Hugo-backed site demo for the stack target.
-layout: site
-type: landing
 ---
 
 <site-demo-card></site-demo-card>
@@ -10,7 +8,7 @@ type: landing
 ## Hugo-backed site target
 
 This demo shows the `site` target using the same Tailwind and Stencil pipeline as the app target.
-It uses the `site` layout and `landing` type to make the Hugo contract visible.
+It is configured explicitly in code via `web.SiteConfig(...)` and the asset parts passed to `web.SiteAt(...)`.
 
 It renders content through Hugo and serves the generated site as a static build.
 

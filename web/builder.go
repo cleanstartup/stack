@@ -27,7 +27,8 @@ type Builder struct {
 	routes   []routeRegistration
 	tailwind *TailwindRegistry
 	stencil  *StencilRegistry
-	showcase *ShowcaseRegistry
+	content  *ContentRegistry
+	layouts  *LayoutRegistry
 	assets   *AssetRegistry
 }
 
@@ -36,7 +37,8 @@ func NewBuilder() *Builder {
 		routes:   []routeRegistration{},
 		tailwind: NewTailwindRegistry(),
 		stencil:  NewStencilRegistry(),
-		showcase: NewShowcaseRegistry(),
+		content:  NewContentRegistry(),
+		layouts:  NewLayoutRegistry(),
 		assets:   NewAssetRegistry(),
 	}
 }
@@ -96,11 +98,18 @@ func (b *Builder) Stencil(src AssetSource) AssetRef {
 	return b.stencil.AddInput(src)
 }
 
-func (b *Builder) Showcase(baseDir string) {
-	if b == nil || b.showcase == nil {
+func (b *Builder) Content(baseDir string, includes ...string) {
+	if b == nil || b.content == nil {
 		return
 	}
-	b.showcase.Add(baseDir)
+	b.content.Add(baseDir, includes...)
+}
+
+func (b *Builder) Layouts(baseDir string, includes ...string) {
+	if b == nil || b.layouts == nil {
+		return
+	}
+	b.layouts.Add(baseDir, includes...)
 }
 
 func (b *Builder) JS(src AssetSource) AssetRef   { return b.Add(AssetKindJS, src) }
@@ -134,11 +143,18 @@ func (b *Builder) Components() *StencilRegistry {
 	return b.stencil
 }
 
-func (b *Builder) Showcases() *ShowcaseRegistry {
+func (b *Builder) ContentRegistry() *ContentRegistry {
 	if b == nil {
 		return nil
 	}
-	return b.showcase
+	return b.content
+}
+
+func (b *Builder) LayoutRegistry() *LayoutRegistry {
+	if b == nil {
+		return nil
+	}
+	return b.layouts
 }
 
 func (b *Builder) Manifest() AssetManifest {

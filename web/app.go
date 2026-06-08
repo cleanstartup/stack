@@ -21,6 +21,7 @@ type WebApp struct {
 	moduleDir   string
 	target      TargetKind
 	hugoModules []HugoModule
+	siteConfig  *SiteOptions
 }
 
 type hugoModuleProvider interface {
@@ -64,7 +65,7 @@ func NewSiteWithDefaults(baseDir string, parts ...Part) *WebApp {
 	app := newWebApp(TargetSite)
 	app.baseDir = strings.TrimSpace(baseDir)
 	app.moduleDir = moduleRoot(baseDir)
-	app.Apply(append([]Part{Styles(baseDir), Components(baseDir), TailwindScan(siteModuleDir())}, parts...)...)
+	app.Apply(append([]Part{TailwindScan(siteModuleDir())}, parts...)...)
 	app.registerHugoModules(siteHugoModule())
 	return app
 }
@@ -144,8 +145,16 @@ func (a *WebApp) RegisterStencilScan(paths ...string) {
 	a.builder.StencilScan(paths...)
 }
 
-func (a *WebApp) RegisterShowcase(baseDir string) {
-	a.builder.Showcase(baseDir)
+func (a *WebApp) RegisterContent(baseDir string, includes ...string) {
+	a.builder.Content(baseDir, includes...)
+}
+
+func (a *WebApp) RegisterLayouts(baseDir string, includes ...string) {
+	a.builder.Layouts(baseDir, includes...)
+}
+
+func (a *WebApp) RegisterSiteConfig(opts SiteOptions) {
+	a.registerSiteConfig(opts)
 }
 
 func (a *WebApp) Target() TargetKind {

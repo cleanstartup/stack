@@ -615,8 +615,21 @@ func (e *BuildEngine) devSourceWatchPaths() []string {
 			}
 		}
 	}
-	if e.builder.showcase != nil {
-		for _, path := range e.builder.showcase.WatchPaths() {
+	if e.builder.content != nil {
+		for _, path := range e.builder.content.WatchPaths() {
+			path = strings.TrimSpace(path)
+			if path == "" {
+				continue
+			}
+			if _, exists := seen[path]; exists {
+				continue
+			}
+			seen[path] = struct{}{}
+			paths = append(paths, path)
+		}
+	}
+	if e.builder.layouts != nil {
+		for _, path := range e.builder.layouts.WatchPaths() {
 			path = strings.TrimSpace(path)
 			if path == "" {
 				continue
@@ -632,11 +645,18 @@ func (e *BuildEngine) devSourceWatchPaths() []string {
 	return paths
 }
 
-func (e *BuildEngine) showcaseModules(moduleRoot string) ([]HugoModule, error) {
-	if e == nil || e.builder == nil || e.builder.showcase == nil {
+func (e *BuildEngine) contentModules(moduleRoot string) ([]HugoModule, error) {
+	if e == nil || e.builder == nil || e.builder.content == nil {
 		return nil, nil
 	}
-	return e.builder.showcase.Modules(moduleRoot)
+	return e.builder.content.Modules(moduleRoot)
+}
+
+func (e *BuildEngine) layoutModules(moduleRoot string) ([]HugoModule, error) {
+	if e == nil || e.builder == nil || e.builder.layouts == nil {
+		return nil, nil
+	}
+	return e.builder.layouts.Modules(moduleRoot)
 }
 
 func (e *BuildEngine) syncStencilSourceMirror(workspaceDir string) error {
@@ -754,22 +774,18 @@ func (e *BuildEngine) devStencilSourceChanged(path string) bool {
 	return false
 }
 
-func (e *BuildEngine) devShowcaseSourceChanged(path string) bool {
-	if e == nil || e.builder == nil || e.builder.showcase == nil {
+func (e *BuildEngine) devContentSourceChanged(path string) bool {
+	if e == nil || e.builder == nil || e.builder.content == nil {
 		return false
 	}
-	if strings.ToLower(filepath.Ext(path)) != ".md" {
+	return e.builder.content.SourceChanged(path)
+}
+
+func (e *BuildEngine) devLayoutSourceChanged(path string) bool {
+	if e == nil || e.builder == nil || e.builder.layouts == nil {
 		return false
 	}
-	for _, entry := range e.builder.showcase.Entries() {
-		files := discoverModuleFiles(entry.baseDir, ".showcase.md")
-		for _, candidate := range files {
-			if sourcePathMatches(candidate, path) {
-				return true
-			}
-		}
-	}
-	return false
+	return e.builder.layouts.SourceChanged(path)
 }
 
 func sourcePathMatches(candidate, changed string) bool {
@@ -919,8 +935,8 @@ func (e *BuildEngine) watchPaths() []string {
 		}
 	}
 	if e.builder.assets == nil {
-		if e.builder.showcase != nil {
-			for _, p := range e.builder.showcase.WatchPaths() {
+		if e.builder.content != nil {
+			for _, p := range e.builder.content.WatchPaths() {
 				p = strings.TrimSpace(p)
 				if p == "" {
 					continue
@@ -950,8 +966,8 @@ func (e *BuildEngine) watchPaths() []string {
 			}
 		}
 	}
-	if e.builder.showcase != nil {
-		for _, p := range e.builder.showcase.WatchPaths() {
+	if e.builder.content != nil {
+		for _, p := range e.builder.content.WatchPaths() {
 			p = strings.TrimSpace(p)
 			if p == "" {
 				continue

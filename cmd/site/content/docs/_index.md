@@ -1,28 +1,16 @@
 ---
 title: Site Contract Docs
-description: Layout and type contract for the stack site target.
-layout: documentation
-type: article
+description: Explicit Hugo settings and consumer-owned content for the stack site target.
 ---
 
-The stack site target now exposes the same architectural axes as the Brand Library:
-
-- `target`
-- `layout`
-- `type`
+The stack site target keeps the runtime and asset pipeline, while the consumer repo decides which content files and Hugo templates to use.
 
 ## Why this matters
 
 It keeps Hugo templates explicit:
 
 - the `site` target owns the runtime and asset pipeline,
-- `layout` decides the page shell,
-- `type` decides the semantic wrapper,
-- and the brand repo can later consume the contract instead of defining it again.
+- `web.SiteConfig(...)` owns the site-level settings,
+- the consumer repo owns the Markdown content and layout/type template files.
 
-## Current demo pages
-
-- home page: `layout = site`, `type = landing`
-- docs section: `layout = documentation`, `type = article`
-
-This section is intentionally small for now, but it gives us a stable place to grow the Hugo structure as the site and brand layers expand.
+This section stays intentionally small for now, but it gives us a stable place to grow the Hugo structure as the site and brand layers expand.

@@ -5,72 +5,27 @@ description: Technical contract for the Hugo-backed site target in stack.
 
 ## Purpose
 
-The `site` target is a Hugo-backed rendering path that still shares the same Tailwind and Stencil asset pipeline as `app`.
-This keeps the rendering model explicit while allowing the brand-oriented content layer to live above the stack.
+The `site` target is a Hugo-backed rendering path that shares the same Tailwind and Stencil asset pipeline as `app`.
+Stack owns the technical shell, asset mirroring, and Hugo module wiring. The consumer module owns the actual content files, layouts, and page semantics.
 
-## Axes
+## Contract
 
-The site contract is intentionally split into three layers:
+The site target expects explicit configuration instead of hidden repo files:
 
-- `target`: the stack entrypoint and runtime mode (`app` or `site`)
-- `layout`: the outer shell and page composition (`site`, `documentation`, `blog`, ...)
-- `type`: the semantic content class inside a layout (`landing`, `article`, `reference`, ...)
+- `web.SiteConfig(...)` defines Hugo settings such as title, base URL, disabled kinds, params, and renderer flags.
+- `web.Content(baseDir, includes...)` materializes matching Markdown files into a temporary Hugo module.
+- `web.Layouts(baseDir, includes...)` materializes matching Hugo layout and type files into a temporary Hugo module.
 
-Why this split matters:
+That means a brand repository can keep its own Markdown files and templates next to the component source while the stack only handles the technical build path.
 
-- `target` selects the execution model.
-- `layout` chooses the page shell.
-- `type` chooses the inner content behavior.
+## Rendering
 
-Keeping those concerns separate makes Hugo templates easier to reason about and keeps the brand repo focused on content rather than infrastructure.
+The stack supplies the shared HTML shell and asset links.
+Brand-specific layout and type templates can live in the consumer module and are resolved through the explicit `layouts/<layout>/content.hugo.html` and `types/<type>/content.hugo.html` conventions.
 
-## Resolution Model
+There are no hard-coded defaults for home copy or documentation copy in stack itself.
+If the consumer wants home pages or section pages, those pages must exist as real content files in the configured source tree.
 
-The stack uses Hugo templates and partials to resolve a page in this order:
+## Demo
 
-1. resolve the page `layout`
-2. resolve the page `type`
-3. render the layout shell
-4. render the type-specific content wrapper
-
-If no explicit front matter is present, the site can fall back to sensible defaults.
-
-Current demo defaults:
-
-- home page: `layout = site`, `type = landing`
-- docs section: `layout = documentation`, `type = article`
-
-## Directory Contract
-
-The reusable site contract lives in `site/`, while `cmd/site` is only the runnable harness:
-
-- `site/layouts/` for shell templates and partial resolution
-- `site/go.mod` for the Hugo module identity
-
-The runnable harness stays in `cmd/site/` and points at the `site/` module automatically.
-
-The same Tailwind and Stencil bundles are shared with the app target.
-
-## Module Contract
-
-The stack treats a module as a reusable bundle rather than a loose list of assets.
-`web.Module(...)` is the low-level bundler for `Part`s, and the same value can additionally contribute Hugo module metadata via `WithHugo(...)`.
-
-That means a future `branding.Module()` can expose:
-
-- Stencil components
-- CSS inputs
-- Hugo showcase content
-- layout/type templates
-- the Hugo module import metadata the site target needs
-
-`web.Site(...)` collects that metadata automatically, so consumer repos do not have to wire Hugo modules manually.
-
-## Change Policy
-
-When changing the site contract, update in the same change:
-
-- the content front matter,
-- the layout and type partials,
-- the docs in `docs/site/`,
-- and the demo content in `cmd/site/`.
+The `cmd/site` harness shows the explicit setup pattern used by the site target.

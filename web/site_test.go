@@ -9,31 +9,30 @@ import (
 
 func TestSiteConfigFilesInjectsModuleImports(t *testing.T) {
 	tmp := t.TempDir()
-	sourceDir := filepath.Join(tmp, "consumer")
 	moduleRoot := filepath.Join(tmp, "workspace")
 	brandingRoot := filepath.Join(tmp, "branding")
-	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
 	if err := os.MkdirAll(brandingRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(sourceDir, "hugo.toml"), []byte("title = \"demo\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 
-	files, err := siteConfigFiles(sourceDir, moduleRoot,
-		siteHugoModule(),
-		HugoModule{ImportPath: "github.com/cleanstartup/branding", ReplacePath: brandingRoot},
-	)
+	unsafe := true
+	files, err := siteConfigFiles(moduleRoot, &SiteOptions{
+		Title:        "demo",
+		BaseURL:      "http://127.0.0.1:8080/",
+		DisableKinds: []string{"taxonomy", "term"},
+		MarkupUnsafe: &unsafe,
+		Params: map[string]string{
+			"brandLead": "hello",
+		},
+	}, siteHugoModule(), HugoModule{ImportPath: "github.com/cleanstartup/branding", ReplacePath: brandingRoot})
 	if err != nil {
 		t.Fatalf("siteConfigFiles failed: %v", err)
 	}
 	if len(files) != 2 {
-		t.Fatalf("expected consumer config plus module config, got %d", len(files))
+		t.Fatalf("expected site config plus module config, got %d", len(files))
 	}
-	if files[0] != filepath.Join(sourceDir, "hugo.toml") {
-		t.Fatalf("expected consumer config first, got %q", files[0])
+	if files[0] != filepath.Join(moduleRoot, "site.hugo.toml") {
+		t.Fatalf("expected site config first, got %q", files[0])
 	}
 	data, err := os.ReadFile(files[1])
 	if err != nil {
@@ -51,5 +50,40 @@ func TestSiteConfigFilesInjectsModuleImports(t *testing.T) {
 	}
 	if !strings.Contains(body, filepath.ToSlash(brandingRoot)) {
 		t.Fatalf("expected branding replace path in config, got %q", body)
+	}
+}
+
+func TestSiteConfigFilesWritesSiteConfig(t *testing.T) {
+	tmp := t.TempDir()
+	moduleRoot := filepath.Join(tmp, "workspace")
+	if err := os.MkdirAll(moduleRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	unsafe := true
+	files, err := siteConfigFiles(moduleRoot, &SiteOptions{
+		Title:        "Branding",
+		BaseURL:      "http://127.0.0.1:8080/",
+		DisableKinds: []string{"taxonomy", "term"},
+		MarkupUnsafe: &unsafe,
+		Params: map[string]string{
+			"brand": "cleanstartup",
+		},
+	})
+	if err != nil {
+		t.Fatalf("siteConfigFiles failed: %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected one config file, got %d", len(files))
+	}
+	data, err := os.ReadFile(files[0])
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	body := string(data)
+	for _, want := range []string{"title = \"Branding\"", "baseURL = \"http://127.0.0.1:8080/\"", "disableKinds = [\"taxonomy\", \"term\"]", "[params]", "brand = \"cleanstartup\"", "[markup.goldmark.renderer]", "unsafe = true"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected %q in config, got %q", want, body)
+		}
 	}
 }

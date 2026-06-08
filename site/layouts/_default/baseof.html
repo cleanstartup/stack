@@ -1,15 +1,53 @@
+{{- $target := .Params.target | default "" -}}
+{{- if eq $target "" -}}
+  {{- $target = index .Site.Params "target" | default "browser" -}}
+{{- end -}}
+{{- $target = $target | lower -}}
+{{- if not (in (slice "browser" "pdf") $target) -}}
+  {{- $target = "browser" -}}
+{{- end -}}
+
+{{- $layout := .Params.layout | default .Layout | default "" -}}
+{{- if and (eq $layout "") .CurrentSection -}}
+  {{- $layout = .CurrentSection.Params.layout | default .CurrentSection.Layout | default "" -}}
+{{- end -}}
+{{- if and (eq $layout "") (gt (len .RegularPages) 0) -}}
+  {{- $firstPage := index .RegularPages 0 -}}
+  {{- with $firstPage.CurrentSection -}}
+    {{- $layout = .Params.layout | default .Layout | default "" -}}
+  {{- end -}}
+{{- end -}}
+{{- $layout = $layout | default "site" | lower -}}
+
+{{- $type := .Params.type | default "" -}}
+{{- if and (eq $type "") .CurrentSection -}}
+  {{- $type = .CurrentSection.Params.type | default "" -}}
+{{- end -}}
+{{- if and (eq $type "") (gt (len .RegularPages) 0) -}}
+  {{- $firstPage := index .RegularPages 0 -}}
+  {{- with $firstPage.CurrentSection -}}
+    {{- $type = .Params.type | default "" -}}
+  {{- end -}}
+{{- end -}}
+{{- if and (eq .Kind "term") (eq .Data.Plural "categories") -}}
+  {{- $type = "intro" -}}
+{{- end -}}
+{{- $type = $type | default "document" | lower -}}
+
 <!doctype html>
-<html lang="en">
+<html lang="{{ .Site.Language.Lang | default "en" }}" data-target="{{ $target }}" data-layout="{{ $layout }}" data-type="{{ $type }}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ if .IsHome }}{{ .Site.Title }}{{ else }}{{ .Title }} | {{ .Site.Title }}{{ end }}</title>
-    <link rel="stylesheet" href="/assets/css/app/app.css">
-    <script type="module" src="/assets/js/stack/stack.esm.js"></script>
+    {{- partial (printf "targets/%s/head.hugo.html" $target) . -}}
+    {{- block "head" . }}{{- end }}
   </head>
-  <body class="brand-shell">
-    <main class="mx-auto max-w-5xl px-6 py-16 lg:px-8">
-      {{ block "main" . }}{{ end }}
+  <body>
+    {{- partial (printf "targets/%s/before-content.hugo.html" $target) . -}}
+    <main id="layout-shell" class="mx-auto max-w-5xl px-6 py-16 lg:px-8">
+      {{- block "main" . }}{{- end }}
     </main>
+    {{- partial (printf "targets/%s/after-content.hugo.html" $target) . -}}
   </body>
 </html>

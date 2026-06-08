@@ -47,7 +47,7 @@ func TestNewWithDefaultsAppliesStylesAndComponentsFromBaseDir(t *testing.T) {
 	}
 }
 
-func TestNewSiteWithDefaultsAppliesStylesAndComponentsFromBaseDir(t *testing.T) {
+func TestNewSiteWithDefaultsKeepsSiteSetupExplicit(t *testing.T) {
 	tmp := t.TempDir()
 	if err := os.MkdirAll(tmp, 0o755); err != nil {
 		t.Fatal(err)
@@ -60,11 +60,11 @@ func TestNewSiteWithDefaultsAppliesStylesAndComponentsFromBaseDir(t *testing.T) 
 	}
 
 	app := NewSiteWithDefaults(tmp)
-	if got := len(app.builder.Styles().Inputs()); got != 1 {
-		t.Fatalf("expected one css input, got %d", got)
+	if got := len(app.builder.Styles().Inputs()); got != 0 {
+		t.Fatalf("expected no implicit css inputs, got %d", got)
 	}
-	if got := len(app.builder.Components().Inputs()); got != 1 {
-		t.Fatalf("expected one stencil input, got %d", got)
+	if got := len(app.builder.Components().Inputs()); got != 0 {
+		t.Fatalf("expected no implicit stencil inputs, got %d", got)
 	}
 	if got := app.Target(); got != TargetSite {
 		t.Fatalf("expected site target, got %q", got)

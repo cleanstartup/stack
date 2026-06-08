@@ -1,5 +1,5 @@
-{{ $page := .Page }}
 <div class="space-y-4 text-slate-600 leading-7">
-  {{ $page.Content }}
+  {{ with .Page.Content }}
+    {{ . }}
+  {{ end }}
 </div>
-

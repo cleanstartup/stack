@@ -27,15 +27,9 @@ func (a *WebApp) buildSite(ctx context.Context, cfg BuildConfig) (*BuildResult, 
 	if abs, err := filepath.Abs(outputDir); err == nil {
 		outputDir = abs
 	}
-	sourceDir := strings.TrimSpace(a.baseDir)
-	if sourceDir == "" {
-		sourceDir = strings.TrimSpace(a.moduleDir)
-	}
-	if sourceDir == "" {
-		sourceDir = CallerDir(1)
-	}
-	if sourceDir == "" {
-		sourceDir = "."
+	workspaceRoot := strings.TrimSpace(cfg.WorkspaceDir)
+	if workspaceRoot == "" {
+		workspaceRoot = defaultWorkspaceDir
 	}
 
 	if err := os.RemoveAll(outputDir); err != nil {
@@ -44,10 +38,11 @@ func (a *WebApp) buildSite(ctx context.Context, cfg BuildConfig) (*BuildResult, 
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return nil, err
 	}
-	workspaceAbs, err := filepath.Abs(cfg.WorkspaceDir)
+	workspaceAbs, err := filepath.Abs(workspaceRoot)
 	if err != nil {
-		workspaceAbs = cfg.WorkspaceDir
+		workspaceAbs = workspaceRoot
 	}
+	siteRoot := siteModuleRoot(workspaceAbs)
 	assetBuildDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets")
 	assetModuleDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets-module")
 	if _, err := a.engine.BuildAssets(ctx, BuildConfig{
@@ -64,22 +59,27 @@ func (a *WebApp) buildSite(ctx context.Context, cfg BuildConfig) (*BuildResult, 
 	if err := mirrorSiteAssets(assetBuildDir, filepath.Join(assetModuleDir, "static", "assets")); err != nil {
 		return nil, err
 	}
-	showcaseModules, err := a.engine.showcaseModules(filepath.Dir(outputDir))
+	contentModules, err := a.engine.contentModules(siteRoot)
+	if err != nil {
+		return nil, err
+	}
+	layoutModules, err := a.engine.layoutModules(siteRoot)
 	if err != nil {
 		return nil, err
 	}
 	modules := append(a.HugoModules(), siteAssetHugoModule(assetModuleDir))
-	modules = append(modules, showcaseModules...)
-	configFiles, err := siteConfigFiles(sourceDir, filepath.Dir(outputDir), modules...)
+	modules = append(modules, contentModules...)
+	modules = append(modules, layoutModules...)
+	configFiles, err := siteConfigFiles(siteRoot, a.SiteConfig(), modules...)
 	if err != nil {
 		return nil, err
 	}
-	if err := runHugoBuild(ctx, sourceDir, outputDir, cfg, configFiles...); err != nil {
+	if err := runHugoBuild(ctx, siteRoot, outputDir, cfg, configFiles...); err != nil {
 		return nil, err
 	}
 	result := &BuildResult{
-		WorkspaceDir: cfg.WorkspaceDir,
-		SourceDir:    sourceDir,
+		WorkspaceDir: workspaceRoot,
+		SourceDir:    siteRoot,
 		OutputDir:    outputDir,
 		AssetsDir:    filepath.Join(outputDir, "assets"),
 	}
@@ -135,32 +135,24 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 	if err != nil {
 		workspaceAbs = cfg.WorkspaceDir
 	}
+	siteRoot := siteModuleRoot(workspaceAbs)
 	tailwindCacheRoot := filepath.Join(filepath.Dir(workspaceAbs), "tailwind-cache")
 	stencilCacheRoot := filepath.Join(filepath.Dir(workspaceAbs), "stencil-cache")
 	assetBuildDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets")
 	assetModuleDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets-module")
-	sourceDir := strings.TrimSpace(a.baseDir)
-	if sourceDir == "" {
-		sourceDir = strings.TrimSpace(a.moduleDir)
-	}
-	if sourceDir == "" {
-		sourceDir = CallerDir(1)
-	}
-	if sourceDir == "" {
-		sourceDir = "."
-	}
-	sourceDirAbs, err := filepath.Abs(sourceDir)
-	if err == nil {
-		sourceDir = sourceDirAbs
-	}
 	assetMirrorDir := filepath.Join(assetModuleDir, "static", "assets")
-	showcaseModules, err := a.engine.showcaseModules(filepath.Dir(assetModuleDir))
+	contentModules, err := a.engine.contentModules(siteRoot)
+	if err != nil {
+		return err
+	}
+	layoutModules, err := a.engine.layoutModules(siteRoot)
 	if err != nil {
 		return err
 	}
 	modules := append(a.HugoModules(), siteAssetHugoModule(assetModuleDir))
-	modules = append(modules, showcaseModules...)
-	configFiles, err := siteConfigFiles(sourceDir, filepath.Dir(assetModuleDir), modules...)
+	modules = append(modules, contentModules...)
+	modules = append(modules, layoutModules...)
+	configFiles, err := siteConfigFiles(siteRoot, a.SiteConfig(), modules...)
 	if err != nil {
 		return err
 	}
@@ -191,6 +183,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 		PollInterval: cfg.PollInterval,
 		DevState:     cfg.DevState,
 	}
+	sourceDir := siteRoot
 	mirrorCtx, mirrorCancel := context.WithCancel(ctx)
 	defer mirrorCancel()
 	mirrorDone := make(chan error, 1)
@@ -232,7 +225,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 					fmt.Fprintf(os.Stderr, "[stack] site sources changed: %s\n", strings.Join(changed, ", "))
 					tailwindTouched := false
 					stencilTouched := false
-					showcaseTouched := false
+					contentTouched := false
 					for _, path := range changed {
 						if a.engine.devTailwindSourceChanged(path) {
 							fmt.Fprintf(os.Stderr, "[stack] site tailwind source touched: %s\n", path)
@@ -242,9 +235,9 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 							fmt.Fprintf(os.Stderr, "[stack] site stencil source touched: %s\n", path)
 							stencilTouched = true
 						}
-						if a.engine.devShowcaseSourceChanged(path) {
-							fmt.Fprintf(os.Stderr, "[stack] site showcase source touched: %s\n", path)
-							showcaseTouched = true
+						if a.engine.devContentSourceChanged(path) {
+							fmt.Fprintf(os.Stderr, "[stack] site content source touched: %s\n", path)
+							contentTouched = true
 						}
 					}
 					if tailwindTouched {
@@ -259,9 +252,22 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 							continue
 						}
 					}
-					if showcaseTouched {
-						if _, err := a.engine.showcaseModules(filepath.Dir(assetModuleDir)); err != nil {
-							fmt.Fprintln(os.Stderr, "[stack] site showcase sync failed:", err)
+					if contentTouched {
+						if _, err := a.engine.contentModules(siteRoot); err != nil {
+							fmt.Fprintln(os.Stderr, "[stack] site content sync failed:", err)
+							continue
+						}
+					}
+					layoutTouched := false
+					for _, path := range changed {
+						if a.engine.devLayoutSourceChanged(path) {
+							fmt.Fprintf(os.Stderr, "[stack] site layout source touched: %s\n", path)
+							layoutTouched = true
+						}
+					}
+					if layoutTouched {
+						if _, err := a.engine.layoutModules(siteRoot); err != nil {
+							fmt.Fprintln(os.Stderr, "[stack] site layout sync failed:", err)
 							continue
 						}
 					}
@@ -517,25 +523,50 @@ func resolveHugoBinary(ctx context.Context, cfg BuildConfig) (string, error) {
 	return "", fmt.Errorf("hugo install completed but binary was not found at %s", binaryPath)
 }
 
-func siteConfigFiles(sourceDir, moduleRoot string, modules ...HugoModule) ([]string, error) {
-	sourceDir = strings.TrimSpace(sourceDir)
+func siteConfigFiles(moduleRoot string, siteConfig *SiteOptions, modules ...HugoModule) ([]string, error) {
 	moduleRoot = strings.TrimSpace(moduleRoot)
-	if sourceDir == "" || moduleRoot == "" {
+	if moduleRoot == "" {
 		return nil, fmt.Errorf("site config paths are required")
 	}
 
 	files := make([]string, 0, 2)
-	consumerConfig := filepath.Join(sourceDir, "hugo.toml")
-	if info, err := os.Stat(consumerConfig); err == nil && !info.IsDir() {
-		files = append(files, consumerConfig)
+	if siteConfig != nil {
+		configPath, err := writeSiteConfig(moduleRoot, *siteConfig)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(configPath) != "" {
+			files = append(files, configPath)
+		}
 	}
 
 	moduleConfig, err := writeSiteModuleConfig(moduleRoot, modules...)
 	if err != nil {
 		return nil, err
 	}
-	files = append(files, moduleConfig)
+	if strings.TrimSpace(moduleConfig) != "" {
+		files = append(files, moduleConfig)
+	}
 	return files, nil
+}
+
+func writeSiteConfig(moduleRoot string, opts SiteOptions) (string, error) {
+	if err := os.MkdirAll(moduleRoot, 0o755); err != nil {
+		return "", err
+	}
+	configPath := filepath.Join(moduleRoot, "site.hugo.toml")
+	content, err := siteConfigToml(opts)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(content) == "" {
+		_ = os.Remove(configPath)
+		return "", nil
+	}
+	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+		return "", err
+	}
+	return configPath, nil
 }
 
 func writeSiteModuleConfig(moduleRoot string, modules ...HugoModule) (string, error) {
@@ -546,6 +577,10 @@ func writeSiteModuleConfig(moduleRoot string, modules ...HugoModule) (string, er
 	content, err := hugoModuleConfig(modules...)
 	if err != nil {
 		return "", err
+	}
+	if strings.TrimSpace(content) == "" {
+		_ = os.Remove(configPath)
+		return "", nil
 	}
 	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
 		return "", err
@@ -570,7 +605,7 @@ func siteAssetHugoModule(assetModuleDir string) HugoModule {
 func hugoModuleConfig(modules ...HugoModule) (string, error) {
 	normalized := normalizeHugoModules(modules...)
 	if len(normalized) == 0 {
-		return "", fmt.Errorf("no hugo modules configured")
+		return "", nil
 	}
 
 	var b strings.Builder
@@ -627,6 +662,14 @@ func siteModuleDir() string {
 		return ""
 	}
 	return filepath.Join(filepath.Dir(filepath.Dir(file)), "site")
+}
+
+func siteModuleRoot(workspaceRoot string) string {
+	workspaceRoot = strings.TrimSpace(workspaceRoot)
+	if workspaceRoot == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(workspaceRoot), "site")
 }
 
 func hugoModuleVersion(version string) string {
