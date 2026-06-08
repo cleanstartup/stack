@@ -1,0 +1,13 @@
+{{ $page := .Page }}
+<article class="space-y-6">
+  <header class="space-y-3">
+    <p class="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">Site layout</p>
+    <h1 class="text-4xl font-semibold tracking-tight text-slate-950">{{ $page.Title }}</h1>
+    <p class="max-w-2xl text-lg leading-8 text-slate-600">{{ $page.Params.description }}</p>
+    <p class="text-xs uppercase tracking-[0.2em] text-slate-400">layout: {{ .Layout }} · type: {{ .Type }}</p>
+  </header>
+
+  <section class="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+    {{ partial (printf "types/%s.hugo.html" .Type) . }}
+  </section>
+</article>

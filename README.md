@@ -124,3 +124,8 @@ If a module comes from a dependency, pass its root explicitly so `stack` can fin
 
 For the local main package, `web.App(...)` discovers the conventions automatically. External modules should compose their parts with the appropriate root or call the helpers directly with a root.
 `web.Site(...)` follows the same asset conventions but renders the page tree through Hugo.
+
+The site contract and Hugo conventions now live in `docs/site/`:
+
+- [`docs/site/architecture.md`](docs/site/architecture.md)
+- [`docs/site/hugo.md`](docs/site/hugo.md)
