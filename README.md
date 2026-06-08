@@ -99,13 +99,13 @@ go run ./cmd/site dev
 
 The site demo renders content through Hugo while using the same Tailwind and Stencil asset pipeline.
 If Hugo is not already installed, the stack will build it on demand via `go install` and cache the binary locally.
-The default Hugo version is pinned to `0.162.1` in code and can be overridden when needed.
+The default Hugo version is pinned to `0.162.1` in code and resolved as the Hugo module tag `v0.162.1`. It can be overridden when needed.
 `go run ./cmd/site dev` starts `hugo server` and keeps the generated CSS and JS mirrored into `cmd/site/static/assets`, so Hugo can serve them directly during development.
 
 Environment overrides:
 
 - `STACK_HUGO_BINARY` to use a preinstalled binary
-- `STACK_HUGO_VERSION` to override the pinned Hugo version built via Go
+- `STACK_HUGO_VERSION` to override the pinned Hugo version built via Go. You can pass either `0.162.1` or `v0.162.1`.
 - `STACK_HUGO_CACHE_DIR` to change the local Hugo cache location
 
 Generated site outputs are ignored by Git:

@@ -439,8 +439,9 @@ func resolveHugoBinary(ctx context.Context, cfg BuildConfig) (string, error) {
 	if version == "" {
 		version = defaultHugoVersion
 	}
+	moduleVersion := hugoModuleVersion(version)
 
-	binDir := filepath.Join(cacheDir, version, "bin")
+	binDir := filepath.Join(cacheDir, moduleVersion, "bin")
 	binaryName := "hugo"
 	if runtime.GOOS == "windows" {
 		binaryName += ".exe"
@@ -453,9 +454,9 @@ func resolveHugoBinary(ctx context.Context, cfg BuildConfig) (string, error) {
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		return "", err
 	}
-	pkg := "github.com/gohugoio/hugo@" + version
+	pkg := "github.com/gohugoio/hugo@" + moduleVersion
 	if version == defaultHugoVersion {
-		fmt.Fprintf(os.Stderr, "[stack] installing pinned hugo version %s via go pkg=%s bin=%s\n", version, pkg, binDir)
+		fmt.Fprintf(os.Stderr, "[stack] installing pinned hugo version %s via go pkg=%s bin=%s\n", moduleVersion, pkg, binDir)
 	} else {
 		fmt.Fprintf(os.Stderr, "[stack] installing hugo via go pkg=%s bin=%s\n", pkg, binDir)
 	}
@@ -469,6 +470,23 @@ func resolveHugoBinary(ctx context.Context, cfg BuildConfig) (string, error) {
 		return binaryPath, nil
 	}
 	return "", fmt.Errorf("hugo install completed but binary was not found at %s", binaryPath)
+}
+
+func hugoModuleVersion(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return "latest"
+	}
+	if version == "latest" || version == "master" {
+		return version
+	}
+	if version[0] == 'v' {
+		return version
+	}
+	if version[0] >= '0' && version[0] <= '9' {
+		return "v" + version
+	}
+	return version
 }
 
 func splitAddr(addr string) (string, string) {
