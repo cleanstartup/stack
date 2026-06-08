@@ -615,8 +615,28 @@ func (e *BuildEngine) devSourceWatchPaths() []string {
 			}
 		}
 	}
+	if e.builder.showcase != nil {
+		for _, path := range e.builder.showcase.WatchPaths() {
+			path = strings.TrimSpace(path)
+			if path == "" {
+				continue
+			}
+			if _, exists := seen[path]; exists {
+				continue
+			}
+			seen[path] = struct{}{}
+			paths = append(paths, path)
+		}
+	}
 	sort.Strings(paths)
 	return paths
+}
+
+func (e *BuildEngine) showcaseModules(moduleRoot string) ([]HugoModule, error) {
+	if e == nil || e.builder == nil || e.builder.showcase == nil {
+		return nil, nil
+	}
+	return e.builder.showcase.Modules(moduleRoot)
 }
 
 func (e *BuildEngine) syncStencilSourceMirror(workspaceDir string) error {
@@ -726,6 +746,24 @@ func (e *BuildEngine) devStencilSourceChanged(path string) bool {
 			continue
 		}
 		for _, candidate := range paths {
+			if sourcePathMatches(candidate, path) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (e *BuildEngine) devShowcaseSourceChanged(path string) bool {
+	if e == nil || e.builder == nil || e.builder.showcase == nil {
+		return false
+	}
+	if strings.ToLower(filepath.Ext(path)) != ".md" {
+		return false
+	}
+	for _, entry := range e.builder.showcase.Entries() {
+		files := discoverModuleFiles(entry.baseDir, ".showcase.md")
+		for _, candidate := range files {
 			if sourcePathMatches(candidate, path) {
 				return true
 			}
@@ -881,6 +919,19 @@ func (e *BuildEngine) watchPaths() []string {
 		}
 	}
 	if e.builder.assets == nil {
+		if e.builder.showcase != nil {
+			for _, p := range e.builder.showcase.WatchPaths() {
+				p = strings.TrimSpace(p)
+				if p == "" {
+					continue
+				}
+				if _, exists := seen[p]; exists {
+					continue
+				}
+				seen[p] = struct{}{}
+				paths = append(paths, p)
+			}
+		}
 		sort.Strings(paths)
 		return paths
 	}
@@ -897,6 +948,19 @@ func (e *BuildEngine) watchPaths() []string {
 				seen[p] = struct{}{}
 				paths = append(paths, p)
 			}
+		}
+	}
+	if e.builder.showcase != nil {
+		for _, p := range e.builder.showcase.WatchPaths() {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if _, exists := seen[p]; exists {
+				continue
+			}
+			seen[p] = struct{}{}
+			paths = append(paths, p)
 		}
 	}
 	sort.Strings(paths)

@@ -47,6 +47,7 @@ func New(parts ...Part) *WebApp {
 func NewSite(parts ...Part) *WebApp {
 	app := newWebApp(TargetSite)
 	app.Apply(parts...)
+	app.RegisterTailwindScan(siteModuleDir())
 	app.registerHugoModules(siteHugoModule())
 	return app
 }
@@ -63,7 +64,7 @@ func NewSiteWithDefaults(baseDir string, parts ...Part) *WebApp {
 	app := newWebApp(TargetSite)
 	app.baseDir = strings.TrimSpace(baseDir)
 	app.moduleDir = moduleRoot(baseDir)
-	app.Apply(append([]Part{Styles(baseDir), Components(baseDir)}, parts...)...)
+	app.Apply(append([]Part{Styles(baseDir), Components(baseDir), TailwindScan(siteModuleDir())}, parts...)...)
 	app.registerHugoModules(siteHugoModule())
 	return app
 }
@@ -141,6 +142,10 @@ func (a *WebApp) RegisterTailwindScan(paths ...string) {
 
 func (a *WebApp) RegisterStencilScan(paths ...string) {
 	a.builder.StencilScan(paths...)
+}
+
+func (a *WebApp) RegisterShowcase(baseDir string) {
+	a.builder.Showcase(baseDir)
 }
 
 func (a *WebApp) Target() TargetKind {

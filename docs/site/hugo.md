@@ -47,7 +47,7 @@ Hugo renders the HTML, while the stack still owns the CSS and JS outputs:
 
 - Tailwind writes `assets/css/app/app.css`
 - Stencil writes `assets/js/stack/stack.esm.js`
-- `site dev` mirrors the generated assets into `cmd/site/static/assets`
+- `site dev` mirrors the generated assets into the temporary `.stack/site-assets-module/static/assets` Hugo module
 
 This lets Hugo serve the final site directly during development without giving up the shared asset pipeline.
 

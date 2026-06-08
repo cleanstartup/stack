@@ -14,6 +14,7 @@ import (
 
 const defaultHugoVersion = "0.162.1"
 const siteModuleImportPath = "github.com/cleanstartup/stack/site"
+const siteAssetsModuleImportPath = "github.com/cleanstartup/stack/site-assets"
 
 func (a *WebApp) buildSite(ctx context.Context, cfg BuildConfig) (*BuildResult, error) {
 	if a == nil || a.engine == nil {
@@ -43,36 +44,45 @@ func (a *WebApp) buildSite(ctx context.Context, cfg BuildConfig) (*BuildResult, 
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return nil, err
 	}
-	configFiles, err := siteConfigFiles(sourceDir, filepath.Dir(outputDir), a.HugoModules()...)
+	workspaceAbs, err := filepath.Abs(cfg.WorkspaceDir)
+	if err != nil {
+		workspaceAbs = cfg.WorkspaceDir
+	}
+	assetBuildDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets")
+	assetModuleDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets-module")
+	if _, err := a.engine.BuildAssets(ctx, BuildConfig{
+		WorkspaceDir:         cfg.WorkspaceDir,
+		OutputDir:            assetBuildDir,
+		TailwindBinary:       cfg.TailwindBinary,
+		TailwindVersion:      cfg.TailwindVersion,
+		TailwindCacheDir:     cfg.TailwindCacheDir,
+		TailwindDownloadBase: cfg.TailwindDownloadBase,
+		StencilBinary:        cfg.StencilBinary,
+	}); err != nil {
+		return nil, err
+	}
+	if err := mirrorSiteAssets(assetBuildDir, filepath.Join(assetModuleDir, "static", "assets")); err != nil {
+		return nil, err
+	}
+	showcaseModules, err := a.engine.showcaseModules(filepath.Dir(outputDir))
+	if err != nil {
+		return nil, err
+	}
+	modules := append(a.HugoModules(), siteAssetHugoModule(assetModuleDir))
+	modules = append(modules, showcaseModules...)
+	configFiles, err := siteConfigFiles(sourceDir, filepath.Dir(outputDir), modules...)
 	if err != nil {
 		return nil, err
 	}
 	if err := runHugoBuild(ctx, sourceDir, outputDir, cfg, configFiles...); err != nil {
 		return nil, err
 	}
-	assetsResult, err := a.engine.BuildAssets(ctx, BuildConfig{
-		WorkspaceDir:         cfg.WorkspaceDir,
-		OutputDir:            outputDir,
-		TailwindBinary:       cfg.TailwindBinary,
-		TailwindVersion:      cfg.TailwindVersion,
-		TailwindCacheDir:     cfg.TailwindCacheDir,
-		TailwindDownloadBase: cfg.TailwindDownloadBase,
-		StencilBinary:        cfg.StencilBinary,
-	})
-	if err != nil {
-		return nil, err
+	result := &BuildResult{
+		WorkspaceDir: cfg.WorkspaceDir,
+		SourceDir:    sourceDir,
+		OutputDir:    outputDir,
+		AssetsDir:    filepath.Join(outputDir, "assets"),
 	}
-	if assetsResult != nil {
-		assetsResult.SourceDir = sourceDir
-	}
-	result := assetsResult
-	if result == nil {
-		result = &BuildResult{}
-	}
-	result.WorkspaceDir = cfg.WorkspaceDir
-	result.SourceDir = sourceDir
-	result.OutputDir = outputDir
-	result.AssetsDir = filepath.Join(outputDir, "assets")
 	if assets, err := collectAssets(outputDir); err == nil {
 		result.Assets = assets
 	}
@@ -97,6 +107,9 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 	}
 	if strings.TrimSpace(cfg.Addr) == "" {
 		cfg.Addr = defaultAddr
+	}
+	if abs, err := filepath.Abs(cfg.OutputDir); err == nil {
+		cfg.OutputDir = abs
 	}
 
 	buildCfg := BuildConfig{
@@ -124,6 +137,8 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 	}
 	tailwindCacheRoot := filepath.Join(filepath.Dir(workspaceAbs), "tailwind-cache")
 	stencilCacheRoot := filepath.Join(filepath.Dir(workspaceAbs), "stencil-cache")
+	assetBuildDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets")
+	assetModuleDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets-module")
 	sourceDir := strings.TrimSpace(a.baseDir)
 	if sourceDir == "" {
 		sourceDir = strings.TrimSpace(a.moduleDir)
@@ -138,21 +153,23 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 	if err == nil {
 		sourceDir = sourceDirAbs
 	}
-	assetOutputDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets")
-	assetMirrorDir := filepath.Join(sourceDir, "static", "assets")
-	configFiles, err := siteConfigFiles(sourceDir, filepath.Dir(assetOutputDir), a.HugoModules()...)
+	assetMirrorDir := filepath.Join(assetModuleDir, "static", "assets")
+	showcaseModules, err := a.engine.showcaseModules(filepath.Dir(assetModuleDir))
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(assetOutputDir, 0o755); err != nil {
+	modules := append(a.HugoModules(), siteAssetHugoModule(assetModuleDir))
+	modules = append(modules, showcaseModules...)
+	configFiles, err := siteConfigFiles(sourceDir, filepath.Dir(assetModuleDir), modules...)
+	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(assetMirrorDir, 0o755); err != nil {
+	if err := os.MkdirAll(assetBuildDir, 0o755); err != nil {
 		return err
 	}
 	if _, err := a.engine.BuildAssets(ctx, BuildConfig{
 		WorkspaceDir:         cfg.WorkspaceDir,
-		OutputDir:            assetOutputDir,
+		OutputDir:            assetBuildDir,
 		TailwindBinary:       "",
 		TailwindVersion:      "",
 		TailwindCacheDir:     "",
@@ -164,13 +181,13 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 	}); err != nil {
 		return err
 	}
-	if err := mirrorSiteAssets(assetOutputDir, assetMirrorDir); err != nil {
+	if err := mirrorSiteAssets(assetBuildDir, assetMirrorDir); err != nil {
 		return err
 	}
 	assetDevCfg := DevConfig{
 		Addr:         cfg.Addr,
 		WorkspaceDir: cfg.WorkspaceDir,
-		OutputDir:    assetOutputDir,
+		OutputDir:    assetBuildDir,
 		PollInterval: cfg.PollInterval,
 		DevState:     cfg.DevState,
 	}
@@ -178,7 +195,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 	defer mirrorCancel()
 	mirrorDone := make(chan error, 1)
 	go func() {
-		mirrorDone <- watchSiteAssetMirror(mirrorCtx, assetOutputDir, assetMirrorDir, cfg.PollInterval)
+		mirrorDone <- watchSiteAssetMirror(mirrorCtx, assetBuildDir, assetMirrorDir, cfg.PollInterval)
 	}()
 	sourcePaths := a.engine.devSourceWatchPaths()
 	if len(sourcePaths) > 0 {
@@ -215,6 +232,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 					fmt.Fprintf(os.Stderr, "[stack] site sources changed: %s\n", strings.Join(changed, ", "))
 					tailwindTouched := false
 					stencilTouched := false
+					showcaseTouched := false
 					for _, path := range changed {
 						if a.engine.devTailwindSourceChanged(path) {
 							fmt.Fprintf(os.Stderr, "[stack] site tailwind source touched: %s\n", path)
@@ -223,6 +241,10 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 						if a.engine.devStencilSourceChanged(path) {
 							fmt.Fprintf(os.Stderr, "[stack] site stencil source touched: %s\n", path)
 							stencilTouched = true
+						}
+						if a.engine.devShowcaseSourceChanged(path) {
+							fmt.Fprintf(os.Stderr, "[stack] site showcase source touched: %s\n", path)
+							showcaseTouched = true
 						}
 					}
 					if tailwindTouched {
@@ -237,13 +259,19 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 							continue
 						}
 					}
+					if showcaseTouched {
+						if _, err := a.engine.showcaseModules(filepath.Dir(assetModuleDir)); err != nil {
+							fmt.Fprintln(os.Stderr, "[stack] site showcase sync failed:", err)
+							continue
+						}
+					}
 					sourceSnapshot = currentSource
 				}
 			}
 		}()
 	}
 
-	workers, err := a.engine.startWatchWorkers(ctx, tailwindCacheRoot, stencilCacheRoot, assetOutputDir)
+	workers, err := a.engine.startWatchWorkers(ctx, tailwindCacheRoot, stencilCacheRoot, assetBuildDir)
 	if err != nil {
 		mirrorCancel()
 		select {
@@ -252,7 +280,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 		}
 		return err
 	}
-	outputPaths := a.engine.devOutputWatchPaths(assetOutputDir, stencilCacheRoot)
+	outputPaths := a.engine.devOutputWatchPaths(assetBuildDir, stencilCacheRoot)
 	if len(outputPaths) > 0 {
 		fmt.Fprintf(os.Stderr, "[stack] site dev watching %d outputs\n", len(outputPaths))
 		for _, path := range outputPaths {
@@ -304,12 +332,12 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 						continue
 					}
 					if stencilDirty {
-						if err := a.engine.syncDevOutputs(assetOutputDir, stencilCacheRoot); err != nil {
+						if err := a.engine.syncDevOutputs(assetBuildDir, stencilCacheRoot); err != nil {
 							fmt.Fprintln(os.Stderr, "[stack] site output sync failed:", err)
 							continue
 						}
 					}
-					if err := mirrorSiteAssets(assetOutputDir, assetMirrorDir); err != nil {
+					if err := mirrorSiteAssets(assetBuildDir, assetMirrorDir); err != nil {
 						fmt.Fprintln(os.Stderr, "[stack] site asset mirror failed:", err)
 						continue
 					}
@@ -334,6 +362,8 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 		"--bind", host,
 		"--port", port,
 		"--source", sourceDir,
+		"--destination", cfg.OutputDir,
+		"--noHTTPCache",
 		"--disableFastRender",
 	}
 	if len(configFiles) > 0 {
@@ -527,6 +557,13 @@ func siteHugoModule() HugoModule {
 	return HugoModule{
 		ImportPath:  siteModuleImportPath,
 		ReplacePath: siteModuleDir(),
+	}
+}
+
+func siteAssetHugoModule(assetModuleDir string) HugoModule {
+	return HugoModule{
+		ImportPath:  siteAssetsModuleImportPath,
+		ReplacePath: strings.TrimSpace(assetModuleDir),
 	}
 }
 

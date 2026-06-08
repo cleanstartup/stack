@@ -72,6 +72,8 @@ func main() {
 - The app-wide style set is collected automatically from all `*.css` files in the calling Go module, whether they live directly in the demo/package directory or deeper in subdirectories.
 - The styles build runs through a single Tailwind output (`/assets/css/app/app.css`). The Tailwind binary is downloaded automatically and cached if it is not already available.
 - The component convention automatically picks up all `*.tsx` and `*.ts` files in the Go module; Stencil components and helper logic can therefore be organized anywhere in the module, including a flat layout directly under a package or demo directory.
+- If the base directory is also a Hugo site root with `hugo.toml`, convention discovery stays scoped to that site directory instead of walking up to the parent Go module root.
+- `web.Showcases(baseDir)` materializes nearby `*.showcase.md` files into a temporary Hugo module so component docs can live next to the component source while still rendering through the site target.
 - The Stencil build produces a central JS output (`/assets/js/stack/stack.esm.js`). The CLI is fetched on demand through `npm exec`; you can override that via `STACK_STENCIL_BINARY`.
 - Additional Tailwind scan paths can be registered with `web.TailwindScan(...)`.
 - The demo shows the default style set through flat `cmd/demo/*.css` files plus a Stencil component with a TS helper in the same directory. The Tailwind binary is downloaded automatically; you can override it via the `STACK_TAILWIND_*` variables.
@@ -102,7 +104,7 @@ go run ./cmd/site dev
 The site demo renders content through Hugo while using the same Tailwind and Stencil asset pipeline.
 If Hugo is not already installed, the stack will build it on demand via `go install` and cache the binary locally.
 The default Hugo version is pinned to `0.162.1` in code and resolved as the Hugo module tag `v0.162.1`. It can be overridden when needed.
-`go run ./cmd/site dev` starts `hugo server` and keeps the generated CSS and JS mirrored into `cmd/site/static/assets`, while the stack Hugo module is injected automatically from `site/`.
+`go run ./cmd/site dev` starts `hugo server` and keeps the generated CSS and JS mirrored into the temporary site-assets module under `.stack/site-assets-module/static/assets`, while the stack Hugo module is injected automatically from `site/`.
 The reusable Hugo contract lives under `site/`; `cmd/site/` is just the local consumer demo.
 Any consumer module can contribute its own Hugo module metadata by using `web.Module(...).WithHugo(...)`.
 
@@ -117,7 +119,8 @@ Generated site outputs are ignored by Git:
 - `cmd/site/public/`
 - `cmd/site/.stack/`
 - `cmd/site/.hugo_build.lock`
-- `cmd/site/static/assets/`
+- `.stack/site-assets/`
+- `.stack/site-assets-module/`
 
 ## External Modules
 

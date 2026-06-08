@@ -1,14 +1,15 @@
 {{ $page := .Page }}
-<article class="space-y-6">
-  <header class="space-y-3">
-    <p class="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">Site layout</p>
-    <h1 class="text-4xl font-semibold tracking-tight text-slate-950">{{ $page.Title }}</h1>
-    <p class="max-w-2xl text-lg leading-8 text-slate-600">{{ $page.Params.description }}</p>
+<article class="space-y-8">
+  <header class="space-y-4">
+    <p class="brand-kicker">Brand preview</p>
+    <div class="max-w-3xl space-y-3">
+      <h1 class="text-4xl font-semibold tracking-tight text-slate-950 lg:text-5xl">{{ $page.Title }}</h1>
+      <p class="text-lg leading-8 text-slate-600">{{ $page.Params.description }}</p>
+    </div>
     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">layout: {{ .Layout }} · type: {{ .Type }}</p>
   </header>
 
-  <section class="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+  <section class="brand-card brand-prose space-y-6 rounded-[1.75rem] p-8 shadow-sm lg:p-10">
     {{ partial (printf "types/%s.hugo.html" .Type) . }}
   </section>
 </article>
-

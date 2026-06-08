@@ -61,3 +61,37 @@ func TestConventionalAssetsIgnoreGeneratedStaticAssets(t *testing.T) {
 		t.Fatalf("expected generated static assets to be ignored, got %d css inputs", got)
 	}
 }
+
+func TestComponentsPreferHugoSiteRootOverParentModuleRoot(t *testing.T) {
+	tmp := t.TempDir()
+	parent := filepath.Join(tmp, "branding")
+	siteDir := filepath.Join(parent, "site")
+	if err := os.MkdirAll(siteDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(parent, "go.mod"), []byte("module github.com/cleanstartup/branding\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(siteDir, "hugo.toml"), []byte("title = \"branding\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(parent, "outside.tsx"), []byte("export const outside = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(siteDir, "inside.tsx"), []byte("export const inside = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := newWebApp()
+	Components(siteDir).Apply(app)
+
+	if got := len(app.builder.Components().Inputs()); got != 1 {
+		t.Fatalf("expected 1 component input from site root, got %d", got)
+	}
+	if got := len(app.builder.Components().ScanPaths()); got != 1 {
+		t.Fatalf("expected 1 scan path from site root, got %d", got)
+	}
+	if got := app.builder.Components().ScanPaths()[0]; got != siteDir {
+		t.Fatalf("expected scan path %q, got %q", siteDir, got)
+	}
+}

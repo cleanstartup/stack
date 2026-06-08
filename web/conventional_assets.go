@@ -131,6 +131,9 @@ func moduleRoot(baseDir string) string {
 	}
 	current := baseDir
 	for {
+		if _, err := os.Stat(filepath.Join(current, "hugo.toml")); err == nil {
+			return current
+		}
 		if _, err := os.Stat(filepath.Join(current, "go.mod")); err == nil {
 			return current
 		}

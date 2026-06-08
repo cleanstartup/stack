@@ -27,6 +27,7 @@ type Builder struct {
 	routes   []routeRegistration
 	tailwind *TailwindRegistry
 	stencil  *StencilRegistry
+	showcase *ShowcaseRegistry
 	assets   *AssetRegistry
 }
 
@@ -35,6 +36,7 @@ func NewBuilder() *Builder {
 		routes:   []routeRegistration{},
 		tailwind: NewTailwindRegistry(),
 		stencil:  NewStencilRegistry(),
+		showcase: NewShowcaseRegistry(),
 		assets:   NewAssetRegistry(),
 	}
 }
@@ -94,6 +96,13 @@ func (b *Builder) Stencil(src AssetSource) AssetRef {
 	return b.stencil.AddInput(src)
 }
 
+func (b *Builder) Showcase(baseDir string) {
+	if b == nil || b.showcase == nil {
+		return
+	}
+	b.showcase.Add(baseDir)
+}
+
 func (b *Builder) JS(src AssetSource) AssetRef   { return b.Add(AssetKindJS, src) }
 func (b *Builder) File(src AssetSource) AssetRef { return b.Add(AssetKindFile, src) }
 
@@ -123,6 +132,13 @@ func (b *Builder) Components() *StencilRegistry {
 		return nil
 	}
 	return b.stencil
+}
+
+func (b *Builder) Showcases() *ShowcaseRegistry {
+	if b == nil {
+		return nil
+	}
+	return b.showcase
 }
 
 func (b *Builder) Manifest() AssetManifest {
