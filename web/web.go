@@ -531,7 +531,15 @@ func (r *Registry) Mount(path string, handler http.Handler) {
 	if r == nil {
 		return
 	}
-	r.router.Mount(path, handler)
+	if handler == nil {
+		return
+	}
+	wrapped := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		req = withAssetManifest(req, r.assets)
+		req = withDevState(req, r.devState)
+		handler.ServeHTTP(w, req)
+	})
+	r.router.Mount(path, wrapped)
 }
 
 func (r *Registry) Group(path string) *Registry {
@@ -861,6 +869,12 @@ func renderResult(w http.ResponseWriter, r *http.Request, result activity.Result
 	default:
 		return fmt.Errorf("unsupported web result type %T", result)
 	}
+}
+
+// RenderResult writes an activity result using the stack renderer so page assets,
+// layout wrappers, and dev reload hooks are applied consistently.
+func RenderResult(w http.ResponseWriter, r *http.Request, result activity.Result) error {
+	return renderResult(w, r, result)
 }
 
 func defaultErrorHandler(_ *RuntimeContext, err error) activity.Result {

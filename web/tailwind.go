@@ -85,17 +85,9 @@ func (e *BuildEngine) tailwindInput(workspace *Workspace) (string, error) {
 				continue
 			}
 			contentPath := filepath.Join(workspace.AssetDir(AssetKindCSS, source.ID()), filepath.FromSlash(sourcePath))
-			content, err := os.ReadFile(contentPath)
-			if err != nil {
-				return "", err
-			}
-			out.WriteString("\n/* stack: ")
+			out.WriteString("\n@import \"")
 			out.WriteString(filepath.ToSlash(contentPath))
-			out.WriteString(" */\n")
-			out.Write(content)
-			if len(content) == 0 || content[len(content)-1] != '\n' {
-				out.WriteString("\n")
-			}
+			out.WriteString("\";\n")
 		}
 	}
 

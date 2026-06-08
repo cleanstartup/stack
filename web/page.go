@@ -33,11 +33,9 @@ func (p Page) Render(ctx context.Context, w io.Writer) error {
 	version := assetVersionFromContext(ctx)
 	renderAssetLinks(&out, manifest.Styles, "stylesheet", version)
 	out.WriteString("</head><body>")
-	out.WriteString("<main>")
 	if err := renderPageBody(&out, p.Body, ctx); err != nil {
 		return err
 	}
-	out.WriteString("</main>")
 	renderAssetLinks(&out, manifest.Scripts, "script", version)
 	if strings.TrimSpace(p.LiveReloadURL) != "" {
 		out.WriteString("<script>")
@@ -95,19 +93,30 @@ func renderPageBody(out *strings.Builder, body any, ctx context.Context) error {
 	case nil:
 		return nil
 	case string:
+		out.WriteString("<main>")
 		out.WriteString(html.EscapeString(typed))
+		out.WriteString("</main>")
 		return nil
 	case []byte:
+		out.WriteString("<main>")
 		out.WriteString(html.EscapeString(string(typed)))
+		out.WriteString("</main>")
 		return nil
 	case templ.Component:
 		return typed.Render(ctx, out)
 	case interface {
 		Render(context.Context, io.Writer) error
 	}:
-		return typed.Render(ctx, out)
+		out.WriteString("<main>")
+		if err := typed.Render(ctx, out); err != nil {
+			return err
+		}
+		out.WriteString("</main>")
+		return nil
 	default:
+		out.WriteString("<main>")
 		out.WriteString(html.EscapeString(fmt.Sprint(typed)))
+		out.WriteString("</main>")
 		return nil
 	}
 }

@@ -334,7 +334,7 @@ func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
 	if !strings.Contains(body, "<script type=\"module\" src=\"/assets/js/stack/stack.esm.js\">") {
 		t.Fatalf("expected module script, got %q", body)
 	}
-	if !strings.Contains(body, "<main>hello</main>") {
+	if !strings.Contains(body, "hello") {
 		t.Fatalf("expected body content, got %q", body)
 	}
 }
@@ -416,6 +416,28 @@ func TestDevEventsEndpointIsMounted(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "connected") {
 		t.Fatalf("expected SSE handshake, got %q", rec.Body.String())
+	}
+}
+
+func TestMountedHandlerReceivesAssetManifest(t *testing.T) {
+	r := web.NewRegistry()
+	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app", Files: []string{"app.css"}}
+	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}})
+
+	r.Mount("/auth", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		_ = web.RenderResult(w, req, web.Page{Title: "mounted", Body: "hello"})
+	}))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth", nil)
+	r.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "<link rel=\"stylesheet\" href=\"/assets/css/app/app.css\">") {
+		t.Fatalf("expected mounted handler to receive asset manifest, got %q", body)
 	}
 }
 

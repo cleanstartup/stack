@@ -162,10 +162,10 @@ func stencilTSConfigSource() string {
     "experimentalDecorators": true,
     "jsx": "react",
     "jsxFactory": "h",
-    "lib": ["dom", "es2017"],
+    "lib": ["dom", "dom.iterable", "es2020"],
     "module": "esnext",
-    "moduleResolution": "node",
-    "target": "es2017"
+    "moduleResolution": "bundler",
+    "target": "es2020"
   },
   "include": ["src/assets/js"]
 }
@@ -179,6 +179,13 @@ func stencilPackageSource() string {
 		"version": "0.0.0",
 		"devDependencies": map[string]string{
 			"@stencil/core": "4.43.5",
+		},
+		"dependencies": map[string]string{
+			"altcha":                   "^3.0.2",
+			"embla-carousel":           "^8.6.0",
+			"embla-carousel-auto-scroll": "^8.6.0",
+			"htmx.org":                 "^2.0.10",
+			"posthog-js":               "^1.379.2",
 		},
 	}, "", "  ")
 	return string(data) + "\n"

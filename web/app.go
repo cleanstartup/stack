@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -135,6 +136,13 @@ func (a *WebApp) RegisterJS(src AssetSource) AssetRef {
 
 func (a *WebApp) RegisterFile(src AssetSource) AssetRef {
 	return a.builder.File(src)
+}
+
+func (a *WebApp) Mount(path string, handler http.Handler) {
+	if a == nil || a.builder == nil || handler == nil {
+		return
+	}
+	a.builder.AddMount(path, handler)
 }
 
 func (a *WebApp) RegisterTailwindScan(paths ...string) {
@@ -444,8 +452,8 @@ func (a *WebApp) DevWithTempl(ctx context.Context, cfg DevConfig) error {
 	childCmd := devChildCommand(moduleDir, a.baseDir, cfg)
 	proxyURL := templProxyURL(cfg.Addr)
 	templArgs := []string{
-		"run",
-		"github.com/a-h/templ/cmd/templ@v0.3.943",
+		"tool",
+		"templ",
 		"generate",
 		"--watch",
 		"--proxy=" + proxyURL,

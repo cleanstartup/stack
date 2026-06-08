@@ -70,6 +70,7 @@ func main() {
 - `web dev` starts a `templ` supervisor for Go/templ changes and combines it with Tailwind and Stencil watch workers for the asset pipeline. The browser runs through the templ proxy; CSS/JS changes are still handled through the internal dev reload.
 - Web commands have their own help text: `run`, `build`, and `dev` explain themselves via `--help` and show up in the CLI listing.
 - Local dependency assets can bring watch paths, for example through `web.FromFS(..., watchPath)` or `web.WithWatchPaths(...)`.
+- `web.Mount(path, handler)` propagates the current asset manifest and dev-state context into mounted routers, so sub-apps such as auth flows can still render `web.Page` responses with the correct CSS/JS bundles.
 - The app-wide style set is collected automatically from all `*.css` files in the calling Go module, whether they live directly in the demo/package directory or deeper in subdirectories.
 - The styles build runs through a single Tailwind output (`/assets/css/app/app.css`). The Tailwind binary is downloaded automatically and cached if it is not already available.
 - The component convention automatically picks up all `*.tsx` and `*.ts` files in the Go module; Stencil components and helper logic can therefore be organized anywhere in the module, including a flat layout directly under a package or demo directory.
@@ -80,7 +81,7 @@ func main() {
 - The demo shows the default style set through flat `cmd/demo/*.css` files plus a Stencil component with a TS helper in the same directory. The Tailwind binary is downloaded automatically; you can override it via the `STACK_TAILWIND_*` variables.
 - Simple web activities can return `templ.Component` or plain text directly; set the page title with `web.WithStaticTitle(...)`. The HTML shell and the global CSS/JS assets are injected automatically by `web`. `web.Page` remains available for special cases.
 
-`STACK_TAILWIND_BINARY`, `STACK_TAILWIND_VERSION`, `STACK_TAILWIND_CACHE_DIR`, `STACK_TAILWIND_DOWNLOAD_BASE`, and `STACK_STENCIL_BINARY` override the default resolution when needed. The dev mode uses `templ generate --watch --proxy=... --cmd=...` as a supervisor for Go/templ files; the inner child mode (`--child`) is responsible for the asset watchers.
+`STACK_TAILWIND_BINARY`, `STACK_TAILWIND_VERSION`, `STACK_TAILWIND_CACHE_DIR`, `STACK_TAILWIND_DOWNLOAD_BASE`, and `STACK_STENCIL_BINARY` override the default resolution when needed. The dev mode uses the local `templ generate --watch --proxy=... --cmd=...` supervisor for Go/templ files; the inner child mode (`--child`) is responsible for the asset watchers.
 
 ## Demo
 

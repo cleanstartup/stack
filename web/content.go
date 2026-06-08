@@ -192,6 +192,7 @@ func discoverContentFiles(baseDir string, includes []string) []string {
 	}
 	skipDirs := map[string]struct{}{
 		".git":         {},
+		"deps":         {},
 		".stack":       {},
 		"node_modules": {},
 		"dist":         {},

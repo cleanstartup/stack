@@ -1,6 +1,7 @@
 package web
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/cleanstartup/stack/activity"
@@ -149,4 +150,16 @@ func TailwindScan(paths ...string) Part {
 
 func StencilScan(paths ...string) Part {
 	return partFunc(func(app *WebApp) { app.RegisterStencilScan(paths...) })
+}
+
+func Mount(path string, handler http.Handler) Part {
+	return partFunc(func(app *WebApp) {
+		if app == nil || handler == nil {
+			return
+		}
+		if strings.TrimSpace(path) == "" {
+			path = "/"
+		}
+		app.Mount(path, handler)
+	})
 }

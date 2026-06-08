@@ -70,11 +70,11 @@ func TestTailwindInputUsesMirroredSourcePaths(t *testing.T) {
 	if _, err := os.Stat(mirroredPath); err != nil {
 		t.Fatalf("expected mirrored css source at %s: %v", mirroredPath, err)
 	}
-	if !strings.Contains(input, "/* stack: "+filepath.ToSlash(mirroredPath)+" */") {
-		t.Fatalf("expected mirrored css marker in input, got %q", input)
+	if !strings.Contains(input, "@import \""+filepath.ToSlash(mirroredPath)+"\";") {
+		t.Fatalf("expected mirrored css import in input, got %q", input)
 	}
-	if !strings.Contains(input, "@apply text-slate-900;") {
-		t.Fatalf("expected css content in input, got %q", input)
+	if strings.Contains(input, "/* stack:") {
+		t.Fatalf("did not expect inline stack marker in input, got %q", input)
 	}
 }
 

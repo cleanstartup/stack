@@ -1,6 +1,10 @@
 package web
 
-import "github.com/cleanstartup/stack/activity"
+import (
+	"net/http"
+
+	"github.com/cleanstartup/stack/activity"
+)
 
 type routeRegistration interface {
 	register(*Registry)
@@ -23,8 +27,21 @@ func (r webActivityRouteRegistration[C]) register(reg *Registry) {
 	RegisterWebActivity(reg, r.activity)
 }
 
+type mountRouteRegistration struct {
+	path    string
+	handler http.Handler
+}
+
+func (r mountRouteRegistration) register(reg *Registry) {
+	if reg == nil || r.handler == nil {
+		return
+	}
+	reg.Mount(r.path, r.handler)
+}
+
 type Builder struct {
 	routes   []routeRegistration
+	mounts   []mountRouteRegistration
 	tailwind *TailwindRegistry
 	stencil  *StencilRegistry
 	content  *ContentRegistry
@@ -35,6 +52,7 @@ type Builder struct {
 func NewBuilder() *Builder {
 	return &Builder{
 		routes:   []routeRegistration{},
+		mounts:   []mountRouteRegistration{},
 		tailwind: NewTailwindRegistry(),
 		stencil:  NewStencilRegistry(),
 		content:  NewContentRegistry(),
@@ -58,6 +76,17 @@ func AddWebActivity[C any](b *Builder, activity *WebActivity[C]) {
 		return
 	}
 	b.routes = append(b.routes, webActivityRouteRegistration[C]{activity: activity})
+}
+
+func AddMount(b *Builder, path string, handler http.Handler) {
+	if b == nil || handler == nil {
+		return
+	}
+	b.mounts = append(b.mounts, mountRouteRegistration{path: path, handler: handler})
+}
+
+func (b *Builder) AddMount(path string, handler http.Handler) {
+	AddMount(b, path, handler)
 }
 
 func (b *Builder) Assets() *AssetRegistry {
@@ -183,5 +212,11 @@ func (b *Builder) registerRoutes(reg *Registry) {
 			continue
 		}
 		route.register(reg)
+	}
+	for _, mount := range b.mounts {
+		if mount.handler == nil {
+			continue
+		}
+		mount.register(reg)
 	}
 }
