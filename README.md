@@ -79,7 +79,7 @@ func main() {
 - The Stencil build produces a central JS output (`/assets/js/stack/stack.esm.js`). The CLI is fetched on demand through `npm exec`; you can override that via `STACK_STENCIL_BINARY`.
 - Additional Tailwind scan paths can be registered with `web.TailwindScan(...)`.
 - The demo shows the default style set through flat `cmd/demo/*.css` files plus a Stencil component with a TS helper in the same directory. The Tailwind binary is downloaded automatically; you can override it via the `STACK_TAILWIND_*` variables.
-- Simple web activities can return `templ.Component` or plain text directly; set the page title with `web.WithStaticTitle(...)`. The HTML shell and the global CSS/JS assets are injected automatically by `web`. `web.Page` remains available for special cases.
+- Simple web activities can return `templ.Component` or plain text directly; set the page title with `web.WithStaticTitle(...)`. For Stencil-backed screens, `web.Screen(name, props)` renders a `screen-*` custom element and serializes props for hydration. Use `showcase.md` alongside the screen to document default props and variants. The HTML shell and the global CSS/JS assets are injected automatically by `web`. `web.Page` remains available for special cases.
 
 `STACK_TAILWIND_BINARY`, `STACK_TAILWIND_VERSION`, `STACK_TAILWIND_CACHE_DIR`, `STACK_TAILWIND_DOWNLOAD_BASE`, and `STACK_STENCIL_BINARY` override the default resolution when needed. The dev mode uses the local `templ generate --watch --proxy=... --cmd=...` supervisor for Go/templ files; the inner child mode (`--child`) is responsible for the asset watchers.
 

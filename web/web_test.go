@@ -367,6 +367,35 @@ func TestPageRendersTemplComponentBody(t *testing.T) {
 	}
 }
 
+func TestScreenRendersCustomElementWithProps(t *testing.T) {
+	r := web.NewRegistry()
+	a := web.Activity(
+		web.Ref("screen"),
+		func(ctx activity.Context) activity.Result {
+			return web.Page{Title: "screen", Body: web.Screen("abc", map[string]any{
+				"title": "Hello",
+				"count": 3,
+			})}
+		},
+	)
+	web.RegisterWebActivity(r, a)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/screen", nil)
+	r.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "<screen-abc") {
+		t.Fatalf("expected screen element, got %q", body)
+	}
+	if !strings.Contains(body, "data-screen-props=\"") || !strings.Contains(body, "count") || !strings.Contains(body, "Hello") {
+		t.Fatalf("expected serialized screen props, got %q", body)
+	}
+	if !strings.Contains(body, "Object.assign(el,props)") {
+		t.Fatalf("expected hydration script, got %q", body)
+	}
+}
+
 func TestPageRendersDevReloadAndVersionedAssets(t *testing.T) {
 	r := web.NewRegistry()
 	devState := web.NewDevState()
