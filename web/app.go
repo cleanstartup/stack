@@ -19,23 +19,42 @@ type WebApp struct {
 	engine    *BuildEngine
 	baseDir   string
 	moduleDir string
+	target    TargetKind
 }
 
-func newWebApp() *WebApp {
+func newWebApp(target ...TargetKind) *WebApp {
+	appTarget := TargetApp
+	if len(target) > 0 && target[0] != "" {
+		appTarget = target[0]
+	}
 	builder := NewBuilder()
-	app := &WebApp{builder: builder}
+	app := &WebApp{builder: builder, target: appTarget}
 	app.engine = &BuildEngine{builder: builder}
 	return app
 }
 
 func New(parts ...Part) *WebApp {
-	app := newWebApp()
+	app := newWebApp(TargetApp)
+	app.Apply(parts...)
+	return app
+}
+
+func NewSite(parts ...Part) *WebApp {
+	app := newWebApp(TargetSite)
 	app.Apply(parts...)
 	return app
 }
 
 func NewWithDefaults(baseDir string, parts ...Part) *WebApp {
-	app := newWebApp()
+	app := newWebApp(TargetApp)
+	app.baseDir = strings.TrimSpace(baseDir)
+	app.moduleDir = moduleRoot(baseDir)
+	app.Apply(append([]Part{Styles(baseDir), Components(baseDir)}, parts...)...)
+	return app
+}
+
+func NewSiteWithDefaults(baseDir string, parts ...Part) *WebApp {
+	app := newWebApp(TargetSite)
 	app.baseDir = strings.TrimSpace(baseDir)
 	app.moduleDir = moduleRoot(baseDir)
 	app.Apply(append([]Part{Styles(baseDir), Components(baseDir)}, parts...)...)
@@ -82,29 +101,53 @@ func (a *WebApp) RegisterStencilScan(paths ...string) {
 	a.builder.StencilScan(paths...)
 }
 
+func (a *WebApp) Target() TargetKind {
+	if a == nil {
+		return TargetApp
+	}
+	if a.target == "" {
+		return TargetApp
+	}
+	return a.target
+}
+
 func (a *WebApp) Build(ctx context.Context, cfg BuildConfig) (*BuildResult, error) {
 	if a == nil || a.engine == nil {
-		return nil, fmt.Errorf("app is nil")
+		return nil, fmt.Errorf("target is nil")
+	}
+	if a.target == TargetSite {
+		return a.buildSite(ctx, cfg)
 	}
 	return a.engine.Build(ctx, cfg)
 }
 
 func (a *WebApp) Serve(ctx context.Context, cfg ServeConfig) error {
 	if a == nil || a.engine == nil {
-		return fmt.Errorf("app is nil")
+		return fmt.Errorf("target is nil")
 	}
 	return a.engine.Serve(ctx, cfg)
 }
 
 func (a *WebApp) Dev(ctx context.Context, cfg DevConfig) error {
 	if a == nil || a.engine == nil {
-		return fmt.Errorf("app is nil")
+		return fmt.Errorf("target is nil")
+	}
+	if a.target == TargetSite {
+		return a.devSite(ctx, cfg)
 	}
 	return a.engine.Dev(ctx, cfg)
 }
 
 func (a *WebApp) CLI() *cli.Registry {
 	r := cli.NewRegistry()
+	runHelp := "serve the already built web app"
+	buildHelp := "materialize assets into the output directory"
+	devHelp := "run the templ supervisor and asset watch loop"
+	if a != nil && a.target == TargetSite {
+		runHelp = "serve the already built static site"
+		buildHelp = "render the site and materialize assets into the output directory"
+		devHelp = "run hugo server and the asset watch loop"
+	}
 
 	runCmd := cli.Activity(
 		"run",
@@ -123,7 +166,7 @@ func (a *WebApp) CLI() *cli.Registry {
 			}
 			return cli.Done()
 		},
-		cli.WithHelp[runCommandInput]("serve the already built web app"),
+		cli.WithHelp[runCommandInput](runHelp),
 	)
 	cli.RegisterActivity(r, runCmd)
 
@@ -143,9 +186,12 @@ func (a *WebApp) CLI() *cli.Registry {
 			if err != nil {
 				return cli.Error(err.Error())
 			}
+			if a != nil && a.target == TargetSite {
+				return cli.Textf("rendered %d files into %s", len(result.Assets), result.OutputDir)
+			}
 			return cli.Textf("built %d assets into %s", len(result.Assets), result.OutputDir)
 		},
-		cli.WithHelp[buildCommandInput]("materialize assets into the output directory"),
+		cli.WithHelp[buildCommandInput](buildHelp),
 	)
 	cli.RegisterActivity(r, buildCmd)
 
@@ -175,6 +221,8 @@ func (a *WebApp) CLI() *cli.Registry {
 			var err error
 			if ctx.Data().Child {
 				err = a.Dev(context.Background(), cfg)
+			} else if a != nil && a.target == TargetSite {
+				err = a.Dev(context.Background(), cfg)
 			} else {
 				err = a.DevWithTempl(context.Background(), cfg)
 			}
@@ -183,7 +231,7 @@ func (a *WebApp) CLI() *cli.Registry {
 			}
 			return cli.Done()
 		},
-		cli.WithHelp[devCommandInput]("run the templ supervisor and asset watch loop"),
+		cli.WithHelp[devCommandInput](devHelp),
 	)
 	cli.RegisterActivity(r, devCmd)
 
@@ -229,6 +277,35 @@ func ExecuteCLI(parts ...Part) error {
 
 func App(parts ...Part) {
 	app := NewWithDefaults(CallerDir(1), parts...)
+	registry := app.CLI()
+
+	args := os.Args[1:]
+	if len(args) == 0 {
+		args = []string{"--help"}
+	}
+
+	result := registry.Execute(args)
+	if strings.TrimSpace(result.Stdout) != "" {
+		_, _ = fmt.Fprint(os.Stdout, result.Stdout)
+		if !strings.HasSuffix(result.Stdout, "\n") {
+			_, _ = fmt.Fprintln(os.Stdout)
+		}
+	}
+	if result.ExitCode != 0 {
+		message := strings.TrimSpace(result.Stderr)
+		if message == "" {
+			message = strings.TrimSpace(result.Stdout)
+		}
+		if message == "" {
+			message = "web command failed"
+		}
+		_, _ = fmt.Fprintln(os.Stderr, message)
+		os.Exit(1)
+	}
+}
+
+func Site(parts ...Part) {
+	app := NewSiteWithDefaults(CallerDir(1), parts...)
 	registry := app.CLI()
 
 	args := os.Args[1:]
@@ -310,6 +387,9 @@ func boolParam(inv *cli.Invocation, fallback bool, name string, aliases ...strin
 func (a *WebApp) DevWithTempl(ctx context.Context, cfg DevConfig) error {
 	if a == nil || a.engine == nil {
 		return fmt.Errorf("build engine is nil")
+	}
+	if a.target == TargetSite {
+		return a.devSite(ctx, cfg)
 	}
 	moduleDir := strings.TrimSpace(a.moduleDir)
 	if strings.TrimSpace(moduleDir) == "" {

@@ -69,3 +69,21 @@ func TestWebCLIHelpIncludesCommandSummaries(t *testing.T) {
 		t.Fatalf("expected dev help summary, got %q", res.Stdout)
 	}
 }
+
+func TestSiteCLIHelpIncludesSiteSummaries(t *testing.T) {
+	app := web.NewSite()
+
+	res := app.CLI().Execute([]string{"--help"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected help exit 0, got %d", res.ExitCode)
+	}
+	if !strings.Contains(res.Stdout, "run - serve the already built static site") {
+		t.Fatalf("expected site run help summary, got %q", res.Stdout)
+	}
+	if !strings.Contains(res.Stdout, "build - render the site and materialize assets into the output directory") {
+		t.Fatalf("expected site build help summary, got %q", res.Stdout)
+	}
+	if !strings.Contains(res.Stdout, "dev - run hugo server and the asset watch loop") {
+		t.Fatalf("expected site dev help summary, got %q", res.Stdout)
+	}
+}

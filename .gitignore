@@ -27,6 +27,15 @@ go.work.sum
 # env file
 .env
 
+# stack build output
+.stack/
+
+# site demo build output
+cmd/site/public/
+cmd/site/.stack/
+cmd/site/.hugo_build.lock
+cmd/site/static/assets/
+
 # Editor/IDE
 # .idea/
 # .vscode/

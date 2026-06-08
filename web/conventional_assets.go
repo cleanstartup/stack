@@ -94,6 +94,9 @@ func discoverModuleFiles(baseDir string, extensions ...string) []string {
 		"build":        {},
 		"coverage":     {},
 		"vendor":       {},
+		"public":       {},
+		"static":       {},
+		"resources":    {},
 	}
 	var files []string
 	_ = filepath.WalkDir(baseDir, func(path string, entry os.DirEntry, err error) error {

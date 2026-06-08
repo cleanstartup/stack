@@ -37,3 +37,27 @@ func TestConventionalAssetsDiscoverStyles(t *testing.T) {
 		t.Fatalf("expected scan path %q, got %q", baseDir, got)
 	}
 }
+
+func TestConventionalAssetsIgnoreGeneratedStaticAssets(t *testing.T) {
+	baseDir := t.TempDir()
+
+	mustWrite := func(rel string, content string) {
+		path := filepath.Join(baseDir, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	mustWrite("site.css", "body{color:red}")
+	mustWrite("static/assets/css/app/app.css", "body{color:blue}")
+
+	app := newWebApp()
+	ConventionalAssets(baseDir).Apply(app)
+
+	if got := len(app.builder.Styles().Inputs()); got != 1 {
+		t.Fatalf("expected generated static assets to be ignored, got %d css inputs", got)
+	}
+}

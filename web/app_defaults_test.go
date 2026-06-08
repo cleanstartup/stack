@@ -46,3 +46,27 @@ func TestNewWithDefaultsAppliesStylesAndComponentsFromBaseDir(t *testing.T) {
 		t.Fatalf("expected stencil bundle url, got %q", got)
 	}
 }
+
+func TestNewSiteWithDefaultsAppliesStylesAndComponentsFromBaseDir(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.MkdirAll(tmp, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "site.css"), []byte("body { color: red; }"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "demo-card.tsx"), []byte("export const demo = true;\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := NewSiteWithDefaults(tmp)
+	if got := len(app.builder.Styles().Inputs()); got != 1 {
+		t.Fatalf("expected one css input, got %d", got)
+	}
+	if got := len(app.builder.Components().Inputs()); got != 1 {
+		t.Fatalf("expected one stencil input, got %d", got)
+	}
+	if got := app.Target(); got != TargetSite {
+		t.Fatalf("expected site target, got %q", got)
+	}
+}

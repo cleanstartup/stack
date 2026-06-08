@@ -1,6 +1,6 @@
 # stack
 
-`stack` is a small Go foundation for building activities, web handlers, and CLIs with a shared model.
+`stack` is a small Go foundation for building activities, web handlers, CLIs, and Hugo-backed sites with a shared model.
 
 ## Packages
 
@@ -17,6 +17,11 @@ import (
 	"github.com/cleanstartup/stack/web"
 )
 ```
+
+`web` exposes two target entrypoints:
+
+- `web.App(...)` for Go web apps with Tailwind and Stencil
+- `web.Site(...)` for static sites rendered by Hugo with the same Tailwind and Stencil asset pipeline
 
 ## Example
 
@@ -84,6 +89,31 @@ go run ./cmd/demo dev
 
 The demo registers a single activity; styles and components are picked up automatically from the local demo module. For external dependencies, `web.Styles(baseDir)` and `web.Components(baseDir)` need an explicit module root so `stack` can discover the CSS/TS/TSX files in the dependency checkout. For the local demo that is not necessary; the defaults are applied automatically.
 
+A Hugo-backed site demo lives in `cmd/site`:
+
+```bash
+go run ./cmd/site build
+go run ./cmd/site run
+go run ./cmd/site dev
+```
+
+The site demo renders content through Hugo while using the same Tailwind and Stencil asset pipeline.
+If Hugo is not already installed, the stack will build it on demand via `go install` and cache the binary locally.
+`go run ./cmd/site dev` starts `hugo server` and keeps the generated CSS and JS mirrored into `cmd/site/static/assets`, so Hugo can serve them directly during development.
+
+Environment overrides:
+
+- `STACK_HUGO_BINARY` to use a preinstalled binary
+- `STACK_HUGO_VERSION` to pin the Hugo version built via Go
+- `STACK_HUGO_CACHE_DIR` to change the local Hugo cache location
+
+Generated site outputs are ignored by Git:
+
+- `cmd/site/public/`
+- `cmd/site/.stack/`
+- `cmd/site/.hugo_build.lock`
+- `cmd/site/static/assets/`
+
 ## External Modules
 
 If a module comes from a dependency, pass its root explicitly so `stack` can find the assets. The usual building blocks are:
@@ -92,3 +122,4 @@ If a module comes from a dependency, pass its root explicitly so `stack` can fin
 - `web.Components(baseDir)` for `*.ts` and `*.tsx`
 
 For the local main package, `web.App(...)` discovers the conventions automatically. External modules should compose their parts with the appropriate root or call the helpers directly with a root.
+`web.Site(...)` follows the same asset conventions but renders the page tree through Hugo.

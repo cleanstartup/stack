@@ -31,6 +31,9 @@ type BuildConfig struct {
 	TailwindCacheDir     string
 	TailwindDownloadBase string
 	StencilBinary        string
+	HugoBinary           string
+	HugoVersion          string
+	HugoCacheDir         string
 }
 
 type ServeConfig struct {
@@ -146,6 +149,63 @@ func (e *BuildEngine) Build(ctx context.Context, cfg BuildConfig) (*BuildResult,
 		SourceDir:    workspace.Src,
 		OutputDir:    publishDir,
 		AssetsDir:    filepath.Join(publishDir, "assets"),
+		Assets:       assets,
+	}, nil
+}
+
+func (e *BuildEngine) BuildAssets(ctx context.Context, cfg BuildConfig) (*BuildResult, error) {
+	_ = ctx
+	if e == nil || e.builder == nil {
+		return nil, fmt.Errorf("build engine is nil")
+	}
+
+	workspace, err := NewWorkspace(cfg.WorkspaceDir)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(cfg.OutputDir) != "" {
+		outputDir, err := filepath.Abs(cfg.OutputDir)
+		if err == nil {
+			workspace.Out = outputDir
+		} else {
+			workspace.Out = cfg.OutputDir
+		}
+	}
+	if err := workspace.Prepare(); err != nil {
+		return nil, err
+	}
+
+	assetsRoot := filepath.Join(workspace.Out, "assets")
+	if err := os.RemoveAll(assetsRoot); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(assetsRoot, 0o755); err != nil {
+		return nil, err
+	}
+	if err := e.materializeAssets(workspace); err != nil {
+		return nil, err
+	}
+	if info, err := os.Stat(workspace.SourceAssetsRoot()); err == nil && info.IsDir() {
+		if err := copyTreeExcept(assetsRoot, workspace.SourceAssetsRoot(), nil); err != nil {
+			return nil, err
+		}
+	}
+	if err := e.buildStyleBundle(ctx, workspace, cfg); err != nil {
+		return nil, err
+	}
+	if err := e.buildStencilBundle(ctx, workspace, cfg); err != nil {
+		return nil, err
+	}
+
+	assets, err := collectAssets(workspace.Out)
+	if err != nil {
+		return nil, err
+	}
+	return &BuildResult{
+		WorkspaceDir: workspace.Root,
+		SourceDir:    workspace.Src,
+		OutputDir:    workspace.Out,
+		AssetsDir:    assetsRoot,
 		Assets:       assets,
 	}, nil
 }
@@ -477,6 +537,9 @@ func (e *BuildEngine) startWatchWorkers(ctx context.Context, tailwindCacheRoot, 
 			return nil, err
 		}
 		outputPath := filepath.Join(outputDir, "assets", "css", "app", tailwindBundleFile)
+		if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+			return nil, err
+		}
 		binaryPath, err := resolveTailwindBinary(ctx, BuildConfig{})
 		if err != nil {
 			return nil, err
@@ -492,6 +555,9 @@ func (e *BuildEngine) startWatchWorkers(ctx context.Context, tailwindCacheRoot, 
 	if e.builder != nil && e.builder.stencil != nil && len(e.builder.stencil.Inputs()) > 0 {
 		binaryPath, err := resolveStencilBinary(BuildConfig{})
 		if err != nil {
+			return nil, err
+		}
+		if err := os.MkdirAll(filepath.Join(outputDir, "assets", "js", stencilBundleID), 0o755); err != nil {
 			return nil, err
 		}
 		worker, err := startCommandWatch(ctx, "stencil", stencilCacheRoot, binaryPath, stencilWatchArgs(binaryPath)...)
