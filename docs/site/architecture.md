@@ -42,12 +42,14 @@ Current demo defaults:
 
 ## Directory Contract
 
-The site demo is organized so the contract stays visible:
+The reusable site contract lives in `site/`, while `cmd/site` is only the runnable harness:
 
-- `cmd/site/content/` for Hugo content
-- `cmd/site/layouts/` for shell templates and partial resolution
-- `cmd/site/static/` for mirrored build artifacts
-- `cmd/site/site.css` for site-specific presentation overrides
+- `site/content/` for Hugo content
+- `site/layouts/` for shell templates and partial resolution
+- `site/static/` for mirrored build artifacts
+- `site/site.css` for site-specific presentation overrides
+
+The runnable harness stays in `cmd/site/` and only points at the `site/` directory.
 
 The same Tailwind and Stencil bundles are shared with the app target.
 
@@ -59,4 +61,3 @@ When changing the site contract, update in the same change:
 - the layout and type partials,
 - the docs in `docs/site/`,
 - and the demo content in `cmd/site/`.
-

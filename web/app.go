@@ -277,37 +277,21 @@ func ExecuteCLI(parts ...Part) error {
 
 func App(parts ...Part) {
 	app := NewWithDefaults(CallerDir(1), parts...)
-	registry := app.CLI()
-
-	args := os.Args[1:]
-	if len(args) == 0 {
-		args = []string{"--help"}
-	}
-
-	result := registry.Execute(args)
-	if strings.TrimSpace(result.Stdout) != "" {
-		_, _ = fmt.Fprint(os.Stdout, result.Stdout)
-		if !strings.HasSuffix(result.Stdout, "\n") {
-			_, _ = fmt.Fprintln(os.Stdout)
-		}
-	}
-	if result.ExitCode != 0 {
-		message := strings.TrimSpace(result.Stderr)
-		if message == "" {
-			message = strings.TrimSpace(result.Stdout)
-		}
-		if message == "" {
-			message = "web command failed"
-		}
-		_, _ = fmt.Fprintln(os.Stderr, message)
-		os.Exit(1)
-	}
+	runWebCLI(app)
 }
 
 func Site(parts ...Part) {
 	app := NewSiteWithDefaults(CallerDir(1), parts...)
-	registry := app.CLI()
+	runWebCLI(app)
+}
 
+func SiteAt(baseDir string, parts ...Part) {
+	app := NewSiteWithDefaults(baseDir, parts...)
+	runWebCLI(app)
+}
+
+func runWebCLI(app *WebApp) {
+	registry := app.CLI()
 	args := os.Args[1:]
 	if len(args) == 0 {
 		args = []string{"--help"}

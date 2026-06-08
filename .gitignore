@@ -35,6 +35,10 @@ cmd/site/public/
 cmd/site/.stack/
 cmd/site/.hugo_build.lock
 cmd/site/static/assets/
+site/public/
+site/.stack/
+site/.hugo_build.lock
+site/static/assets/
 
 # Editor/IDE
 # .idea/

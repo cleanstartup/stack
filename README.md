@@ -89,7 +89,7 @@ go run ./cmd/demo dev
 
 The demo registers a single activity; styles and components are picked up automatically from the local demo module. For external dependencies, `web.Styles(baseDir)` and `web.Components(baseDir)` need an explicit module root so `stack` can discover the CSS/TS/TSX files in the dependency checkout. For the local demo that is not necessary; the defaults are applied automatically.
 
-A Hugo-backed site demo lives in `cmd/site`:
+A Hugo-backed site demo harness lives in `cmd/site`, while the Hugo source for the demo lives in `site/`:
 
 ```bash
 go run ./cmd/site build
@@ -100,7 +100,8 @@ go run ./cmd/site dev
 The site demo renders content through Hugo while using the same Tailwind and Stencil asset pipeline.
 If Hugo is not already installed, the stack will build it on demand via `go install` and cache the binary locally.
 The default Hugo version is pinned to `0.162.1` in code and resolved as the Hugo module tag `v0.162.1`. It can be overridden when needed.
-`go run ./cmd/site dev` starts `hugo server` and keeps the generated CSS and JS mirrored into `cmd/site/static/assets`, so Hugo can serve them directly during development.
+`go run ./cmd/site dev` starts `hugo server` and keeps the generated CSS and JS mirrored into `site/static/assets`, so Hugo can serve them directly during development.
+The reusable Hugo contract and demo source live under `site/`, not `cmd/site/`.
 
 Environment overrides:
 
@@ -110,10 +111,10 @@ Environment overrides:
 
 Generated site outputs are ignored by Git:
 
-- `cmd/site/public/`
-- `cmd/site/.stack/`
-- `cmd/site/.hugo_build.lock`
-- `cmd/site/static/assets/`
+- `site/public/`
+- `site/.stack/`
+- `site/.hugo_build.lock`
+- `site/static/assets/`
 
 ## External Modules
 
