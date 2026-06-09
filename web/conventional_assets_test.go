@@ -19,7 +19,7 @@ func TestConventionalAssetsDiscoverStyles(t *testing.T) {
 		}
 	}
 
-	mustWrite("site.css", "body{color:red}")
+	mustWrite("site.tailwind.css", "body{color:red}")
 
 	app := newWebApp()
 	ConventionalAssets(baseDir).Apply(app)
@@ -51,7 +51,7 @@ func TestConventionalAssetsIgnoreGeneratedStaticAssets(t *testing.T) {
 		}
 	}
 
-	mustWrite("site.css", "body{color:red}")
+	mustWrite("site.tailwind.css", "body{color:red}")
 	mustWrite("static/assets/css/app/app.css", "body{color:blue}")
 
 	app := newWebApp()
@@ -75,10 +75,10 @@ func TestComponentsPreferHugoSiteRootOverParentModuleRoot(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(siteDir, "hugo.toml"), []byte("title = \"branding\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(parent, "outside.tsx"), []byte("export const outside = true\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(parent, "outside.stencil.tsx"), []byte("export const outside = true\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(siteDir, "inside.tsx"), []byte("export const inside = true\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(siteDir, "inside.stencil.tsx"), []byte("export const inside = true\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

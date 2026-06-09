@@ -57,6 +57,7 @@ type Target struct {
 type TargetOption func(*Target)
 
 type Context struct {
+	ProjectDir   string
 	Mode         Mode
 	WorkspaceDir string
 	OutputDir    string
@@ -394,6 +395,9 @@ func (t *Target) resolveExecution(cfg Context) Context {
 	if strings.TrimSpace(cfg.WorkspaceDir) == "" {
 		cfg.WorkspaceDir = t.WorkspaceDir
 	}
+	if strings.TrimSpace(cfg.ProjectDir) == "" {
+		cfg.ProjectDir = t.baseDir()
+	}
 	if strings.TrimSpace(cfg.OutputDir) == "" {
 		cfg.OutputDir = t.OutputDir
 	}
@@ -405,6 +409,9 @@ func (t *Target) resolveExecution(cfg Context) Context {
 	}
 	if strings.TrimSpace(cfg.WorkspaceDir) == "" {
 		cfg.WorkspaceDir = defaultWorkspaceDir
+	}
+	if strings.TrimSpace(cfg.ProjectDir) == "" {
+		cfg.ProjectDir = t.baseDir()
 	}
 	if strings.TrimSpace(cfg.OutputDir) == "" {
 		cfg.OutputDir = defaultOutputDir
@@ -425,6 +432,7 @@ func (t *Target) executeApp(ctx context.Context, cfg Context) error {
 	switch cfg.Mode {
 	case ModeDev:
 		return engine.Dev(ctx, hugo.DevConfig{
+			ProjectDir:   cfg.ProjectDir,
 			Addr:         cfg.Addr,
 			WorkspaceDir: cfg.WorkspaceDir,
 			OutputDir:    cfg.OutputDir,
@@ -432,6 +440,7 @@ func (t *Target) executeApp(ctx context.Context, cfg Context) error {
 		})
 	default:
 		_, err := engine.Build(ctx, hugo.BuildConfig{
+			ProjectDir:   cfg.ProjectDir,
 			WorkspaceDir: cfg.WorkspaceDir,
 			OutputDir:    cfg.OutputDir,
 		})
@@ -445,6 +454,7 @@ func (t *Target) executeHugo(ctx context.Context, cfg Context) error {
 	switch cfg.Mode {
 	case ModeDev:
 		return app.Dev(ctx, hugo.DevConfig{
+			ProjectDir:   cfg.ProjectDir,
 			Addr:         cfg.Addr,
 			WorkspaceDir: cfg.WorkspaceDir,
 			OutputDir:    cfg.OutputDir,
@@ -452,6 +462,7 @@ func (t *Target) executeHugo(ctx context.Context, cfg Context) error {
 		})
 	default:
 		_, err := app.Build(ctx, hugo.BuildConfig{
+			ProjectDir:   cfg.ProjectDir,
 			WorkspaceDir: cfg.WorkspaceDir,
 			OutputDir:    cfg.OutputDir,
 		})
@@ -465,6 +476,7 @@ func (t *Target) executeAssetTarget(ctx context.Context, cfg Context) error {
 	switch cfg.Mode {
 	case ModeDev:
 		return engine.Dev(ctx, hugo.DevConfig{
+			ProjectDir:   cfg.ProjectDir,
 			Addr:         cfg.Addr,
 			WorkspaceDir: cfg.WorkspaceDir,
 			OutputDir:    cfg.OutputDir,
@@ -472,6 +484,7 @@ func (t *Target) executeAssetTarget(ctx context.Context, cfg Context) error {
 		})
 	default:
 		_, err := engine.BuildAssets(ctx, hugo.BuildConfig{
+			ProjectDir:   cfg.ProjectDir,
 			WorkspaceDir: cfg.WorkspaceDir,
 			OutputDir:    cfg.OutputDir,
 		})

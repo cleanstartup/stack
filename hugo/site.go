@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/cleanstartup/stack/web"
 )
 
 const defaultHugoVersion = "0.162.1"
@@ -115,6 +117,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 	}
 
 	buildCfg := BuildConfig{
+		ProjectDir:           cfg.ProjectDir,
 		WorkspaceDir:         cfg.WorkspaceDir,
 		OutputDir:            cfg.OutputDir,
 		TailwindBinary:       "",
@@ -162,6 +165,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 		return err
 	}
 	if _, err := engine.BuildAssets(ctx, BuildConfig{
+		ProjectDir:           cfg.ProjectDir,
 		WorkspaceDir:         cfg.WorkspaceDir,
 		OutputDir:            assetBuildDir,
 		TailwindBinary:       "",
@@ -179,6 +183,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 		return err
 	}
 	assetDevCfg := DevConfig{
+		ProjectDir:   cfg.ProjectDir,
 		Addr:         cfg.Addr,
 		WorkspaceDir: cfg.WorkspaceDir,
 		OutputDir:    assetBuildDir,
@@ -224,6 +229,11 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 						continue
 					}
 					changed := diffSnapshotPaths(sourceSnapshot, currentSource)
+					changed = web.FilterGeneratedProjectPaths(cfg.ProjectDir, changed)
+					if len(changed) == 0 {
+						sourceSnapshot = currentSource
+						continue
+					}
 					fmt.Fprintf(os.Stderr, "[stack] site sources changed: %s\n", strings.Join(changed, ", "))
 					tailwindTouched := false
 					stencilTouched := false
@@ -245,18 +255,21 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 					if tailwindTouched {
 						if err := engine.rebuildTailwindBundle(ctx, assetDevCfg, newTailwindWorkspace(tailwindCacheRoot)); err != nil {
 							fmt.Fprintln(os.Stderr, "[stack] site tailwind rebuild failed:", err)
+							sourceSnapshot = currentSource
 							continue
 						}
 					}
 					if stencilTouched {
 						if err := engine.syncStencilSourceMirror(cfg.WorkspaceDir); err != nil {
 							fmt.Fprintln(os.Stderr, "[stack] site stencil source sync failed:", err)
+							sourceSnapshot = currentSource
 							continue
 						}
 					}
 					if contentTouched {
 						if _, err := engine.contentModules(siteRoot); err != nil {
 							fmt.Fprintln(os.Stderr, "[stack] site content sync failed:", err)
+							sourceSnapshot = currentSource
 							continue
 						}
 					}
@@ -270,6 +283,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 					if layoutTouched {
 						if _, err := engine.layoutModules(siteRoot); err != nil {
 							fmt.Fprintln(os.Stderr, "[stack] site layout sync failed:", err)
+							sourceSnapshot = currentSource
 							continue
 						}
 					}
@@ -279,7 +293,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 		}()
 	}
 
-	workers, err := engine.startWatchWorkers(ctx, tailwindCacheRoot, stencilCacheRoot, assetBuildDir)
+	workers, err := engine.startWatchWorkers(ctx, buildCfg, tailwindCacheRoot, stencilCacheRoot, assetBuildDir)
 	if err != nil {
 		mirrorCancel()
 		select {

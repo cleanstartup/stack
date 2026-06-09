@@ -28,6 +28,7 @@ func (e *BuildEngine) buildStyleBundle(ctx context.Context, workspace *Workspace
 		Version:      cfg.TailwindVersion,
 		CacheDir:     cfg.TailwindCacheDir,
 		DownloadBase: cfg.TailwindDownloadBase,
+		ProjectDir:   cfg.ProjectDir,
 	})
 }
 

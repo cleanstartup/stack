@@ -19,8 +19,8 @@ func TestComponentsDiscoverStencilSources(t *testing.T) {
 		}
 	}
 
-	mustWrite("demo-card.tsx", "export const demo = true\n")
-	mustWrite("demo-copy.ts", "export const state = true\n")
+	mustWrite("demo-card.stencil.tsx", "export const demo = true\n")
+	mustWrite("demo-copy.stencil.ts", "export const state = true\n")
 
 	app := newWebApp()
 	Components(baseDir).Apply(app)

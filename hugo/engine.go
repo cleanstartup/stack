@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 
+	stencilpkg "github.com/cleanstartup/stack/stencil"
+	tailwindpkg "github.com/cleanstartup/stack/tailwind"
 	"github.com/cleanstartup/stack/web"
 )
 
@@ -192,7 +194,7 @@ func stopWatchWorkers(workers []watchWorker) {
 	}
 }
 
-func (e *BuildEngine) startWatchWorkers(ctx context.Context, tailwindCacheRoot, stencilCacheRoot, outputDir string) ([]watchWorker, error) {
+func (e *BuildEngine) startWatchWorkers(ctx context.Context, cfg BuildConfig, tailwindCacheRoot, stencilCacheRoot, outputDir string) ([]watchWorker, error) {
 	var workers []watchWorker
 	if e == nil || e.builder == nil {
 		return workers, nil
@@ -206,47 +208,31 @@ func (e *BuildEngine) startWatchWorkers(ctx context.Context, tailwindCacheRoot, 
 		if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 			return nil, err
 		}
-		binaryPath, err := resolveTailwindBinary(ctx, BuildConfig{})
+		spec, err := tailwindpkg.DevCommand(ctx, tailwindpkg.Config{ProjectDir: cfg.ProjectDir}, inputPath, outputPath)
 		if err != nil {
 			return nil, err
 		}
-		worker, err := startCommandWatch(ctx, "tailwind", "", binaryPath, tailwindWatchArgs(inputPath, outputPath)...)
+		worker, err := startCommandWatch(ctx, "tailwind", spec.WorkDir, spec.Binary, spec.Args...)
 		if err != nil {
 			return nil, err
 		}
 		workers = append(workers, worker)
 	}
 	if e.builder.Components() != nil && len(e.builder.Components().Inputs()) > 0 {
-		binaryPath, err := resolveStencilBinary(BuildConfig{})
-		if err != nil {
-			return nil, err
-		}
 		if err := os.MkdirAll(filepath.Join(outputDir, "assets", "js", stencilBundleID), 0o755); err != nil {
 			return nil, err
 		}
-		worker, err := startCommandWatch(ctx, "stencil", stencilCacheRoot, binaryPath, stencilWatchArgs(binaryPath)...)
+		spec, err := stencilpkg.DevCommand(stencilpkg.Config{ProjectDir: cfg.ProjectDir})
+		if err != nil {
+			return nil, err
+		}
+		worker, err := startCommandWatch(ctx, "stencil", spec.WorkDir, spec.Binary, spec.Args...)
 		if err != nil {
 			return nil, err
 		}
 		workers = append(workers, worker)
 	}
 	return workers, nil
-}
-
-func tailwindWatchArgs(inputPath, outputPath string) []string {
-	return []string{"-i", inputPath, "-o", outputPath, "--watch", "--minify"}
-}
-
-func stencilWatchArgs(binaryPath string) []string {
-	base := strings.ToLower(filepath.Base(binaryPath))
-	switch base {
-	case "npm":
-		return []string{"exec", "--yes", "--package=@stencil/core", "--", "stencil", "build", "--watch"}
-	case "npx":
-		return []string{"--yes", "stencil", "build", "--watch"}
-	default:
-		return []string{"build", "--watch"}
-	}
 }
 
 type fileSignature struct {

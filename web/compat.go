@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -215,23 +216,27 @@ func devChildCommand(moduleDir, baseDir string, cfg DevConfig) string {
 }
 
 func stencilPackageSource() string {
+	return projectPackageSource(false, true)
+}
+
+func stencilConfigSource(srcDir, outDir string) string {
+	srcDir = strings.TrimSpace(srcDir)
+	if srcDir == "" {
+		srcDir = "src/assets/js"
+	}
+	outDir = strings.TrimSpace(outDir)
+	if outDir == "" {
+		outDir = "dist"
+	}
 	return `import type { Config } from '@stencil/core';
 
 export const config: Config = {
   namespace: 'stack',
-  srcDir: 'src/assets/js',
-  extras: {
-    dependencies: {
-      "altcha": "^0.0.0",
-      "embla-carousel": "^0.0.0",
-      "embla-carousel-auto-scroll": "^0.0.0",
-      "htmx.org": "^0.0.0",
-      "posthog-js": "^0.0.0",
-    },
-  },
+  srcDir: '` + filepath.ToSlash(srcDir) + `',
   outputTargets: [
     {
       type: 'dist',
+      dir: '` + filepath.ToSlash(outDir) + `',
       esmLoaderPath: '../loader',
     },
   ],
@@ -255,4 +260,90 @@ func stencilTSConfigSource() string {
   "include": ["src/assets/js"]
 }
 `
+}
+
+func tailwindPackageSource() string {
+	return projectPackageSource(true, false)
+}
+
+func projectPackageSource(includeTailwind, includeStencil bool) string {
+	data := map[string]any{
+		"name":    "stack-target-workspace",
+		"private": true,
+		"version": "0.0.0",
+	}
+	devDependencies := map[string]string{}
+	dependencies := map[string]string{}
+
+	if includeTailwind {
+		devDependencies["tailwindcss"] = "^4.0.0"
+		devDependencies["@tailwindcss/cli"] = "^4.0.0"
+	}
+	if includeStencil {
+		devDependencies["@stencil/core"] = "4.43.5"
+		dependencies["altcha"] = "^3.0.2"
+		dependencies["embla-carousel"] = "^8.6.0"
+		dependencies["embla-carousel-auto-scroll"] = "^8.6.0"
+		dependencies["htmx.org"] = "^2.0.10"
+		dependencies["posthog-js"] = "^1.379.2"
+	}
+	if len(devDependencies) > 0 {
+		data["devDependencies"] = devDependencies
+	}
+	if len(dependencies) > 0 {
+		data["dependencies"] = dependencies
+	}
+	buf, _ := json.MarshalIndent(data, "", "  ")
+	return string(buf) + "\n"
+}
+
+func projectLockSource(includeTailwind, includeStencil bool) string {
+	root := map[string]any{
+		"name":    "stack-target-workspace",
+		"version": "0.0.0",
+	}
+
+	devDependencies := map[string]string{}
+	dependencies := map[string]string{}
+
+	if includeTailwind {
+		devDependencies["tailwindcss"] = "^4.0.0"
+		devDependencies["@tailwindcss/cli"] = "^4.0.0"
+	}
+	if includeStencil {
+		devDependencies["@stencil/core"] = "4.43.5"
+		dependencies["altcha"] = "^3.0.2"
+		dependencies["embla-carousel"] = "^8.6.0"
+		dependencies["embla-carousel-auto-scroll"] = "^8.6.0"
+		dependencies["htmx.org"] = "^2.0.10"
+		dependencies["posthog-js"] = "^1.379.2"
+	}
+	if len(devDependencies) > 0 {
+		root["devDependencies"] = devDependencies
+	}
+	if len(dependencies) > 0 {
+		root["dependencies"] = dependencies
+	}
+
+	data := map[string]any{
+		"name":            "stack-target-workspace",
+		"lockfileVersion": 3,
+		"requires":        true,
+		"packages": map[string]any{
+			"": root,
+		},
+		"version": "0.0.0",
+	}
+	merged := map[string]string{}
+	for k, v := range devDependencies {
+		merged[k] = v
+	}
+	for k, v := range dependencies {
+		merged[k] = v
+	}
+	if len(merged) > 0 {
+		data["dependencies"] = merged
+	}
+	buf, _ := json.MarshalIndent(data, "", "  ")
+	return string(buf) + "\n"
 }

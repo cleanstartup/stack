@@ -11,13 +11,13 @@ func TestNewAppWithDefaultsAppliesStylesAndComponentsFromBaseDir(t *testing.T) {
 	if err := os.MkdirAll(tmp, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "site.css"), []byte("body { color: red; }"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "site.tailwind.css"), []byte("body { color: red; }"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "demo-card.tsx"), []byte("export const demo = true;\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "demo-card.stencil.tsx"), []byte("export const demo = true;\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "demo-copy.ts"), []byte("export const demo = true;\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "demo-copy.stencil.ts"), []byte("export const demo = true;\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -52,10 +52,10 @@ func TestNewHugoWithDefaultsKeepsSiteSetupExplicit(t *testing.T) {
 	if err := os.MkdirAll(tmp, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "site.css"), []byte("body { color: red; }"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "site.tailwind.css"), []byte("body { color: red; }"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "demo-card.tsx"), []byte("export const demo = true;\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "demo-card.stencil.tsx"), []byte("export const demo = true;\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

@@ -22,7 +22,8 @@ func (e *BuildEngine) buildStencilBundle(ctx context.Context, workspace *Workspa
 	}
 	cacheRoot := filepath.Join(filepath.Dir(workspace.Root), "stencil-cache")
 	return stencilpkg.Build(ctx, stencilWorkspaceAdapter{workspace: workspace}, cacheRoot, workspace.Out, e.builder.stencil.Inputs(), stencilpkg.Config{
-		Binary: cfg.StencilBinary,
+		Binary:     cfg.StencilBinary,
+		ProjectDir: cfg.ProjectDir,
 	})
 }
 
@@ -68,7 +69,7 @@ func (e *BuildEngine) syncTailwindInput(workspace *Workspace, inputPath string) 
 	if e == nil || e.builder == nil || e.builder.tailwind == nil {
 		return nil
 	}
-	cacheRoot := filepath.Dir(filepath.Dir(inputPath))
+	cacheRoot := filepath.Join(filepath.Dir(workspace.Root), "tailwind-cache")
 	cacheWorkspace := &Workspace{
 		Root: cacheRoot,
 		Src:  filepath.Join(cacheRoot, "src"),
@@ -89,24 +90,27 @@ func (e *BuildEngine) rebuildTailwindBundle(ctx context.Context, cfg DevConfig, 
 		return nil
 	}
 	inputPath := filepath.Join(workspace.Root, "tailwind.input.css")
-	if err := e.syncTailwindInput(workspace, inputPath); err != nil {
-		return err
+	if strings.TrimSpace(cfg.ProjectDir) != "" {
+		absProjectDir, err := filepath.Abs(cfg.ProjectDir)
+		if err != nil {
+			return err
+		}
+		inputPath = filepath.Join(absProjectDir, "tailwind.input.css")
 	}
-	binaryPath, err := tailwindpkg.ResolveBinary(ctx, tailwindpkg.Config{})
-	if err != nil {
+	if err := e.syncTailwindInput(workspace, inputPath); err != nil {
 		return err
 	}
 	outputPath := filepath.Join(cfg.OutputDir, "assets", "css", "app", tailwindBundleFile)
 	fmt.Fprintf(os.Stderr, "[stack] dev tailwind rebuild input=%s output=%s\n", inputPath, outputPath)
-	return tailwindpkg.Run(ctx, binaryPath, inputPath, outputPath)
+	return tailwindpkg.Run(ctx, tailwindpkg.Config{ProjectDir: cfg.ProjectDir}, inputPath, outputPath)
 }
 
 func (e *BuildEngine) devTailwindSourceChanged(path string) bool {
 	if e == nil || e.builder == nil || e.builder.tailwind == nil {
 		return false
 	}
-	if strings.EqualFold(filepath.Ext(path), ".css") {
-		return true
+	if !isTailwindSourceFile(path) {
+		return false
 	}
 	for _, source := range e.builder.tailwind.Inputs() {
 		paths, err := tailwindpkg.SourcePaths(source)
@@ -126,9 +130,8 @@ func (e *BuildEngine) devStencilSourceChanged(path string) bool {
 	if e == nil || e.builder == nil || e.builder.stencil == nil {
 		return false
 	}
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext == ".ts" || ext == ".tsx" {
-		return true
+	if !isStencilSourceFile(path) {
+		return false
 	}
 	for _, source := range e.builder.stencil.Inputs() {
 		paths, err := stencilpkg.SourcePaths(source)
@@ -142,6 +145,16 @@ func (e *BuildEngine) devStencilSourceChanged(path string) bool {
 		}
 	}
 	return false
+}
+
+func isTailwindSourceFile(path string) bool {
+	name := strings.ToLower(filepath.Base(strings.TrimSpace(path)))
+	return strings.HasSuffix(name, ".tailwind.css")
+}
+
+func isStencilSourceFile(path string) bool {
+	name := strings.ToLower(filepath.Base(strings.TrimSpace(path)))
+	return strings.HasSuffix(name, ".stencil.ts") || strings.HasSuffix(name, ".stencil.tsx")
 }
 
 func (e *BuildEngine) devContentSourceChanged(path string) bool {

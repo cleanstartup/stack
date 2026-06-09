@@ -26,6 +26,7 @@ type Config struct {
 	Version      string
 	CacheDir     string
 	DownloadBase string
+	ProjectDir   string
 }
 
 func (r *Registry) Input(workspace Workspace) (string, error) {
@@ -97,6 +98,13 @@ func Build(ctx context.Context, materializationWorkspace Workspace, cacheRoot, o
 
 	cacheWorkspace := newCacheWorkspace(cacheRoot)
 	inputPath := filepath.Join(cacheWorkspace.Root, "tailwind.input.css")
+	if projectDir := strings.TrimSpace(cfg.ProjectDir); projectDir != "" {
+		absProjectDir, err := filepath.Abs(projectDir)
+		if err != nil {
+			return err
+		}
+		inputPath = filepath.Join(absProjectDir, "tailwind.input.css")
+	}
 	reg := &Registry{
 		entries: make([]inputEntry, 0, len(sources)),
 		scans:   append([]string{}, scans...),
@@ -119,11 +127,7 @@ func Build(ctx context.Context, materializationWorkspace Workspace, cacheRoot, o
 		return err
 	}
 
-	binaryPath, err := ResolveBinary(ctx, cfg)
-	if err != nil {
-		return err
-	}
-	return run(ctx, binaryPath, inputPath, outputPath)
+	return run(ctx, cfg, inputPath, outputPath)
 }
 
 type cacheWorkspace struct {
@@ -160,35 +164,35 @@ func materializeSource(source Source, workspace Workspace) ([]string, error) {
 	return source.Materialize(workspace, AssetCSS)
 }
 
-func run(ctx context.Context, binaryPath, inputPath, outputPath string) error {
+func run(ctx context.Context, cfg Config, inputPath, outputPath string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	cmd := exec.CommandContext(ctx, binaryPath, "-i", inputPath, "-o", outputPath, "--minify")
+	spec, err := commandSpec(ctx, cfg, inputPath, outputPath, false)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, spec.Binary, spec.Args...)
+	if strings.TrimSpace(spec.WorkDir) != "" {
+		cmd.Dir = spec.WorkDir
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("tailwind build failed via %s: %w: %s", binaryPath, err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("tailwind build failed via %s: %w: %s", spec.Binary, err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }
 
-func Run(ctx context.Context, binaryPath, inputPath, outputPath string) error {
-	return run(ctx, binaryPath, inputPath, outputPath)
+func Run(ctx context.Context, cfg Config, inputPath, outputPath string) error {
+	return run(ctx, cfg, inputPath, outputPath)
 }
 
-func WatchArgs(inputPath, outputPath string) []string {
+func WatchArgs(cfg Config, inputPath, outputPath string) []string {
 	return []string{"-i", inputPath, "-o", outputPath, "--watch", "--minify"}
 }
 
 func DevCommand(ctx context.Context, cfg Config, inputPath, outputPath string) (assetspkg.CommandSpec, error) {
-	binaryPath, err := ResolveBinary(ctx, cfg)
-	if err != nil {
-		return assetspkg.CommandSpec{}, err
-	}
-	return assetspkg.CommandSpec{
-		Binary: binaryPath,
-		Args:   WatchArgs(inputPath, outputPath),
-	}, nil
+	return commandSpec(ctx, cfg, inputPath, outputPath, true)
 }
 
 func ResolveBinary(ctx context.Context, cfg Config) (string, error) {
@@ -197,6 +201,9 @@ func ResolveBinary(ctx context.Context, cfg Config) (string, error) {
 	}
 	if path := strings.TrimSpace(os.Getenv("STACK_TAILWIND_BINARY")); path != "" {
 		return path, nil
+	}
+	if strings.TrimSpace(cfg.ProjectDir) != "" {
+		return "npm", nil
 	}
 
 	version := strings.TrimSpace(cfg.Version)
@@ -228,6 +235,69 @@ func ResolveBinary(ctx context.Context, cfg Config) (string, error) {
 	}
 
 	return downloadBinary(ctx, cacheDir, version, downloadBase)
+}
+
+func commandSpec(ctx context.Context, cfg Config, inputPath, outputPath string, watch bool) (assetspkg.CommandSpec, error) {
+	projectDir := strings.TrimSpace(cfg.ProjectDir)
+	if projectDir != "" && strings.TrimSpace(cfg.Binary) == "" && strings.TrimSpace(os.Getenv("STACK_TAILWIND_BINARY")) == "" {
+		if err := ensureProjectDependencies(ctx, projectDir); err != nil {
+			return assetspkg.CommandSpec{}, err
+		}
+		absProjectDir, err := filepath.Abs(projectDir)
+		if err != nil {
+			return assetspkg.CommandSpec{}, err
+		}
+		binaryPath := filepath.Join(absProjectDir, "node_modules", ".bin", "tailwindcss")
+		args := []string{"-i", inputPath, "-o", outputPath}
+		if watch {
+			args = append(args, "--watch")
+		}
+		args = append(args, "--minify")
+		return assetspkg.CommandSpec{
+			Binary:  binaryPath,
+			Args:    args,
+			WorkDir: absProjectDir,
+		}, nil
+	}
+	binaryPath, err := ResolveBinary(ctx, cfg)
+	if err != nil {
+		return assetspkg.CommandSpec{}, err
+	}
+	args := []string{"-i", inputPath, "-o", outputPath}
+	if watch {
+		args = append(args, "--watch")
+	}
+	args = append(args, "--minify")
+	return assetspkg.CommandSpec{
+		Binary: binaryPath,
+		Args:   args,
+	}, nil
+}
+
+func ensureProjectDependencies(ctx context.Context, projectDir string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	projectDir = strings.TrimSpace(projectDir)
+	if projectDir == "" {
+		return nil
+	}
+	absProjectDir, err := filepath.Abs(projectDir)
+	if err != nil {
+		return err
+	}
+	if marker := filepath.Join(absProjectDir, "node_modules", ".package-lock.json"); fileExists(marker) {
+		if fileExists(filepath.Join(absProjectDir, "node_modules", ".bin", "tailwindcss")) {
+			return nil
+		}
+	}
+	cmd := exec.CommandContext(ctx, "npm", "install", "--ignore-scripts", "--no-audit", "--no-fund")
+	cmd.Dir = absProjectDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("tailwind dependency install failed: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
 }
 
 func downloadBinary(ctx context.Context, cacheDir, version, downloadBase string) (string, error) {
@@ -415,4 +485,9 @@ func CopyAsset(src, dst string) error {
 		return err
 	}
 	return output.Close()
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }

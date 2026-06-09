@@ -15,7 +15,8 @@ import (
 )
 
 type Config struct {
-	Binary string
+	Binary     string
+	ProjectDir string
 }
 
 func Build(ctx context.Context, materializationWorkspace Workspace, cacheRoot, outputDir string, sources []Source, cfg Config) error {
@@ -60,14 +61,13 @@ func Build(ctx context.Context, materializationWorkspace Workspace, cacheRoot, o
 	if err := os.WriteFile(filepath.Join(cacheWorkspace.Root, "package.json"), []byte(packageSource()), 0o644); err != nil {
 		return err
 	}
-	if err := ensureDependencies(ctx, cacheWorkspace.Root); err != nil {
-		return err
+	projectDir := strings.TrimSpace(cfg.ProjectDir)
+	if projectDir == "" {
+		if err := ensureDependencies(ctx, cacheWorkspace.Root); err != nil {
+			return err
+		}
 	}
-	binaryPath, err := ResolveBinary(cfg)
-	if err != nil {
-		return err
-	}
-	if err := run(ctx, binaryPath, cacheWorkspace.Root); err != nil {
+	if err := run(ctx, cfg, cacheWorkspace.Root); err != nil {
 		return err
 	}
 	distRoot := filepath.Join(cacheWorkspace.Root, "dist")
@@ -102,53 +102,86 @@ func ResolveBinary(cfg Config) (string, error) {
 	if path := strings.TrimSpace(os.Getenv("STACK_STENCIL_BINARY")); path != "" {
 		return path, nil
 	}
+	if strings.TrimSpace(cfg.ProjectDir) != "" {
+		return "npm", nil
+	}
 	return "npm", nil
 }
 
-func Run(ctx context.Context, binaryPath, workDir string) error {
-	return run(ctx, binaryPath, workDir)
+func Run(ctx context.Context, cfg Config, workDir string) error {
+	return run(ctx, cfg, workDir)
 }
 
-func WatchArgs(binaryPath string) []string {
-	base := strings.ToLower(filepath.Base(binaryPath))
-	switch base {
-	case "npm":
-		return []string{"exec", "--yes", "--package=@stencil/core", "--", "stencil", "build", "--watch"}
-	case "npx":
-		return []string{"--yes", "stencil", "build", "--watch"}
-	default:
-		return []string{"build", "--watch"}
-	}
+func WatchArgs(cfg Config) []string {
+	binaryPath, _ := ResolveBinary(cfg)
+	return commandArgs(binaryPath)
 }
 
 func DevCommand(cfg Config) (assetspkg.CommandSpec, error) {
-	binaryPath, err := ResolveBinary(cfg)
-	if err != nil {
-		return assetspkg.CommandSpec{}, err
-	}
-	return assetspkg.CommandSpec{
-		Binary:  binaryPath,
-		Args:    WatchArgs(binaryPath),
-		WorkDir: "",
-	}, nil
+	return commandSpec(cfg, true)
 }
 
-func run(ctx context.Context, binaryPath, workDir string) error {
+func run(ctx context.Context, cfg Config, workDir string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	args := commandArgs(binaryPath)
-	cmd := exec.CommandContext(ctx, binaryPath, args...)
+	spec, err := commandSpec(cfg, false)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, spec.Binary, spec.Args...)
 	cmd.Dir = workDir
+	if strings.TrimSpace(spec.WorkDir) != "" {
+		cmd.Dir = spec.WorkDir
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("stencil build failed via %s: %w: %s", binaryPath, err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("stencil build failed via %s: %w: %s", spec.Binary, err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }
 
 func CommandArgs(binaryPath string) []string {
 	return commandArgs(binaryPath)
+}
+
+func commandSpec(cfg Config, watch bool) (assetspkg.CommandSpec, error) {
+	projectDir := strings.TrimSpace(cfg.ProjectDir)
+	if projectDir != "" && strings.TrimSpace(cfg.Binary) == "" && strings.TrimSpace(os.Getenv("STACK_STENCIL_BINARY")) == "" {
+		if err := ensureProjectDependencies(context.Background(), projectDir); err != nil {
+			return assetspkg.CommandSpec{}, err
+		}
+		absProjectDir, err := filepath.Abs(projectDir)
+		if err != nil {
+			return assetspkg.CommandSpec{}, err
+		}
+		binaryPath, err := filepath.Abs(filepath.Join(absProjectDir, "node_modules", ".bin", "stencil"))
+		if err != nil {
+			return assetspkg.CommandSpec{}, err
+		}
+		args := []string{"build"}
+		if watch {
+			args = append(args, "--watch")
+		}
+		args = append(args, "--config", "stencil.config.ts")
+		return assetspkg.CommandSpec{
+			Binary:  binaryPath,
+			Args:    args,
+			WorkDir: absProjectDir,
+		}, nil
+	}
+	binaryPath, err := ResolveBinary(cfg)
+	if err != nil {
+		return assetspkg.CommandSpec{}, err
+	}
+	args := commandArgs(binaryPath)
+	if watch {
+		args = append(args, "--watch")
+	}
+	return assetspkg.CommandSpec{
+		Binary: binaryPath,
+		Args:   args,
+	}, nil
 }
 
 func commandArgs(binaryPath string) []string {
@@ -235,11 +268,36 @@ func ensureDependencies(ctx context.Context, workDir string) error {
 		return nil
 	}
 	fmt.Fprintf(os.Stderr, "[stack] stencil deps install %s\n", workDir)
-	cmd := exec.CommandContext(ctx, "npm", "install", "--no-package-lock", "--ignore-scripts")
+	cmd := exec.CommandContext(ctx, "npm", "install", "--ignore-scripts")
 	cmd.Dir = workDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("stencil dependency install failed: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func ensureProjectDependencies(ctx context.Context, projectDir string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	projectDir = strings.TrimSpace(projectDir)
+	if projectDir == "" {
+		return nil
+	}
+	absProjectDir, err := filepath.Abs(projectDir)
+	if err != nil {
+		return err
+	}
+	if fileExists(filepath.Join(absProjectDir, "node_modules", ".package-lock.json")) &&
+		fileExists(filepath.Join(absProjectDir, "node_modules", ".bin", "stencil")) {
+		return nil
+	}
+	cmd := exec.CommandContext(ctx, "npm", "install", "--ignore-scripts", "--no-audit", "--no-fund")
+	cmd.Dir = absProjectDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("stencil project dependency install failed: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }
@@ -318,4 +376,9 @@ func copyFile(dst, src string) error {
 		return err
 	}
 	return output.Close()
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }

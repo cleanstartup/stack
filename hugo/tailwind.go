@@ -29,6 +29,7 @@ func (e *BuildEngine) buildStyleBundle(ctx context.Context, workspace *Workspace
 		Version:      cfg.TailwindVersion,
 		CacheDir:     cfg.TailwindCacheDir,
 		DownloadBase: cfg.TailwindDownloadBase,
+		ProjectDir:   cfg.ProjectDir,
 	})
 }
 
@@ -75,8 +76,8 @@ func tailwindSourcePaths(source any) ([]string, error) {
 	return nil, fmt.Errorf("unsupported tailwind source %T", source)
 }
 
-func runTailwind(ctx context.Context, binaryPath, inputPath, outputPath string) error {
-	return tailwindpkg.Run(ctx, binaryPath, inputPath, outputPath)
+func runTailwind(ctx context.Context, cfg tailwindpkg.Config, inputPath, outputPath string) error {
+	return tailwindpkg.Run(ctx, cfg, inputPath, outputPath)
 }
 
 func resolveTailwindBinary(ctx context.Context, cfg BuildConfig) (string, error) {

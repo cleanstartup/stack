@@ -39,6 +39,29 @@ Targets describe:
 
 Targets do not own asset compilation details. They only depend on built asset outputs.
 
+## Target Workspace
+
+Each target has a dedicated workspace rooted at `cmd/<target>/`.
+
+That directory is treated as the target's project root for all non-Go toolchains:
+
+- `package.json`
+- `package-lock.json`
+- `tsconfig.json`
+- `stencil.config.ts`
+- other tool-specific config files as needed
+
+The workspace should look and behave as if the target lived in its own repository.
+This is important for:
+
+- editor and language-server discovery
+- local dependency resolution
+- lockfile-based pinning
+- tool-specific conventions that expect project-root config files
+
+The Go entrypoint remains `cmd/<target>/main.go`, but the surrounding directory is also
+the synthetic root for asset tooling.
+
 ## Asset
 
 `Asset` means a buildable artifact type, for example:
@@ -111,6 +134,10 @@ The runtime should rely on:
 - `replace` directives
 
 In the common case, Go sources do not need to be copied into a separate workspace. The runtime can execute tools directly against the real repository layout as long as the module/workspace context is correct.
+
+For npm- or TS-based asset targets, `cmd/<target>/` is the primary workspace root.
+Tooling should write its root-level project files there rather than to a shared global
+workspace, so that every target keeps its own isolated project context.
 
 ## When Copying Is Useful
 

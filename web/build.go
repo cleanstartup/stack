@@ -27,6 +27,7 @@ const (
 )
 
 type BuildConfig struct {
+	ProjectDir           string
 	WorkspaceDir         string
 	OutputDir            string
 	TailwindBinary       string
@@ -48,6 +49,7 @@ type ServeConfig struct {
 }
 
 type DevConfig struct {
+	ProjectDir   string
 	Addr         string
 	WorkspaceDir string
 	OutputDir    string
@@ -119,6 +121,9 @@ func (e *BuildEngine) Build(ctx context.Context, cfg BuildConfig) (*BuildResult,
 	if err := workspace.Prepare(); err != nil {
 		return nil, err
 	}
+	if err := e.materializeProjectFiles(cfg.ProjectDir, workspace.Root); err != nil {
+		return nil, err
+	}
 
 	if err := e.materializeAssets(workspace); err != nil {
 		return nil, err
@@ -182,6 +187,9 @@ func (e *BuildEngine) BuildAssets(ctx context.Context, cfg BuildConfig) (*BuildR
 		}
 	}
 	if err := workspace.Prepare(); err != nil {
+		return nil, err
+	}
+	if err := e.materializeProjectFiles(cfg.ProjectDir, workspace.Root); err != nil {
 		return nil, err
 	}
 
@@ -334,6 +342,9 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	if cfg.OutputDir == "" {
 		cfg.OutputDir = defaultOutputDir
 	}
+	if abs, err := filepath.Abs(cfg.OutputDir); err == nil {
+		cfg.OutputDir = abs
+	}
 	if cfg.WorkspaceDir == "" {
 		cfg.WorkspaceDir = defaultWorkspaceDir
 	}
@@ -349,6 +360,7 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	stencilCacheRoot := filepath.Join(filepath.Dir(workspaceAbs), "stencil-cache")
 
 	if _, err := e.Build(ctx, BuildConfig{
+		ProjectDir:   cfg.ProjectDir,
 		WorkspaceDir: cfg.WorkspaceDir,
 		OutputDir:    cfg.OutputDir,
 	}); err != nil {
@@ -361,7 +373,7 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	watchCtx, watchCancel := context.WithCancel(ctx)
 	defer watchCancel()
 
-	workers, err := e.startWatchWorkers(watchCtx, tailwindCacheRoot, stencilCacheRoot, cfg.OutputDir)
+	workers, err := e.startWatchWorkers(watchCtx, cfg, tailwindCacheRoot, stencilCacheRoot, cfg.OutputDir)
 	if err != nil {
 		return err
 	}
@@ -423,6 +435,11 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 				}
 				if !pipelinepkg.SnapshotsEqual(sourceSnapshot, currentSource) {
 					changed := pipelinepkg.DiffSnapshotPaths(sourceSnapshot, currentSource)
+					changed = FilterGeneratedProjectPaths(cfg.ProjectDir, changed)
+					if len(changed) == 0 {
+						sourceSnapshot = currentSource
+						continue
+					}
 					fmt.Fprintf(os.Stderr, "[stack] dev sources changed: %s\n", strings.Join(changed, ", "))
 					tailwindTouched := false
 					stencilTouched := false
@@ -439,12 +456,14 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 					if tailwindTouched {
 						if err := e.rebuildTailwindBundle(ctx, cfg, tailwindWorkspace); err != nil {
 							fmt.Fprintln(os.Stderr, "[stack] dev tailwind rebuild failed:", err)
+							sourceSnapshot = currentSource
 							continue
 						}
 					}
 					if stencilTouched {
 						if err := e.syncStencilSourceMirror(cfg.WorkspaceDir); err != nil {
 							fmt.Fprintln(os.Stderr, "[stack] dev stencil source sync failed:", err)
+							sourceSnapshot = currentSource
 							continue
 						}
 					}
@@ -491,11 +510,18 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	}
 }
 
-func (e *BuildEngine) startWatchWorkers(ctx context.Context, tailwindCacheRoot, stencilCacheRoot, outputDir string) ([]pipelinepkg.WatchWorker, error) {
+func (e *BuildEngine) startWatchWorkers(ctx context.Context, cfg DevConfig, tailwindCacheRoot, stencilCacheRoot, outputDir string) ([]pipelinepkg.WatchWorker, error) {
 	var workers []pipelinepkg.WatchWorker
 
 	if e.builder != nil && e.builder.tailwind != nil && len(e.builder.tailwind.Inputs()) > 0 {
 		inputPath := filepath.Join(tailwindCacheRoot, "tailwind.input.css")
+		if strings.TrimSpace(cfg.ProjectDir) != "" {
+			absProjectDir, err := filepath.Abs(cfg.ProjectDir)
+			if err != nil {
+				return nil, err
+			}
+			inputPath = filepath.Join(absProjectDir, "tailwind.input.css")
+		}
 		if err := e.syncTailwindInput(newTailwindWorkspace(tailwindCacheRoot), inputPath); err != nil {
 			return nil, err
 		}
@@ -503,7 +529,7 @@ func (e *BuildEngine) startWatchWorkers(ctx context.Context, tailwindCacheRoot, 
 		if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 			return nil, err
 		}
-		spec, err := tailwindpkg.DevCommand(ctx, tailwindpkg.Config{}, inputPath, outputPath)
+		spec, err := tailwindpkg.DevCommand(ctx, tailwindpkg.Config{ProjectDir: cfg.ProjectDir}, inputPath, outputPath)
 		if err != nil {
 			return nil, err
 		}
@@ -516,7 +542,7 @@ func (e *BuildEngine) startWatchWorkers(ctx context.Context, tailwindCacheRoot, 
 	}
 
 	if e.builder != nil && e.builder.stencil != nil && len(e.builder.stencil.Inputs()) > 0 {
-		spec, err := stencilpkg.DevCommand(stencilpkg.Config{})
+		spec, err := stencilpkg.DevCommand(stencilpkg.Config{ProjectDir: cfg.ProjectDir})
 		if err != nil {
 			return nil, err
 		}
@@ -654,6 +680,48 @@ func (e *BuildEngine) materializeAssets(workspace *Workspace) error {
 	return nil
 }
 
+func (e *BuildEngine) materializeProjectFiles(projectDir, workspaceRoot string) error {
+	if e == nil || e.builder == nil {
+		return nil
+	}
+	projectDir = strings.TrimSpace(projectDir)
+	if projectDir == "" {
+		return nil
+	}
+	hasTailwind := e.builder.tailwind != nil && len(e.builder.tailwind.Inputs()) > 0
+	hasStencil := e.builder.stencil != nil && len(e.builder.stencil.Inputs()) > 0
+	if !hasTailwind && !hasStencil {
+		return nil
+	}
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(projectPackageSource(hasTailwind, hasStencil)), 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(projectDir, "package-lock.json"), []byte(projectLockSource(hasTailwind, hasStencil)), 0o644); err != nil {
+		return err
+	}
+	if hasStencil {
+		stencilCacheRoot := filepath.Join(filepath.Dir(strings.TrimSpace(workspaceRoot)), "stencil-cache")
+		srcDir := filepath.Join(stencilCacheRoot, "src", "assets", "js")
+		outDir := filepath.Join(stencilCacheRoot, "dist")
+		if rel, err := filepath.Rel(projectDir, srcDir); err == nil && strings.TrimSpace(rel) != "" {
+			srcDir = rel
+		}
+		if rel, err := filepath.Rel(projectDir, outDir); err == nil && strings.TrimSpace(rel) != "" {
+			outDir = rel
+		}
+		if err := os.WriteFile(filepath.Join(projectDir, "stencil.config.ts"), []byte(stencilConfigSource(srcDir, outDir)), 0o644); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(projectDir, "tsconfig.json"), []byte(stencilTSConfigSource()), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (e *BuildEngine) watchPaths() []string {
 	if e == nil || e.builder == nil {
 		return nil
@@ -733,6 +801,55 @@ func (e *BuildEngine) watchPaths() []string {
 	}
 	sort.Strings(paths)
 	return paths
+}
+
+func FilterGeneratedProjectPaths(projectDir string, paths []string) []string {
+	projectDir = strings.TrimSpace(projectDir)
+	if projectDir == "" || len(paths) == 0 {
+		return append([]string{}, paths...)
+	}
+	absProjectDir, err := filepath.Abs(projectDir)
+	if err != nil {
+		absProjectDir = projectDir
+	}
+	absProjectDir = filepath.Clean(absProjectDir)
+
+	out := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if isGeneratedProjectFile(absProjectDir, path) {
+			continue
+		}
+		out = append(out, path)
+	}
+	return out
+}
+
+func isGeneratedProjectFile(projectDir, path string) bool {
+	projectDir = filepath.Clean(strings.TrimSpace(projectDir))
+	path = filepath.Clean(strings.TrimSpace(path))
+	if projectDir == "" || path == "" {
+		return false
+	}
+	rel, err := filepath.Rel(projectDir, path)
+	if err != nil {
+		return false
+	}
+	rel = filepath.Clean(rel)
+	if rel == "." {
+		return false
+	}
+	if rel == "package.json" ||
+		rel == "package-lock.json" ||
+		rel == ".package-lock.json" ||
+		rel == "tailwind.input.css" ||
+		rel == "stencil.config.ts" ||
+		rel == "tsconfig.json" {
+		return true
+	}
+	if rel == "node_modules" || strings.HasPrefix(rel, "node_modules"+string(filepath.Separator)) {
+		return true
+	}
+	return false
 }
 
 func collectAssets(root string) ([]MaterializedAsset, error) {

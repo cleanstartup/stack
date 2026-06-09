@@ -23,7 +23,7 @@ type componentAssets struct {
 
 func Styles(baseDir ...string) Part {
 	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
-		return styleAssets{baseDir: moduleRoot(baseDir[0])}
+		return styleAssets{baseDir: filepath.Clean(baseDir[0])}
 	}
 	return styleAssets{baseDir: inferredStyleAssetsDir()}
 }
@@ -32,7 +32,7 @@ func inferredStyleAssetsDir() string { return web.CallerDir(2) }
 
 func Components(baseDir ...string) Part {
 	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
-		return componentAssets{baseDir: moduleRoot(baseDir[0])}
+		return componentAssets{baseDir: filepath.Clean(baseDir[0])}
 	}
 	return componentAssets{baseDir: inferredComponentAssetsDir()}
 }
@@ -41,7 +41,7 @@ func inferredComponentAssetsDir() string { return web.CallerDir(2) }
 
 func ConventionalAssets(baseDir ...string) Part {
 	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
-		return conventionalAssets{baseDir: moduleRoot(baseDir[0])}
+		return conventionalAssets{baseDir: filepath.Clean(baseDir[0])}
 	}
 	return conventionalAssets{baseDir: inferredConventionalAssetsDir()}
 }
@@ -54,7 +54,7 @@ func (a conventionalAssets) Apply(app *WebApp) {
 	}
 	app.RegisterTailwindScan(a.baseDir)
 
-	cssFiles := discoverModuleFiles(a.baseDir, ".css")
+	cssFiles := discoverModuleFiles(a.baseDir, ".tailwind.css")
 	if len(cssFiles) > 0 {
 		app.RegisterTailwindCSS(web.FromFiles(a.baseDir, cssFiles...))
 	}
@@ -64,10 +64,9 @@ func (a styleAssets) Apply(app *WebApp) {
 	if app == nil || strings.TrimSpace(a.baseDir) == "" {
 		return
 	}
-	app.RegisterTailwindScan(a.baseDir)
-
-	cssFiles := discoverModuleFiles(a.baseDir, ".css")
+	cssFiles := discoverModuleFiles(a.baseDir, ".tailwind.css")
 	if len(cssFiles) > 0 {
+		app.RegisterTailwindScan(a.baseDir)
 		app.RegisterTailwindCSS(web.FromFiles(a.baseDir, cssFiles...))
 	}
 }
@@ -76,7 +75,7 @@ func (a componentAssets) Apply(app *WebApp) {
 	if app == nil || strings.TrimSpace(a.baseDir) == "" {
 		return
 	}
-	tsFiles := discoverModuleFiles(a.baseDir, ".ts", ".tsx")
+	tsFiles := discoverModuleFiles(a.baseDir, ".stencil.ts", ".stencil.tsx")
 	if len(tsFiles) == 0 {
 		return
 	}
@@ -115,6 +114,10 @@ func discoverModuleFiles(baseDir string, extensions ...string) []string {
 			return nil
 		}
 		name := strings.ToLower(filepath.Base(path))
+		switch name {
+		case "tailwind.input.css", "stencil.config.ts", "tsconfig.json", "package.json", "package-lock.json", ".package-lock.json":
+			return nil
+		}
 		for _, ext := range extensions {
 			if strings.HasSuffix(name, ext) {
 				files = append(files, path)
