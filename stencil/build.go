@@ -1,0 +1,321 @@
+package stencil
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+
+	assetspkg "github.com/cleanstartup/stack/asset"
+)
+
+type Config struct {
+	Binary string
+}
+
+func Build(ctx context.Context, materializationWorkspace Workspace, cacheRoot, outputDir string, sources []Source, cfg Config) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if materializationWorkspace == nil {
+		return fmt.Errorf("stencil workspace is nil")
+	}
+	if len(sources) == 0 {
+		return nil
+	}
+
+	cacheWorkspace := newCacheWorkspace(cacheRoot)
+	start := time.Now()
+	fmt.Fprintf(os.Stderr, "[stack] stencil build start inputs=%d cache=%s\n", len(sources), cacheWorkspace.Root)
+	if err := os.MkdirAll(cacheWorkspace.Root, 0o755); err != nil {
+		return err
+	}
+	for _, dir := range []string{cacheWorkspace.Src, cacheWorkspace.Out, cacheWorkspace.Temp} {
+		if err := os.RemoveAll(dir); err != nil {
+			return err
+		}
+	}
+	if err := cacheWorkspace.Prepare(); err != nil {
+		return err
+	}
+	for _, source := range sources {
+		if source == nil {
+			continue
+		}
+		if _, err := source.Materialize(cacheWorkspace, AssetJS); err != nil {
+			return err
+		}
+	}
+	if err := os.WriteFile(filepath.Join(cacheWorkspace.Root, "stencil.config.ts"), []byte(configSource()), 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(cacheWorkspace.Root, "tsconfig.json"), []byte(tsconfigSource()), 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(cacheWorkspace.Root, "package.json"), []byte(packageSource()), 0o644); err != nil {
+		return err
+	}
+	if err := ensureDependencies(ctx, cacheWorkspace.Root); err != nil {
+		return err
+	}
+	binaryPath, err := ResolveBinary(cfg)
+	if err != nil {
+		return err
+	}
+	if err := run(ctx, binaryPath, cacheWorkspace.Root); err != nil {
+		return err
+	}
+	distRoot := filepath.Join(cacheWorkspace.Root, "dist")
+	sourceDir := filepath.Join(distRoot, BundleID)
+	if info, err := os.Stat(sourceDir); err != nil || !info.IsDir() {
+		return fmt.Errorf("stencil output not found at %s", sourceDir)
+	}
+	outputBundleDir := filepath.Join(outputDir, "assets", "js", BundleID)
+	if err := os.RemoveAll(outputBundleDir); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(outputBundleDir, 0o755); err != nil {
+		return err
+	}
+	if err := copyTree(outputBundleDir, sourceDir); err != nil {
+		return err
+	}
+	loaderDir := filepath.Join(distRoot, "loader")
+	if info, err := os.Stat(loaderDir); err == nil && info.IsDir() {
+		if err := copyTree(filepath.Join(outputBundleDir, "loader"), loaderDir); err != nil {
+			return err
+		}
+	}
+	fmt.Fprintf(os.Stderr, "[stack] stencil build complete duration=%s output=%s\n", time.Since(start).Round(time.Millisecond), outputBundleDir)
+	return nil
+}
+
+func ResolveBinary(cfg Config) (string, error) {
+	if path := strings.TrimSpace(cfg.Binary); path != "" {
+		return path, nil
+	}
+	if path := strings.TrimSpace(os.Getenv("STACK_STENCIL_BINARY")); path != "" {
+		return path, nil
+	}
+	return "npm", nil
+}
+
+func Run(ctx context.Context, binaryPath, workDir string) error {
+	return run(ctx, binaryPath, workDir)
+}
+
+func WatchArgs(binaryPath string) []string {
+	base := strings.ToLower(filepath.Base(binaryPath))
+	switch base {
+	case "npm":
+		return []string{"exec", "--yes", "--package=@stencil/core", "--", "stencil", "build", "--watch"}
+	case "npx":
+		return []string{"--yes", "stencil", "build", "--watch"}
+	default:
+		return []string{"build", "--watch"}
+	}
+}
+
+func DevCommand(cfg Config) (assetspkg.CommandSpec, error) {
+	binaryPath, err := ResolveBinary(cfg)
+	if err != nil {
+		return assetspkg.CommandSpec{}, err
+	}
+	return assetspkg.CommandSpec{
+		Binary:  binaryPath,
+		Args:    WatchArgs(binaryPath),
+		WorkDir: "",
+	}, nil
+}
+
+func run(ctx context.Context, binaryPath, workDir string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	args := commandArgs(binaryPath)
+	cmd := exec.CommandContext(ctx, binaryPath, args...)
+	cmd.Dir = workDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("stencil build failed via %s: %w: %s", binaryPath, err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func CommandArgs(binaryPath string) []string {
+	return commandArgs(binaryPath)
+}
+
+func commandArgs(binaryPath string) []string {
+	base := strings.ToLower(filepath.Base(binaryPath))
+	switch base {
+	case "npm":
+		return []string{"exec", "--yes", "--package=@stencil/core", "--", "stencil", "build"}
+	case "npx":
+		return []string{"--yes", "stencil", "build"}
+	default:
+		return []string{"build"}
+	}
+}
+
+func ConfigSource() string {
+	return configSource()
+}
+
+func configSource() string {
+	return `import type { Config } from '@stencil/core';
+
+export const config: Config = {
+  namespace: 'stack',
+  srcDir: 'src/assets/js',
+  outputTargets: [
+    {
+      type: 'dist',
+      esmLoaderPath: '../loader',
+    },
+  ],
+};
+`
+}
+
+func TSConfigSource() string {
+	return tsconfigSource()
+}
+
+func tsconfigSource() string {
+	return `{
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "declaration": false,
+    "experimentalDecorators": true,
+    "jsx": "react",
+    "jsxFactory": "h",
+    "lib": ["dom", "es2017"],
+    "module": "esnext",
+    "moduleResolution": "node",
+    "target": "es2017"
+  },
+  "include": ["src/assets/js"]
+}
+`
+}
+
+func PackageSource() string {
+	return packageSource()
+}
+
+func packageSource() string {
+	data, _ := json.MarshalIndent(map[string]any{
+		"name":    "stack-stencil-workspace",
+		"private": true,
+		"version": "0.0.0",
+		"devDependencies": map[string]string{
+			"@stencil/core": "4.43.5",
+		},
+	}, "", "  ")
+	return string(data) + "\n"
+}
+
+func EnsureDependencies(ctx context.Context, workDir string) error {
+	return ensureDependencies(ctx, workDir)
+}
+
+func ensureDependencies(ctx context.Context, workDir string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	marker := filepath.Join(workDir, "node_modules", "@stencil", "core", "package.json")
+	if info, err := os.Stat(marker); err == nil && !info.IsDir() {
+		fmt.Fprintf(os.Stderr, "[stack] stencil deps cache hit %s\n", workDir)
+		return nil
+	}
+	fmt.Fprintf(os.Stderr, "[stack] stencil deps install %s\n", workDir)
+	cmd := exec.CommandContext(ctx, "npm", "install", "--no-package-lock", "--ignore-scripts")
+	cmd.Dir = workDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("stencil dependency install failed: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+type cacheWorkspace struct {
+	Root string
+	Src  string
+	Out  string
+	Temp string
+}
+
+func newCacheWorkspace(cacheRoot string) *cacheWorkspace {
+	cacheRoot = strings.TrimSpace(cacheRoot)
+	if cacheRoot == "" {
+		cacheRoot = filepath.Join(".stack", "stencil-cache")
+	}
+	return &cacheWorkspace{
+		Root: cacheRoot,
+		Src:  filepath.Join(cacheRoot, "src"),
+		Out:  filepath.Join(cacheRoot, "dist"),
+		Temp: filepath.Join(cacheRoot, "tmp"),
+	}
+}
+
+func (w *cacheWorkspace) AssetDir(kind AssetKind, id string) string {
+	if w == nil {
+		return ""
+	}
+	return filepath.Join(w.Src, "assets", string(kind), id)
+}
+
+func (w *cacheWorkspace) Prepare() error {
+	if w == nil {
+		return fmt.Errorf("workspace is nil")
+	}
+	for _, dir := range []string{w.Root, w.Src, w.Out, w.Temp} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyTree(dst, src string) error {
+	return filepath.WalkDir(src, func(current string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, current)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		return copyFile(target, current)
+	})
+}
+
+func copyFile(dst, src string) error {
+	input, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer input.Close()
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	output, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer output.Close()
+	if _, err := io.Copy(output, input); err != nil {
+		return err
+	}
+	return output.Close()
+}

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestNewWithDefaultsAppliesStylesAndComponentsFromBaseDir(t *testing.T) {
+func TestNewAppWithDefaultsAppliesStylesAndComponentsFromBaseDir(t *testing.T) {
 	tmp := t.TempDir()
 	if err := os.MkdirAll(tmp, 0o755); err != nil {
 		t.Fatal(err)
@@ -21,7 +21,7 @@ func TestNewWithDefaultsAppliesStylesAndComponentsFromBaseDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app := NewWithDefaults(tmp)
+	app := NewAppWithDefaults(tmp)
 	if got := len(app.builder.Styles().Inputs()); got != 1 {
 		t.Fatalf("expected one css input, got %d", got)
 	}
@@ -47,7 +47,7 @@ func TestNewWithDefaultsAppliesStylesAndComponentsFromBaseDir(t *testing.T) {
 	}
 }
 
-func TestNewSiteWithDefaultsKeepsSiteSetupExplicit(t *testing.T) {
+func TestNewHugoWithDefaultsKeepsSiteSetupExplicit(t *testing.T) {
 	tmp := t.TempDir()
 	if err := os.MkdirAll(tmp, 0o755); err != nil {
 		t.Fatal(err)
@@ -59,14 +59,14 @@ func TestNewSiteWithDefaultsKeepsSiteSetupExplicit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app := NewSiteWithDefaults(tmp)
+	app := NewHugoWithDefaults(tmp)
 	if got := len(app.builder.Styles().Inputs()); got != 0 {
 		t.Fatalf("expected no implicit css inputs, got %d", got)
 	}
 	if got := len(app.builder.Components().Inputs()); got != 0 {
 		t.Fatalf("expected no implicit stencil inputs, got %d", got)
 	}
-	if got := app.Target(); got != TargetSite {
-		t.Fatalf("expected site target, got %q", got)
+	if got := app.Target(); got != TargetHugo {
+		t.Fatalf("expected hugo target, got %q", got)
 	}
 }

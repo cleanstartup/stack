@@ -1,4 +1,4 @@
-package web
+package hugosupport
 
 import (
 	"fmt"
@@ -7,9 +7,17 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	assetpkg "github.com/cleanstartup/stack/asset"
+	pipelinepkg "github.com/cleanstartup/stack/pipeline"
 )
 
 const contentModulePrefix = "github.com/cleanstartup/stack/content"
+
+type Module struct {
+	ImportPath  string
+	ReplacePath string
+}
 
 type contentEntry struct {
 	baseDir  string
@@ -70,7 +78,7 @@ func (r *ContentRegistry) WatchPaths() []string {
 		seen[entry.baseDir] = struct{}{}
 		paths = append(paths, entry.baseDir)
 	}
-	return cleanWatchPaths(paths)
+	return assetpkg.CleanWatchPaths(paths)
 }
 
 func (r *ContentRegistry) SourceChanged(path string) bool {
@@ -78,14 +86,14 @@ func (r *ContentRegistry) SourceChanged(path string) bool {
 		return false
 	}
 	for _, entry := range r.Entries() {
-		if sourcePathMatches(entry.baseDir, path) || entry.baseDir == "." {
+		if SourcePathMatches(entry.baseDir, path) || entry.baseDir == "." {
 			return true
 		}
 	}
 	return false
 }
 
-func (r *ContentRegistry) Modules(moduleRoot string) ([]HugoModule, error) {
+func (r *ContentRegistry) Modules(moduleRoot string) ([]Module, error) {
 	if r == nil {
 		return nil, nil
 	}
@@ -94,7 +102,7 @@ func (r *ContentRegistry) Modules(moduleRoot string) ([]HugoModule, error) {
 		return nil, fmt.Errorf("module root is required")
 	}
 
-	var modules []HugoModule
+	var modules []Module
 	for _, entry := range r.entries {
 		if strings.TrimSpace(entry.baseDir) == "" {
 			continue
@@ -112,19 +120,19 @@ func (r *ContentRegistry) Modules(moduleRoot string) ([]HugoModule, error) {
 	return modules, nil
 }
 
-func (r *ContentRegistry) materialize(moduleRoot, baseDir string, includes, files []string) (HugoModule, error) {
-	id := assetID(baseDir + "\x00" + strings.Join(includes, "\x00"))
+func (r *ContentRegistry) materialize(moduleRoot, baseDir string, includes, files []string) (Module, error) {
+	id := assetpkg.AssetID(baseDir + "\x00" + strings.Join(includes, "\x00"))
 	moduleDir := filepath.Join(moduleRoot, "content", id)
 	contentDir := filepath.Join(moduleDir, "content")
 
 	if err := os.RemoveAll(moduleDir); err != nil {
-		return HugoModule{}, err
+		return Module{}, err
 	}
 	if err := os.MkdirAll(contentDir, 0o755); err != nil {
-		return HugoModule{}, err
+		return Module{}, err
 	}
 	if err := os.WriteFile(filepath.Join(moduleDir, "hugo.toml"), []byte(contentModuleConfig()), 0o644); err != nil {
-		return HugoModule{}, err
+		return Module{}, err
 	}
 
 	for _, file := range files {
@@ -134,11 +142,11 @@ func (r *ContentRegistry) materialize(moduleRoot, baseDir string, includes, file
 		}
 		target := filepath.Join(contentDir, filepath.FromSlash(rel))
 		if err := copyTextFileIfChanged(file, target); err != nil {
-			return HugoModule{}, err
+			return Module{}, err
 		}
 	}
 
-	return HugoModule{
+	return Module{
 		ImportPath:  contentModulePrefix + "/" + id,
 		ReplacePath: moduleDir,
 	}, nil
@@ -231,6 +239,31 @@ func discoverContentFiles(baseDir string, includes []string) []string {
 	return files
 }
 
+func moduleRoot(baseDir string) string {
+	baseDir = strings.TrimSpace(baseDir)
+	if baseDir == "" {
+		return ""
+	}
+	current := baseDir
+	for {
+		if _, err := os.Stat(filepath.Join(current, "hugo.toml")); err == nil {
+			return current
+		}
+		if _, err := os.Stat(filepath.Join(current, "go.mod")); err == nil {
+			return current
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return baseDir
+		}
+		current = parent
+	}
+}
+
+func SourcePathMatches(candidate, changed string) bool {
+	return pipelinepkg.SourcePathMatches(candidate, changed)
+}
+
 func matchesAnyContentPattern(patterns []string, name string) bool {
 	for _, pattern := range patterns {
 		if matchContentPattern(pattern, name) {
@@ -272,21 +305,4 @@ func matchContentSegments(patterns, names []string) bool {
 		return false
 	}
 	return matchContentSegments(patterns[1:], names[1:])
-}
-
-func Content(baseDir string, includes ...string) Part {
-	patterns := cleanContentIncludes(includes...)
-	return contentAssets{baseDir: moduleRoot(baseDir), includes: patterns}
-}
-
-type contentAssets struct {
-	baseDir  string
-	includes []string
-}
-
-func (a contentAssets) Apply(app *WebApp) {
-	if app == nil || strings.TrimSpace(a.baseDir) == "" {
-		return
-	}
-	app.RegisterContent(a.baseDir, a.includes...)
 }

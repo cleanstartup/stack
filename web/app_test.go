@@ -28,7 +28,7 @@ func TestBuildMaterializesAssets(t *testing.T) {
 	}
 
 	def := activity.As[smokeParams, activity.NoInput]("smoke.page")
-	app := web.New(web.Module(
+	app := web.NewApp(web.Module(
 		web.BindActivity(def, func(params smokeParams) activity.Instance[smokeParams, activity.NoInput] {
 			return def.Take(params).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
 				return "ok"
@@ -59,7 +59,7 @@ func TestWebAppCollectsHugoModulesFromModules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app := web.New(web.Module(
+	app := web.NewApp(web.Module(
 		web.CSS(web.FromFile(cssPath)),
 	).WithHugo(
 		web.HugoModule{ImportPath: "github.com/cleanstartup/branding", ReplacePath: "/tmp/branding"},
@@ -75,7 +75,7 @@ func TestWebAppCollectsHugoModulesFromModules(t *testing.T) {
 }
 
 func TestWebCLIHelpIncludesCommandSummaries(t *testing.T) {
-	app := web.New()
+	app := web.NewApp()
 
 	res := app.CLI().Execute([]string{"--help"})
 	if res.ExitCode != 0 {
@@ -92,20 +92,20 @@ func TestWebCLIHelpIncludesCommandSummaries(t *testing.T) {
 	}
 }
 
-func TestSiteCLIHelpIncludesSiteSummaries(t *testing.T) {
-	app := web.NewSite()
+func TestHugoCLIHelpIncludesSiteSummaries(t *testing.T) {
+	app := web.NewHugo()
 
 	res := app.CLI().Execute([]string{"--help"})
 	if res.ExitCode != 0 {
 		t.Fatalf("expected help exit 0, got %d", res.ExitCode)
 	}
-	if !strings.Contains(res.Stdout, "run - serve the already built static site") {
-		t.Fatalf("expected site run help summary, got %q", res.Stdout)
+	if !strings.Contains(res.Stdout, "run - serve the already built hugo site") {
+		t.Fatalf("expected hugo run help summary, got %q", res.Stdout)
 	}
-	if !strings.Contains(res.Stdout, "build - render the site and materialize assets into the output directory") {
-		t.Fatalf("expected site build help summary, got %q", res.Stdout)
+	if !strings.Contains(res.Stdout, "build - render the hugo site and materialize assets into the output directory") {
+		t.Fatalf("expected hugo build help summary, got %q", res.Stdout)
 	}
 	if !strings.Contains(res.Stdout, "dev - run hugo server and the asset watch loop") {
-		t.Fatalf("expected site dev help summary, got %q", res.Stdout)
+		t.Fatalf("expected hugo dev help summary, got %q", res.Stdout)
 	}
 }

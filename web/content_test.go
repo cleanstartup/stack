@@ -19,7 +19,7 @@ func TestContentRegistryMaterializesHugoModule(t *testing.T) {
 		t.Fatalf("write source: %v", err)
 	}
 
-	app := New()
+	app := NewApp()
 	Content(baseDir, "components/**/showcase.md").Apply(app)
 
 	mods, err := app.engine.contentModules(moduleRoot)

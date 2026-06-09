@@ -19,7 +19,7 @@ func TestLayoutRegistryMaterializesHugoModule(t *testing.T) {
 		t.Fatalf("write source: %v", err)
 	}
 
-	app := New()
+	app := NewApp()
 	Layouts(baseDir, "layouts/**/*.hugo.html").Apply(app)
 
 	mods, err := app.engine.layoutModules(moduleRoot)

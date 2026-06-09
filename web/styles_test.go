@@ -24,7 +24,7 @@ func TestCSSReturnsDirectAssetRef(t *testing.T) {
 	if ref.Kind != AssetKindCSS {
 		t.Fatalf("expected css kind, got %v", ref.Kind)
 	}
-	if ref.URL() != "/assets/css/"+assetID(cssPath)+"/site.css" {
+	if ref.URL() != "/assets/css/"+AssetID(cssPath)+"/site.css" {
 		t.Fatalf("expected direct css asset url, got %q", ref.URL())
 	}
 }
@@ -58,7 +58,7 @@ func TestTailwindInputUsesMirroredSourcePaths(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app := New(TailwindCSS(FromFile(cssPath)))
+	app := NewApp(TailwindCSS(FromFile(cssPath)))
 	cache := newTailwindWorkspace(filepath.Join(tmp, "tailwind-cache"))
 
 	input, err := app.engine.tailwindInput(cache)
@@ -66,7 +66,7 @@ func TestTailwindInputUsesMirroredSourcePaths(t *testing.T) {
 		t.Fatalf("tailwind input failed: %v", err)
 	}
 
-	mirroredPath := filepath.Join(cache.AssetDir(AssetKindCSS, assetID(cssPath)), filepath.Base(cssPath))
+	mirroredPath := filepath.Join(cache.AssetDir(AssetKindCSS, AssetID(cssPath)), filepath.Base(cssPath))
 	if _, err := os.Stat(mirroredPath); err != nil {
 		t.Fatalf("expected mirrored css source at %s: %v", mirroredPath, err)
 	}
@@ -109,7 +109,7 @@ func TestBuildUsesExplicitTailwindBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app := New(TailwindCSS(FromFile(cssPath)))
+	app := NewApp(TailwindCSS(FromFile(cssPath)))
 	result, err := app.Build(context.Background(), BuildConfig{
 		WorkspaceDir:   filepath.Join(tmp, "workspace"),
 		OutputDir:      filepath.Join(tmp, "public"),

@@ -35,7 +35,7 @@ type Registry struct {
 	pathPrefix   string
 	idPrefix     string
 	byActivity   map[uintptr]string
-	byRef        map[uintptr]string
+	byRef        map[string]string
 	globalMW     []GlobalMiddleware
 	devState     *DevState
 	assets       AssetManifest
@@ -76,13 +76,7 @@ type GlobalMiddleware func(next func(ctx activity.Context) activity.Result) func
 type ActivityOption[C any] func(a *WebActivity[C])
 type TitleFunc func(ctx activity.Context) string
 
-type uriRefKey struct {
-	id string
-}
-
-type URIRef struct {
-	key *uriRefKey
-}
+type URIRef = activity.URIRef
 
 type WebActivity[C any] struct {
 	id          string
@@ -90,7 +84,7 @@ type WebActivity[C any] struct {
 	decode      DecodeFunc[C]
 	handler     ActivityHandler[C]
 	middlewares []ActivityMiddleware[C]
-	ref         *uriRefKey
+	ref         URIRef
 	title       TitleFunc
 }
 
@@ -108,7 +102,7 @@ func NewRegistry() *Registry {
 		pathPrefix:   "",
 		idPrefix:     "",
 		byActivity:   map[uintptr]string{},
-		byRef:        map[uintptr]string{},
+		byRef:        map[string]string{},
 		globalMW:     []GlobalMiddleware{},
 		devState:     nil,
 		assets:       AssetManifest{},
@@ -185,34 +179,11 @@ func URIOk(target any) (string, bool) {
 	return uri, ok
 }
 
-func Ref(id string) URIRef {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		panic("ref id must not be empty")
-	}
-	return URIRef{key: &uriRefKey{id: id}}
-}
-
-func RootRef() URIRef { return Ref("root") }
-
-func URIByRef(ref URIRef) string { return URI(ref) }
-
 func URIOkByRef(ref URIRef) (string, bool) {
-	if ref.key == nil {
-		return "", false
-	}
-	key := reflect.ValueOf(ref.key).Pointer()
 	uriBindingsMu.RLock()
 	defer uriBindingsMu.RUnlock()
-	uri, ok := defaultRegistry.byRef[key]
+	uri, ok := defaultRegistry.byRef[ref.ID()]
 	return uri, ok
-}
-
-func (r URIRef) ID() string {
-	if r.key == nil {
-		return ""
-	}
-	return r.key.id
 }
 
 func Input(name string) InputKey {
@@ -249,7 +220,7 @@ func Activity(ref URIRef, handler func(ctx activity.Context) activity.Result, op
 	if handler == nil {
 		panic("handler function must not be nil")
 	}
-	if ref.key == nil {
+	if strings.TrimSpace(ref.ID()) == "" {
 		panic("ref must not be nil")
 	}
 	opts = append(opts, WithRef[struct{}](ref))
@@ -291,10 +262,10 @@ func WithMiddleware[C any](mw ActivityMiddleware[C]) ActivityOption[C] {
 
 func WithRef[C any](ref URIRef) ActivityOption[C] {
 	return func(a *WebActivity[C]) {
-		if ref.key == nil {
+		if strings.TrimSpace(ref.ID()) == "" {
 			panic("ref must not be nil")
 		}
-		a.ref = ref.key
+		a.ref = ref
 	}
 }
 
@@ -397,8 +368,8 @@ func RegisterWebActivity[C any](r *Registry, a *WebActivity[C]) {
 	r.byPath[pattern] = id
 	uriBindingsMu.Lock()
 	r.byActivity[reflect.ValueOf(a).Pointer()] = pattern
-	if a.ref != nil {
-		r.byRef[reflect.ValueOf(a.ref).Pointer()] = pattern
+	if strings.TrimSpace(a.ref.ID()) != "" {
+		r.byRef[a.ref.ID()] = pattern
 	}
 	uriBindingsMu.Unlock()
 }

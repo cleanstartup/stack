@@ -1,10 +1,12 @@
-package web
+package hugo
 
 import (
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/cleanstartup/stack/web"
 )
 
 type conventionalAssets struct {
@@ -26,7 +28,7 @@ func Styles(baseDir ...string) Part {
 	return styleAssets{baseDir: inferredStyleAssetsDir()}
 }
 
-func inferredStyleAssetsDir() string { return CallerDir(2) }
+func inferredStyleAssetsDir() string { return web.CallerDir(2) }
 
 func Components(baseDir ...string) Part {
 	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
@@ -35,7 +37,7 @@ func Components(baseDir ...string) Part {
 	return componentAssets{baseDir: inferredComponentAssetsDir()}
 }
 
-func inferredComponentAssetsDir() string { return CallerDir(2) }
+func inferredComponentAssetsDir() string { return web.CallerDir(2) }
 
 func ConventionalAssets(baseDir ...string) Part {
 	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
@@ -44,7 +46,7 @@ func ConventionalAssets(baseDir ...string) Part {
 	return conventionalAssets{baseDir: inferredConventionalAssetsDir()}
 }
 
-func inferredConventionalAssetsDir() string { return CallerDir(2) }
+func inferredConventionalAssetsDir() string { return web.CallerDir(2) }
 
 func (a conventionalAssets) Apply(app *WebApp) {
 	if app == nil || strings.TrimSpace(a.baseDir) == "" {
@@ -54,7 +56,7 @@ func (a conventionalAssets) Apply(app *WebApp) {
 
 	cssFiles := discoverModuleFiles(a.baseDir, ".css")
 	if len(cssFiles) > 0 {
-		app.RegisterTailwindCSS(FromFiles(a.baseDir, cssFiles...))
+		app.RegisterTailwindCSS(web.FromFiles(a.baseDir, cssFiles...))
 	}
 }
 
@@ -66,7 +68,7 @@ func (a styleAssets) Apply(app *WebApp) {
 
 	cssFiles := discoverModuleFiles(a.baseDir, ".css")
 	if len(cssFiles) > 0 {
-		app.RegisterTailwindCSS(FromFiles(a.baseDir, cssFiles...))
+		app.RegisterTailwindCSS(web.FromFiles(a.baseDir, cssFiles...))
 	}
 }
 
@@ -79,7 +81,7 @@ func (a componentAssets) Apply(app *WebApp) {
 		return
 	}
 	app.RegisterStencilScan(a.baseDir)
-	app.RegisterStencil(FromFiles(a.baseDir, tsFiles...))
+	app.RegisterStencil(web.FromFiles(a.baseDir, tsFiles...))
 }
 
 func discoverModuleFiles(baseDir string, extensions ...string) []string {
@@ -87,17 +89,17 @@ func discoverModuleFiles(baseDir string, extensions ...string) []string {
 		return nil
 	}
 	skipDirs := map[string]struct{}{
-		".git":        {},
-		"deps":        {},
-		".stack":      {},
+		".git":         {},
+		"deps":         {},
+		".stack":       {},
 		"node_modules": {},
-		"dist":        {},
-		"build":       {},
-		"coverage":    {},
-		"vendor":      {},
-		"public":      {},
-		"static":      {},
-		"resources":   {},
+		"dist":         {},
+		"build":        {},
+		"coverage":     {},
+		"vendor":       {},
+		"public":       {},
+		"static":       {},
+		"resources":    {},
 	}
 	var files []string
 	_ = filepath.WalkDir(baseDir, func(path string, entry os.DirEntry, err error) error {
@@ -145,4 +147,3 @@ func moduleRoot(baseDir string) string {
 		current = parent
 	}
 }
-

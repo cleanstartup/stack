@@ -4,7 +4,7 @@ type TargetKind string
 
 const (
 	TargetApp  TargetKind = "app"
-	TargetSite TargetKind = "site"
+	TargetHugo TargetKind = "hugo"
 )
 
 func (t TargetKind) String() string {

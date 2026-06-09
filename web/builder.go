@@ -4,6 +4,9 @@ import (
 	"net/http"
 
 	"github.com/cleanstartup/stack/activity"
+	assetpkg "github.com/cleanstartup/stack/asset"
+	stencilpkg "github.com/cleanstartup/stack/stencil"
+	tailwindpkg "github.com/cleanstartup/stack/tailwind"
 )
 
 type routeRegistration interface {
@@ -42,8 +45,8 @@ func (r mountRouteRegistration) register(reg *Registry) {
 type Builder struct {
 	routes   []routeRegistration
 	mounts   []mountRouteRegistration
-	tailwind *TailwindRegistry
-	stencil  *StencilRegistry
+	tailwind *tailwindpkg.Registry
+	stencil  *stencilpkg.Registry
 	content  *ContentRegistry
 	layouts  *LayoutRegistry
 	assets   *AssetRegistry
@@ -53,8 +56,8 @@ func NewBuilder() *Builder {
 	return &Builder{
 		routes:   []routeRegistration{},
 		mounts:   []mountRouteRegistration{},
-		tailwind: NewTailwindRegistry(),
-		stencil:  NewStencilRegistry(),
+		tailwind: tailwindpkg.NewRegistry(),
+		stencil:  stencilpkg.NewRegistry(),
 		content:  NewContentRegistry(),
 		layouts:  NewLayoutRegistry(),
 		assets:   NewAssetRegistry(),
@@ -117,14 +120,16 @@ func (b *Builder) TailwindCSS(src AssetSource) AssetRef {
 	if b == nil || b.tailwind == nil {
 		return AssetRef{}
 	}
-	return b.tailwind.AddInput(src)
+	ref := b.tailwind.AddInput(wrapTailwindSource(src))
+	return AssetRef{Kind: AssetKind(ref.Kind), ID: ref.ID, Files: append([]string{}, ref.Files...)}
 }
 
 func (b *Builder) Stencil(src AssetSource) AssetRef {
 	if b == nil || b.stencil == nil {
 		return AssetRef{}
 	}
-	return b.stencil.AddInput(src)
+	ref := b.stencil.AddInput(wrapStencilSource(src))
+	return AssetRef{Kind: AssetKind(ref.Kind), ID: ref.ID, Files: append([]string{}, ref.Files...)}
 }
 
 func (b *Builder) Content(baseDir string, includes ...string) {
@@ -158,14 +163,14 @@ func (b *Builder) StencilScan(paths ...string) {
 	b.stencil.AddScan(paths...)
 }
 
-func (b *Builder) Styles() *TailwindRegistry {
+func (b *Builder) Styles() *tailwindpkg.Registry {
 	if b == nil {
 		return nil
 	}
 	return b.tailwind
 }
 
-func (b *Builder) Components() *StencilRegistry {
+func (b *Builder) Components() *stencilpkg.Registry {
 	if b == nil {
 		return nil
 	}
@@ -195,10 +200,12 @@ func (b *Builder) Manifest() AssetManifest {
 		manifest = b.assets.Manifest()
 	}
 	if b.tailwind != nil && len(b.tailwind.Inputs()) > 0 {
-		manifest.Styles = append(manifest.Styles, b.tailwind.BundleRef())
+		ref := b.tailwind.BundleRef()
+		manifest.Styles = append(manifest.Styles, AssetRef{Kind: AssetKind(ref.Kind), ID: ref.ID, Files: append([]string{}, ref.Files...)})
 	}
 	if b.stencil != nil && len(b.stencil.Inputs()) > 0 {
-		manifest.Scripts = append(manifest.Scripts, b.stencil.BundleRef())
+		ref := b.stencil.BundleRef()
+		manifest.Scripts = append(manifest.Scripts, AssetRef{Kind: AssetKind(ref.Kind), ID: ref.ID, Files: append([]string{}, ref.Files...)})
 	}
 	return manifest
 }
@@ -219,4 +226,120 @@ func (b *Builder) registerRoutes(reg *Registry) {
 		}
 		mount.register(reg)
 	}
+}
+
+type tailwindWorkspaceAdapter struct {
+	workspace tailwindpkg.Workspace
+}
+
+func (a tailwindWorkspaceAdapter) AssetDir(kind AssetKind, id string) string {
+	if a.workspace == nil {
+		return ""
+	}
+	return a.workspace.AssetDir(tailwindpkg.AssetKind(kind), id)
+}
+
+type tailwindBuildWorkspaceAdapter struct {
+	workspace AssetWorkspace
+}
+
+func (a tailwindBuildWorkspaceAdapter) AssetDir(kind tailwindpkg.AssetKind, id string) string {
+	if a.workspace == nil {
+		return ""
+	}
+	return a.workspace.AssetDir(AssetKind(kind), id)
+}
+
+type tailwindSourceAdapter struct {
+	source AssetSource
+}
+
+func (a tailwindSourceAdapter) ID() string {
+	if a.source == nil {
+		return ""
+	}
+	return a.source.ID()
+}
+
+func (a tailwindSourceAdapter) Materialize(ws tailwindpkg.Workspace, kind tailwindpkg.AssetKind) ([]string, error) {
+	if a.source == nil {
+		return nil, nil
+	}
+	return a.source.Materialize(tailwindWorkspaceAdapter{workspace: ws}, AssetKind(kind))
+}
+
+func (a tailwindSourceAdapter) SourcePaths() []string {
+	if a.source == nil {
+		return nil
+	}
+	paths, err := assetpkg.SourcePaths(a.source)
+	if err != nil {
+		return nil
+	}
+	return paths
+}
+
+func wrapTailwindSource(src AssetSource) tailwindpkg.Source {
+	if src == nil {
+		return nil
+	}
+	return tailwindSourceAdapter{source: src}
+}
+
+type stencilBuildWorkspaceAdapter struct {
+	workspace stencilpkg.Workspace
+}
+
+func (a stencilBuildWorkspaceAdapter) AssetDir(kind AssetKind, id string) string {
+	if a.workspace == nil {
+		return ""
+	}
+	return a.workspace.AssetDir(stencilpkg.AssetKind(kind), id)
+}
+
+type stencilWorkspaceAdapter struct {
+	workspace AssetWorkspace
+}
+
+func (a stencilWorkspaceAdapter) AssetDir(kind stencilpkg.AssetKind, id string) string {
+	if a.workspace == nil {
+		return ""
+	}
+	return a.workspace.AssetDir(AssetKind(kind), id)
+}
+
+type stencilSourceAdapter struct {
+	source AssetSource
+}
+
+func (a stencilSourceAdapter) ID() string {
+	if a.source == nil {
+		return ""
+	}
+	return a.source.ID()
+}
+
+func (a stencilSourceAdapter) Materialize(ws stencilpkg.Workspace, kind stencilpkg.AssetKind) ([]string, error) {
+	if a.source == nil {
+		return nil, nil
+	}
+	return a.source.Materialize(stencilBuildWorkspaceAdapter{workspace: ws}, AssetKind(kind))
+}
+
+func (a stencilSourceAdapter) SourcePaths() []string {
+	if a.source == nil {
+		return nil
+	}
+	paths, err := assetpkg.SourcePaths(a.source)
+	if err != nil {
+		return nil
+	}
+	return paths
+}
+
+func wrapStencilSource(src AssetSource) stencilpkg.Source {
+	if src == nil {
+		return nil
+	}
+	return stencilSourceAdapter{source: src}
 }

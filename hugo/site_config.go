@@ -1,4 +1,4 @@
-package web
+package hugo
 
 import (
 	"fmt"
@@ -6,29 +6,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-type SiteOptions struct {
-	Title        string
-	BaseURL      string
-	DisableKinds []string
-	Params       map[string]string
-	MarkupUnsafe *bool
-}
-
-type siteOptionsPart struct {
-	opts SiteOptions
-}
-
-func SiteConfig(opts SiteOptions) Part {
-	return siteOptionsPart{opts: opts}
-}
-
-func (p siteOptionsPart) Apply(app *WebApp) {
-	if app == nil {
-		return
-	}
-	app.registerSiteConfig(p.opts)
-}
 
 func (a *WebApp) registerSiteConfig(opts SiteOptions) {
 	if a == nil {

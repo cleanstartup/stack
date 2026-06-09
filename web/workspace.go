@@ -123,7 +123,7 @@ func copyTreeExcept(dst, src string, skip func(rel string, entry fs.DirEntry) bo
 		if entry.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
-		return copyFile(target, current)
+		return CopyFile(target, current)
 	})
 }
 

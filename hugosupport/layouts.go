@@ -1,9 +1,11 @@
-package web
+package hugosupport
 
 import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	assetpkg "github.com/cleanstartup/stack/asset"
 )
 
 const layoutsModulePrefix = "github.com/cleanstartup/stack/layouts"
@@ -62,7 +64,7 @@ func (r *LayoutRegistry) WatchPaths() []string {
 		seen[entry.baseDir] = struct{}{}
 		paths = append(paths, entry.baseDir)
 	}
-	return cleanWatchPaths(paths)
+	return assetpkg.CleanWatchPaths(paths)
 }
 
 func (r *LayoutRegistry) SourceChanged(path string) bool {
@@ -70,14 +72,14 @@ func (r *LayoutRegistry) SourceChanged(path string) bool {
 		return false
 	}
 	for _, entry := range r.Entries() {
-		if sourcePathMatches(entry.baseDir, path) || entry.baseDir == "." {
+		if SourcePathMatches(entry.baseDir, path) || entry.baseDir == "." {
 			return true
 		}
 	}
 	return false
 }
 
-func (r *LayoutRegistry) Modules(moduleRoot string) ([]HugoModule, error) {
+func (r *LayoutRegistry) Modules(moduleRoot string) ([]Module, error) {
 	if r == nil {
 		return nil, nil
 	}
@@ -85,7 +87,7 @@ func (r *LayoutRegistry) Modules(moduleRoot string) ([]HugoModule, error) {
 	if moduleRoot == "" {
 		return nil, os.ErrInvalid
 	}
-	var modules []HugoModule
+	var modules []Module
 	for _, entry := range r.entries {
 		if strings.TrimSpace(entry.baseDir) == "" {
 			continue
@@ -103,19 +105,19 @@ func (r *LayoutRegistry) Modules(moduleRoot string) ([]HugoModule, error) {
 	return modules, nil
 }
 
-func (r *LayoutRegistry) materialize(moduleRoot, baseDir string, includes, files []string) (HugoModule, error) {
-	id := assetID(baseDir + "\x00" + strings.Join(includes, "\x00"))
+func (r *LayoutRegistry) materialize(moduleRoot, baseDir string, includes, files []string) (Module, error) {
+	id := assetpkg.AssetID(baseDir + "\x00" + strings.Join(includes, "\x00"))
 	moduleDir := filepath.Join(moduleRoot, "layouts", id)
 	layoutsDir := filepath.Join(moduleDir, "layouts")
 
 	if err := os.RemoveAll(moduleDir); err != nil {
-		return HugoModule{}, err
+		return Module{}, err
 	}
 	if err := os.MkdirAll(layoutsDir, 0o755); err != nil {
-		return HugoModule{}, err
+		return Module{}, err
 	}
 	if err := os.WriteFile(filepath.Join(moduleDir, "hugo.toml"), []byte(layoutModuleConfig()), 0o644); err != nil {
-		return HugoModule{}, err
+		return Module{}, err
 	}
 	for _, file := range files {
 		rel, err := filepath.Rel(baseDir, file)
@@ -124,10 +126,10 @@ func (r *LayoutRegistry) materialize(moduleRoot, baseDir string, includes, files
 		}
 		target := filepath.Join(layoutsDir, "partials", filepath.FromSlash(rel))
 		if err := copyTextFileIfChanged(file, target); err != nil {
-			return HugoModule{}, err
+			return Module{}, err
 		}
 	}
-	return HugoModule{
+	return Module{
 		ImportPath:  layoutsModulePrefix + "/" + id,
 		ReplacePath: moduleDir,
 	}, nil
@@ -135,21 +137,4 @@ func (r *LayoutRegistry) materialize(moduleRoot, baseDir string, includes, files
 
 func layoutModuleConfig() string {
 	return "title = \"layouts\"\n"
-}
-
-func Layouts(baseDir string, includes ...string) Part {
-	patterns := cleanContentIncludes(includes...)
-	return layoutAssets{baseDir: moduleRoot(baseDir), includes: patterns}
-}
-
-type layoutAssets struct {
-	baseDir  string
-	includes []string
-}
-
-func (a layoutAssets) Apply(app *WebApp) {
-	if app == nil || strings.TrimSpace(a.baseDir) == "" {
-		return
-	}
-	app.RegisterLayouts(a.baseDir, a.includes...)
 }
