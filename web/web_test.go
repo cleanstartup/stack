@@ -270,6 +270,27 @@ func TestURIOkBeforeRegistration(t *testing.T) {
 	}
 }
 
+func TestURIFallsBackToPathFromIDForUnregisteredRef(t *testing.T) {
+	web.Reset()
+	got := web.URI(web.Ref("backup.intro"))
+	if got != "/backup/intro" {
+		t.Fatalf("expected /backup/intro, got %q", got)
+	}
+}
+
+func TestURIFallsBackToPathFromIDForUnregisteredActivity(t *testing.T) {
+	web.Reset()
+	a := web.Activity(
+		web.Ref("backup.intro"),
+		func(ctx activity.Context) activity.Result { return "ok" },
+	)
+
+	got := web.URI(a)
+	if got != "/backup/intro" {
+		t.Fatalf("expected /backup/intro, got %q", got)
+	}
+}
+
 func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 	r := web.NewRegistry()
 	called := false
@@ -467,6 +488,27 @@ func TestMountedHandlerReceivesAssetManifest(t *testing.T) {
 	body := rec.Body.String()
 	if !strings.Contains(body, "<link rel=\"stylesheet\" href=\"/assets/css/app/app.css\">") {
 		t.Fatalf("expected mounted handler to receive asset manifest, got %q", body)
+	}
+}
+
+func TestMountedHandlerSeesOriginalPath(t *testing.T) {
+	r := web.NewRegistry()
+	var gotPath string
+
+	r.Mount("/auth", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		gotPath = req.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/auth/session/refresh", nil)
+	r.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", rec.Code)
+	}
+	if gotPath != "/auth/session/refresh" {
+		t.Fatalf("expected original path to be preserved, got %q", gotPath)
 	}
 }
 

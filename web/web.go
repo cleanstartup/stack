@@ -145,13 +145,16 @@ func URI(target any) string {
 	case nil:
 		panic("web uri target is nil")
 	case URIRef:
-		panic(fmt.Sprintf("web activity ref '%s' is not registered", t.ID()))
+		return activity.PathFromID(t.ID())
 	case *URIRef:
 		if t == nil {
 			panic("web uri target is nil")
 		}
-		panic(fmt.Sprintf("web activity ref '%s' is not registered", t.ID()))
+		return activity.PathFromID(t.ID())
 	default:
+		if uriTarget, ok := target.(interface{ ID() string }); ok {
+			return activity.PathFromID(uriTarget.ID())
+		}
 		panic("web uri target is not registered")
 	}
 }
@@ -539,7 +542,19 @@ func (r *Registry) Mount(path string, handler http.Handler) {
 		req = withDevState(req, r.devState)
 		handler.ServeHTTP(w, req)
 	})
-	r.router.Mount(path, wrapped)
+	path = strings.TrimSpace(path)
+	if path == "" {
+		path = "/"
+	}
+	if path == "/" {
+		r.router.Handle(path, wrapped)
+		return
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	r.router.Handle(path, wrapped)
+	r.router.Handle(path+"/*", wrapped)
 }
 
 func (r *Registry) Group(path string) *Registry {

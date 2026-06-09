@@ -70,7 +70,7 @@ func main() {
 - `web dev` starts a `templ` supervisor for Go/templ changes and combines it with Tailwind and Stencil watch workers for the asset pipeline. The browser runs through the templ proxy; CSS/JS changes are still handled through the internal dev reload.
 - Web commands have their own help text: `run`, `build`, and `dev` explain themselves via `--help` and show up in the CLI listing.
 - Local dependency assets can bring watch paths, for example through `web.FromFS(..., watchPath)` or `web.WithWatchPaths(...)`.
-- `web.Mount(path, handler)` propagates the current asset manifest and dev-state context into mounted routers, so sub-apps such as auth flows can still render `web.Page` responses with the correct CSS/JS bundles.
+- `web.Mount(path, handler)` propagates the current asset manifest and dev-state context into mounted routers, and preserves the original request path so sub-apps such as auth flows can still render `web.Page` responses with the correct CSS/JS bundles and API endpoints.
 - The app-wide style set is collected automatically from all `*.css` files in the calling Go module, whether they live directly in the demo/package directory or deeper in subdirectories.
 - The styles build runs through a single Tailwind output (`/assets/css/app/app.css`). The Tailwind binary is downloaded automatically and cached if it is not already available.
 - The component convention automatically picks up all `*.tsx` and `*.ts` files in the Go module; Stencil components and helper logic can therefore be organized anywhere in the module, including a flat layout directly under a package or demo directory.
