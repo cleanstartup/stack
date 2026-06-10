@@ -87,17 +87,18 @@ func discoverModuleFiles(baseDir string, extensions ...string) []string {
 		return nil
 	}
 	skipDirs := map[string]struct{}{
-		".git":         {},
-		"deps":         {},
-		".stack":       {},
-		"node_modules": {},
-		"dist":         {},
-		"build":        {},
-		"coverage":     {},
-		"vendor":       {},
-		"public":       {},
-		"static":       {},
-		"resources":    {},
+		".git":             {},
+		"deps":             {},
+		".stack":           {},
+		"generated-assets": {},
+		"node_modules":     {},
+		"dist":             {},
+		"build":            {},
+		"coverage":         {},
+		"vendor":           {},
+		"public":           {},
+		"static":           {},
+		"resources":        {},
 	}
 	var files []string
 	_ = filepath.WalkDir(baseDir, func(path string, entry os.DirEntry, err error) error {
