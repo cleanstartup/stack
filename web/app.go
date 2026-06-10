@@ -371,10 +371,7 @@ func SiteAt(baseDir string, parts ...Part) {
 
 func runWebCLI(app *WebApp) {
 	registry := app.CLI()
-	args := os.Args[1:]
-	if len(args) == 0 {
-		args = []string{"--help"}
-	}
+	args := defaultWebCLIArgs(os.Args[1:])
 
 	result := registry.Execute(args)
 	if strings.TrimSpace(result.Stdout) != "" {
@@ -394,6 +391,13 @@ func runWebCLI(app *WebApp) {
 		_, _ = fmt.Fprintln(os.Stderr, message)
 		os.Exit(1)
 	}
+}
+
+func defaultWebCLIArgs(args []string) []string {
+	if len(args) != 0 {
+		return args
+	}
+	return []string{"run"}
 }
 
 func Run(parts ...Part) { App(parts...) }
