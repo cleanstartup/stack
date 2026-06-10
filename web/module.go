@@ -1,6 +1,7 @@
 package web
 
 import (
+	"io/fs"
 	"net/http"
 	"strings"
 
@@ -142,6 +143,16 @@ func JS(src AssetSource) Part {
 
 func File(src AssetSource) Part {
 	return partFunc(func(app *WebApp) { app.RegisterFile(src) })
+}
+
+func AssetFS(source fs.FS, root string) Part {
+	return partFunc(func(app *WebApp) {
+		if app == nil {
+			return
+		}
+		app.assetsFS = source
+		app.assetRoot = strings.TrimSpace(root)
+	})
 }
 
 func TailwindScan(paths ...string) Part {

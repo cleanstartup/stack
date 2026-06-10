@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -21,6 +22,8 @@ type WebApp struct {
 	baseDir     string
 	moduleDir   string
 	target      TargetKind
+	assetsFS    fs.FS
+	assetRoot   string
 	hugoModules []HugoModule
 	siteConfig  *SiteOptions
 }
@@ -189,12 +192,24 @@ func (a *WebApp) Serve(ctx context.Context, cfg ServeConfig) error {
 	if a == nil || a.engine == nil {
 		return fmt.Errorf("target is nil")
 	}
+	if cfg.AssetsFS == nil && a.assetsFS != nil {
+		cfg.AssetsFS = a.assetsFS
+	}
+	if strings.TrimSpace(cfg.AssetRoot) == "" && strings.TrimSpace(a.assetRoot) != "" {
+		cfg.AssetRoot = a.assetRoot
+	}
 	return a.engine.Serve(ctx, cfg)
 }
 
 func (a *WebApp) Dev(ctx context.Context, cfg DevConfig) error {
 	if a == nil || a.engine == nil {
 		return fmt.Errorf("target is nil")
+	}
+	if cfg.AssetsFS == nil && a.assetsFS != nil {
+		cfg.AssetsFS = a.assetsFS
+	}
+	if strings.TrimSpace(cfg.AssetRoot) == "" && strings.TrimSpace(a.assetRoot) != "" {
+		cfg.AssetRoot = a.assetRoot
 	}
 	if a.target == TargetSite {
 		return a.devSite(ctx, cfg)
