@@ -96,6 +96,14 @@ func JS(src AssetSource) Part {
 	return partFunc(func(app *WebApp) { app.RegisterJS(src) })
 }
 
+func WithCSS(names ...string) Part {
+	return partFunc(func(app *WebApp) { app.RequireCSS(names...) })
+}
+
+func WithJS(names ...string) Part {
+	return partFunc(func(app *WebApp) { app.RequireJS(names...) })
+}
+
 func File(src AssetSource) Part {
 	return partFunc(func(app *WebApp) { app.RegisterFile(src) })
 }

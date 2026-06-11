@@ -44,12 +44,12 @@ func TestTailwindReturnsBundleRef(t *testing.T) {
 	if ref.Kind != AssetKindCSS {
 		t.Fatalf("expected css kind, got %v", ref.Kind)
 	}
-	if ref.URL() != "/assets/css/app/app.css" {
+	if ref.URL() != "/assets/css/app.css" {
 		t.Fatalf("expected tailwind bundle url, got %q", ref.URL())
 	}
 }
 
-func TestTailwindInputUsesMirroredSourcePaths(t *testing.T) {
+func TestTailwindInputUsesSourcePathsDirectly(t *testing.T) {
 	t.Parallel()
 
 	tmp := t.TempDir()
@@ -66,12 +66,11 @@ func TestTailwindInputUsesMirroredSourcePaths(t *testing.T) {
 		t.Fatalf("tailwind input failed: %v", err)
 	}
 
-	mirroredPath := filepath.Join(cache.AssetDir(AssetKindCSS, AssetID(cssPath)), filepath.Base(cssPath))
-	if _, err := os.Stat(mirroredPath); err != nil {
-		t.Fatalf("expected mirrored css source at %s: %v", mirroredPath, err)
+	if strings.Contains(input, filepath.ToSlash(cache.AssetDir(AssetKindCSS, AssetID(cssPath)))) {
+		t.Fatalf("did not expect mirrored css source in input, got %q", input)
 	}
-	if !strings.Contains(input, "@import \""+filepath.ToSlash(mirroredPath)+"\";") {
-		t.Fatalf("expected mirrored css import in input, got %q", input)
+	if !strings.Contains(input, "@import \""+filepath.ToSlash(cssPath)+"\";") {
+		t.Fatalf("expected direct css import in input, got %q", input)
 	}
 	if strings.Contains(input, "/* stack:") {
 		t.Fatalf("did not expect inline stack marker in input, got %q", input)
@@ -119,7 +118,7 @@ func TestBuildUsesExplicitTailwindBinary(t *testing.T) {
 		t.Fatalf("build failed: %v", err)
 	}
 
-	bundlePath := filepath.Join(result.OutputDir, "assets", "css", "app", "app.css")
+	bundlePath := filepath.Join(result.OutputDir, "assets", "css", "app.css")
 	if _, err := os.Stat(bundlePath); err != nil {
 		t.Fatalf("expected tailwind bundle at %s: %v", bundlePath, err)
 	}

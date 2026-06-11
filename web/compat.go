@@ -244,7 +244,17 @@ export const config: Config = {
 `
 }
 
-func stencilTSConfigSource() string {
+func stencilTSConfigSource(include ...string) string {
+	if len(include) == 0 {
+		include = []string{"src/assets/js"}
+	}
+	for idx, path := range include {
+		include[idx] = filepath.ToSlash(strings.TrimSpace(path))
+	}
+	includeJSON, err := json.Marshal(include)
+	if err != nil {
+		includeJSON = []byte(`["src/assets/js"]`)
+	}
 	return `{
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
@@ -257,7 +267,7 @@ func stencilTSConfigSource() string {
     "moduleResolution": "bundler",
     "target": "es2020"
   },
-  "include": ["src/assets/js"]
+  "include": ` + string(includeJSON) + `
 }
 `
 }

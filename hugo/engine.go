@@ -22,6 +22,13 @@ func (e *BuildEngine) BuildAssets(ctx context.Context, cfg BuildConfig) (*BuildR
 	return e.core.BuildAssets(ctx, cfg)
 }
 
+func (e *BuildEngine) Install(ctx context.Context, cfg BuildConfig) error {
+	if e == nil || e.core == nil {
+		return fmt.Errorf("build engine is nil")
+	}
+	return e.core.Install(ctx, cfg)
+}
+
 func (e *BuildEngine) Build(ctx context.Context, cfg BuildConfig) (*BuildResult, error) {
 	if e == nil || e.core == nil {
 		return nil, fmt.Errorf("build engine is nil")
@@ -41,6 +48,13 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 		return fmt.Errorf("build engine is nil")
 	}
 	return e.core.Dev(ctx, cfg)
+}
+
+func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
+	if e == nil || e.core == nil {
+		return fmt.Errorf("build engine is nil")
+	}
+	return e.core.DevAssets(ctx, cfg)
 }
 
 func (e *BuildEngine) contentModules(moduleRoot string) ([]HugoModule, error) {
@@ -153,7 +167,7 @@ func stopWatchWorkers(workers []watchWorker) {
 	pipelinepkg.StopWatchWorkers(workers)
 }
 
-func (e *BuildEngine) startWatchWorkers(ctx context.Context, cfg BuildConfig, tailwindCacheRoot, stencilCacheRoot, outputDir string) ([]watchWorker, error) {
+func (e *BuildEngine) startWatchWorkers(ctx context.Context, cfg BuildConfig, tailwindCacheRoot, outputDir string) ([]watchWorker, error) {
 	var workers []watchWorker
 	if e == nil || e.builder == nil {
 		return workers, nil
@@ -163,7 +177,7 @@ func (e *BuildEngine) startWatchWorkers(ctx context.Context, cfg BuildConfig, ta
 		if err := e.syncTailwindInput(newTailwindWorkspace(tailwindCacheRoot), inputPath); err != nil {
 			return nil, err
 		}
-		outputPath := filepath.Join(outputDir, "assets", "css", "app", tailwindBundleFile)
+		outputPath := filepath.Join(outputDir, "assets", "css", tailwindBundleFile)
 		if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 			return nil, err
 		}
@@ -189,6 +203,7 @@ func (e *BuildEngine) startWatchWorkers(ctx context.Context, cfg BuildConfig, ta
 		if err != nil {
 			return nil, err
 		}
+		fmt.Fprintf(os.Stderr, "[stack] stencil watch started output=%s\n", filepath.Join(outputDir, "assets", "js", stencilBundleID))
 		workers = append(workers, worker)
 	}
 	return workers, nil

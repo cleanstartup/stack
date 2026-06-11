@@ -12,7 +12,7 @@ import (
 
 func NewApp(parts ...Part) *WebApp {
 	app := &WebApp{
-		core:  web.NewApp(),
+		core:   web.NewApp(),
 		target: "hugo",
 	}
 	app.Apply(parts...)
@@ -108,6 +108,20 @@ func (a *WebApp) RegisterJS(src AssetSource) AssetRef {
 	return AssetRef{Kind: ref.Kind, ID: ref.ID, Files: append([]string{}, ref.Files...)}
 }
 
+func (a *WebApp) RequireCSS(names ...string) {
+	if a == nil || a.coreApp() == nil {
+		return
+	}
+	a.coreApp().RequireCSS(names...)
+}
+
+func (a *WebApp) RequireJS(names ...string) {
+	if a == nil || a.coreApp() == nil {
+		return
+	}
+	a.coreApp().RequireJS(names...)
+}
+
 func (a *WebApp) RegisterFile(src AssetSource) AssetRef {
 	if a == nil || a.coreApp() == nil {
 		return AssetRef{}
@@ -160,6 +174,13 @@ func (a *WebApp) Build(ctx context.Context, cfg BuildConfig) (*BuildResult, erro
 		return nil, fmt.Errorf("target is nil")
 	}
 	return a.buildSite(ctx, cfg)
+}
+
+func (a *WebApp) Install(ctx context.Context, cfg BuildConfig) error {
+	if a == nil {
+		return fmt.Errorf("target is nil")
+	}
+	return a.buildEngine().Install(ctx, cfg)
 }
 
 func (a *WebApp) Serve(ctx context.Context, cfg ServeConfig) error {

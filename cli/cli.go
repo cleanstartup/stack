@@ -361,6 +361,32 @@ func (i *Invocation) Error() error {
 	return fmt.Errorf("%v", i.errs)
 }
 
+func (i *Invocation) Arg(index int) string {
+	if i == nil || index < 0 {
+		return ""
+	}
+	args := i.Args()
+	if index >= len(args) {
+		return ""
+	}
+	return args[index]
+}
+
+func (i *Invocation) Args() []string {
+	if i == nil {
+		return nil
+	}
+	var args []string
+	for _, arg := range i.rawArgs {
+		arg = strings.TrimSpace(arg)
+		if arg == "" || strings.HasPrefix(arg, "-") {
+			continue
+		}
+		args = append(args, arg)
+	}
+	return args
+}
+
 func (c *handlerContext[C]) Data() C {
 	if c == nil {
 		var zero C

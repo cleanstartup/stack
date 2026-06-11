@@ -22,6 +22,15 @@ func Screen(name string, props any) templ.Component {
 	if !strings.HasPrefix(tag, "screen-") {
 		tag = "screen-" + tag
 	}
+	return Element(tag, props)
+}
+
+// Element renders a Stencil-backed custom element with optional serialized props.
+func Element(name string, props any) templ.Component {
+	tag := strings.TrimSpace(name)
+	if tag == "" {
+		panic("element name must not be empty")
+	}
 	return templ.ComponentFunc(func(_ context.Context, w io.Writer) error {
 		if _, err := io.WriteString(w, "<"+tag); err != nil {
 			return err

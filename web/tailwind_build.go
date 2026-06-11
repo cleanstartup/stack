@@ -16,8 +16,7 @@ func (e *BuildEngine) buildStyleBundle(ctx context.Context, workspace *Workspace
 	if e == nil || e.builder == nil || e.builder.tailwind == nil || workspace == nil {
 		return nil
 	}
-	bundle := e.builder.tailwind.BundleRef()
-	outputDir := workspace.OutputAssetDir(AssetKind(bundle.Kind), bundle.ID)
+	outputDir := filepath.Join(workspace.Out, "assets", "css")
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return err
 	}

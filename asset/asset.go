@@ -37,9 +37,9 @@ type AssetNamer interface {
 }
 
 type AssetRef struct {
-	Kind  AssetKind
-	ID    string
-	Files []string
+	Kind  AssetKind `json:"kind"`
+	ID    string    `json:"id"`
+	Files []string  `json:"files,omitempty"`
 }
 
 func (r AssetRef) URLs() []string {
@@ -90,6 +90,10 @@ type WatchPathsProvider interface {
 
 type SourcePathsProvider interface {
 	SourcePaths() []string
+}
+
+type SourceFileProvider interface {
+	SourceFiles() []string
 }
 
 type watchedAssetSource struct {
@@ -187,8 +191,8 @@ func (r *AssetRegistry) Refs(kind AssetKind) []AssetRef {
 }
 
 type AssetManifest struct {
-	Styles  []AssetRef
-	Scripts []AssetRef
+	Styles  []AssetRef `json:"styles,omitempty"`
+	Scripts []AssetRef `json:"scripts,omitempty"`
 }
 
 func (r *AssetRegistry) Manifest() AssetManifest {
@@ -233,6 +237,8 @@ func (s fileAssetSource) Materialize(ws AssetWorkspace, kind AssetKind) ([]strin
 }
 
 func (s fileAssetSource) WatchPaths() []string { return []string{s.path} }
+
+func (s fileAssetSource) SourceFiles() []string { return []string{s.path} }
 
 type dirAssetSource struct {
 	id   string
@@ -348,6 +354,10 @@ func (s fileSetAssetSource) WatchPaths() []string {
 	return cleanWatchPaths(paths)
 }
 
+func (s fileSetAssetSource) SourceFiles() []string {
+	return append([]string{}, s.files...)
+}
+
 type fsAssetSource struct {
 	id         string
 	source     fs.FS
@@ -439,6 +449,9 @@ func CallerDir(skip int) string {
 func SourcePaths(source AssetSource) ([]string, error) {
 	if source == nil {
 		return nil, nil
+	}
+	if provider, ok := source.(SourceFileProvider); ok {
+		return append([]string{}, provider.SourceFiles()...), nil
 	}
 	if provider, ok := source.(SourcePathsProvider); ok {
 		return append([]string{}, provider.SourcePaths()...), nil

@@ -61,7 +61,14 @@ func (r *Registry) Input(workspace Workspace) (string, error) {
 			if strings.TrimSpace(sourcePath) == "" {
 				continue
 			}
-			contentPath := filepath.Join(baseDir, filepath.FromSlash(sourcePath))
+			contentPath := filepath.Clean(filepath.FromSlash(sourcePath))
+			if !filepath.IsAbs(contentPath) {
+				if _, err := os.Stat(contentPath); err != nil {
+					contentPath = filepath.Join(baseDir, filepath.FromSlash(sourcePath))
+				} else if !strings.HasPrefix(filepath.ToSlash(contentPath), "./") && !strings.HasPrefix(filepath.ToSlash(contentPath), "../") {
+					contentPath = "." + string(filepath.Separator) + contentPath
+				}
+			}
 			out.WriteString("\n@import \"")
 			out.WriteString(filepath.ToSlash(contentPath))
 			out.WriteString("\";\n")
@@ -98,7 +105,8 @@ func Build(ctx context.Context, materializationWorkspace Workspace, cacheRoot, o
 
 	cacheWorkspace := newCacheWorkspace(cacheRoot)
 	inputPath := filepath.Join(cacheWorkspace.Root, "tailwind.input.css")
-	if projectDir := strings.TrimSpace(cfg.ProjectDir); projectDir != "" {
+	projectDir := strings.TrimSpace(cfg.ProjectDir)
+	if projectDir != "" {
 		absProjectDir, err := filepath.Abs(projectDir)
 		if err != nil {
 			return err
@@ -113,11 +121,13 @@ func Build(ctx context.Context, materializationWorkspace Workspace, cacheRoot, o
 	for _, src := range sources {
 		reg.entries = append(reg.entries, inputEntry{source: src})
 	}
-	if err := os.MkdirAll(cacheWorkspace.Root, 0o755); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(cacheWorkspace.Src, 0o755); err != nil {
-		return err
+	if projectDir == "" {
+		if err := os.MkdirAll(cacheWorkspace.Root, 0o755); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(cacheWorkspace.Src, 0o755); err != nil {
+			return err
+		}
 	}
 	input, err := reg.Input(materializationWorkspace)
 	if err != nil {
@@ -160,6 +170,9 @@ func (w *cacheWorkspace) AssetDir(kind AssetKind, id string) string {
 func materializeSource(source Source, workspace Workspace) ([]string, error) {
 	if source == nil {
 		return nil, nil
+	}
+	if paths, err := SourcePaths(source); err == nil && len(paths) > 0 {
+		return paths, nil
 	}
 	return source.Materialize(workspace, AssetCSS)
 }
@@ -298,6 +311,10 @@ func ensureProjectDependencies(ctx context.Context, projectDir string) error {
 		return fmt.Errorf("tailwind dependency install failed: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
+}
+
+func EnsureProjectDependencies(ctx context.Context, projectDir string) error {
+	return ensureProjectDependencies(ctx, projectDir)
 }
 
 func downloadBinary(ctx context.Context, cacheDir, version, downloadBase string) (string, error) {

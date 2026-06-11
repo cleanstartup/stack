@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,46 +22,48 @@ func Build(ctx context.Context, materializationWorkspace Workspace, cacheRoot, o
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if materializationWorkspace == nil {
-		return fmt.Errorf("stencil workspace is nil")
-	}
 	if len(sources) == 0 {
 		return nil
 	}
 
 	cacheWorkspace := newCacheWorkspace(cacheRoot)
+	outputRoot := filepath.Join(outputDir, "assets", "js")
 	start := time.Now()
-	fmt.Fprintf(os.Stderr, "[stack] stencil build start inputs=%d cache=%s\n", len(sources), cacheWorkspace.Root)
-	if err := os.MkdirAll(cacheWorkspace.Root, 0o755); err != nil {
-		return err
-	}
-	for _, dir := range []string{cacheWorkspace.Src, cacheWorkspace.Out, cacheWorkspace.Temp} {
-		if err := os.RemoveAll(dir); err != nil {
-			return err
-		}
-	}
-	if err := cacheWorkspace.Prepare(); err != nil {
-		return err
-	}
-	for _, source := range sources {
-		if source == nil {
-			continue
-		}
-		if _, err := source.Materialize(cacheWorkspace, AssetJS); err != nil {
-			return err
-		}
-	}
-	if err := os.WriteFile(filepath.Join(cacheWorkspace.Root, "stencil.config.ts"), []byte(configSource()), 0o644); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(cacheWorkspace.Root, "tsconfig.json"), []byte(tsconfigSource()), 0o644); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(cacheWorkspace.Root, "package.json"), []byte(packageSource()), 0o644); err != nil {
+	fmt.Fprintf(os.Stderr, "[stack] stencil build start inputs=%d output=%s\n", len(sources), outputRoot)
+	if err := os.MkdirAll(outputRoot, 0o755); err != nil {
 		return err
 	}
 	projectDir := strings.TrimSpace(cfg.ProjectDir)
 	if projectDir == "" {
+		if materializationWorkspace == nil {
+			return fmt.Errorf("stencil workspace is nil")
+		}
+		if err := os.MkdirAll(cacheWorkspace.Root, 0o755); err != nil {
+			return err
+		}
+		for _, dir := range []string{cacheWorkspace.Src, cacheWorkspace.Out, cacheWorkspace.Temp} {
+			if err := os.RemoveAll(dir); err != nil {
+				return err
+			}
+		}
+		if err := cacheWorkspace.Prepare(); err != nil {
+			return err
+		}
+		sourceFiles := sourceFiles(sources)
+		srcDir := commonSourceDir(sourceFiles)
+		include := []string{srcDir}
+		if strings.TrimSpace(srcDir) == "" {
+			include = nil
+		}
+		if err := os.WriteFile(filepath.Join(cacheWorkspace.Root, "stencil.config.ts"), []byte(configSource(srcDir, outputRoot)), 0o644); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(cacheWorkspace.Root, "tsconfig.json"), []byte(tsconfigSource(include...)), 0o644); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(cacheWorkspace.Root, "package.json"), []byte(packageSource()), 0o644); err != nil {
+			return err
+		}
 		if err := ensureDependencies(ctx, cacheWorkspace.Root); err != nil {
 			return err
 		}
@@ -70,26 +71,9 @@ func Build(ctx context.Context, materializationWorkspace Workspace, cacheRoot, o
 	if err := run(ctx, cfg, cacheWorkspace.Root); err != nil {
 		return err
 	}
-	distRoot := filepath.Join(cacheWorkspace.Root, "dist")
-	sourceDir := filepath.Join(distRoot, BundleID)
-	if info, err := os.Stat(sourceDir); err != nil || !info.IsDir() {
-		return fmt.Errorf("stencil output not found at %s", sourceDir)
-	}
-	outputBundleDir := filepath.Join(outputDir, "assets", "js", BundleID)
-	if err := os.RemoveAll(outputBundleDir); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(outputBundleDir, 0o755); err != nil {
-		return err
-	}
-	if err := copyTree(outputBundleDir, sourceDir); err != nil {
-		return err
-	}
-	loaderDir := filepath.Join(distRoot, "loader")
-	if info, err := os.Stat(loaderDir); err == nil && info.IsDir() {
-		if err := copyTree(filepath.Join(outputBundleDir, "loader"), loaderDir); err != nil {
-			return err
-		}
+	outputBundleDir := filepath.Join(outputRoot, BundleID)
+	if info, err := os.Stat(outputBundleDir); err != nil || !info.IsDir() {
+		return fmt.Errorf("stencil output not found at %s", outputBundleDir)
 	}
 	fmt.Fprintf(os.Stderr, "[stack] stencil build complete duration=%s output=%s\n", time.Since(start).Round(time.Millisecond), outputBundleDir)
 	return nil
@@ -197,18 +181,27 @@ func commandArgs(binaryPath string) []string {
 }
 
 func ConfigSource() string {
-	return configSource()
+	return configSource("src/assets/js", "dist")
 }
 
-func configSource() string {
+func configSource(srcDir, outDir string) string {
+	srcDir = strings.TrimSpace(srcDir)
+	if srcDir == "" {
+		srcDir = "src/assets/js"
+	}
+	outDir = strings.TrimSpace(outDir)
+	if outDir == "" {
+		outDir = "dist"
+	}
 	return `import type { Config } from '@stencil/core';
 
 export const config: Config = {
   namespace: 'stack',
-  srcDir: 'src/assets/js',
+  srcDir: '` + filepath.ToSlash(srcDir) + `',
   outputTargets: [
     {
       type: 'dist',
+      dir: '` + filepath.ToSlash(outDir) + `',
       esmLoaderPath: '../loader',
     },
   ],
@@ -217,10 +210,20 @@ export const config: Config = {
 }
 
 func TSConfigSource() string {
-	return tsconfigSource()
+	return tsconfigSource("src/assets/js")
 }
 
-func tsconfigSource() string {
+func tsconfigSource(include ...string) string {
+	if len(include) == 0 {
+		include = []string{"src/assets/js"}
+	}
+	for idx, path := range include {
+		include[idx] = filepath.ToSlash(strings.TrimSpace(path))
+	}
+	includeJSON, err := json.Marshal(include)
+	if err != nil {
+		includeJSON = []byte(`["src/assets/js"]`)
+	}
 	return `{
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
@@ -233,9 +236,55 @@ func tsconfigSource() string {
     "moduleResolution": "node",
     "target": "es2017"
   },
-  "include": ["src/assets/js"]
+  "include": ` + string(includeJSON) + `
 }
 `
+}
+
+func sourceFiles(sources []Source) []string {
+	seen := map[string]struct{}{}
+	var files []string
+	for _, source := range sources {
+		paths, err := SourcePaths(source)
+		if err != nil {
+			continue
+		}
+		for _, path := range paths {
+			path = strings.TrimSpace(path)
+			if path == "" {
+				continue
+			}
+			path = filepath.Clean(path)
+			if _, exists := seen[path]; exists {
+				continue
+			}
+			seen[path] = struct{}{}
+			files = append(files, path)
+		}
+	}
+	return files
+}
+
+func commonSourceDir(files []string) string {
+	if len(files) == 0 {
+		return "src/assets/js"
+	}
+	common := filepath.Dir(files[0])
+	for _, file := range files[1:] {
+		dir := filepath.Dir(file)
+		for common != "." && common != string(filepath.Separator) {
+			rel, err := filepath.Rel(common, dir)
+			if err == nil && !strings.HasPrefix(rel, "..") {
+				break
+			}
+			next := filepath.Dir(common)
+			if next == common {
+				break
+			}
+			common = next
+		}
+	}
+	return common
 }
 
 func PackageSource() string {
@@ -302,6 +351,10 @@ func ensureProjectDependencies(ctx context.Context, projectDir string) error {
 	return nil
 }
 
+func EnsureProjectDependencies(ctx context.Context, projectDir string) error {
+	return ensureProjectDependencies(ctx, projectDir)
+}
+
 type cacheWorkspace struct {
 	Root string
 	Src  string
@@ -312,7 +365,7 @@ type cacheWorkspace struct {
 func newCacheWorkspace(cacheRoot string) *cacheWorkspace {
 	cacheRoot = strings.TrimSpace(cacheRoot)
 	if cacheRoot == "" {
-		cacheRoot = filepath.Join(".stack", "stencil-cache")
+		cacheRoot = filepath.Join(".stack", "stencil-workspace")
 	}
 	return &cacheWorkspace{
 		Root: cacheRoot,
@@ -339,43 +392,6 @@ func (w *cacheWorkspace) Prepare() error {
 		}
 	}
 	return nil
-}
-
-func copyTree(dst, src string) error {
-	return filepath.WalkDir(src, func(current string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, current)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		if entry.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		return copyFile(target, current)
-	})
-}
-
-func copyFile(dst, src string) error {
-	input, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer input.Close()
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	output, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer output.Close()
-	if _, err := io.Copy(output, input); err != nil {
-		return err
-	}
-	return output.Close()
 }
 
 func fileExists(path string) bool {

@@ -15,8 +15,8 @@ The system should be defined declaratively as a graph of targets and assets.
 
 The main goal is to keep the user-facing API declarative:
 
-- define targets in `main`
-- attach child targets and asset requirements
+- define the artifact in `main`
+- attach modules and asset requirements
 - let the runtime interpret the graph
 
 There should be no `Run()` call at the end of the declarative definition.
@@ -41,9 +41,10 @@ Targets do not own asset compilation details. They only depend on built asset ou
 
 ## Target Workspace
 
-Each target has a dedicated workspace rooted at `cmd/<target>/`.
+Each artifact has a dedicated workspace rooted at the artifact root that owns it,
+typically the repository root in an artifact-only setup.
 
-That directory is treated as the target's project root for all non-Go toolchains:
+That directory is treated as the artifact's project root for all non-Go toolchains:
 
 - `package.json`
 - `package-lock.json`
@@ -51,7 +52,7 @@ That directory is treated as the target's project root for all non-Go toolchains
 - `stencil.config.ts`
 - other tool-specific config files as needed
 
-The workspace should look and behave as if the target lived in its own repository.
+The workspace should look and behave as if the artifact lived in its own repository.
 This is important for:
 
 - editor and language-server discovery
@@ -61,6 +62,10 @@ This is important for:
 
 The Go entrypoint remains `cmd/<target>/main.go`, but the surrounding directory is also
 the synthetic root for asset tooling.
+
+The artifact-wide `install` step writes the shared npm/TypeScript metadata into that
+root, so one artifact owns exactly one `package.json`, `package-lock.json`,
+`tsconfig.json`, and `stencil.config.ts`.
 
 ## Asset
 
@@ -90,6 +95,7 @@ The architecture distinguishes between:
 
 Typical modes:
 
+- `install`
 - `build`
 - `dev`
 
@@ -135,9 +141,15 @@ The runtime should rely on:
 
 In the common case, Go sources do not need to be copied into a separate workspace. The runtime can execute tools directly against the real repository layout as long as the module/workspace context is correct.
 
-For npm- or TS-based asset targets, `cmd/<target>/` is the primary workspace root.
+For npm- or TS-based asset targets, the artifact root is the primary workspace root.
 Tooling should write its root-level project files there rather than to a shared global
-workspace, so that every target keeps its own isolated project context.
+workspace, so that every artifact keeps its own isolated project context.
+
+The declarative entrypoints should read naturally, for example:
+
+- `stack.WebApp(...)`
+- `stack.Site(...)`
+- `stack.Artifact(...)`
 
 ## When Copying Is Useful
 

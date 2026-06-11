@@ -151,7 +151,6 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 	}
 	siteRoot := siteModuleRoot(workspaceAbs)
 	tailwindCacheRoot := filepath.Join(filepath.Dir(workspaceAbs), "tailwind-cache")
-	stencilCacheRoot := filepath.Join(filepath.Dir(workspaceAbs), "stencil-cache")
 	assetBuildDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets")
 	assetModuleDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets-module")
 	assetMirrorDir := filepath.Join(assetModuleDir, "static", "assets")
@@ -268,13 +267,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 							continue
 						}
 					}
-					if stencilTouched {
-						if err := engine.syncStencilSourceMirror(cfg.WorkspaceDir); err != nil {
-							fmt.Fprintln(os.Stderr, "[stack] site stencil source sync failed:", err)
-							sourceSnapshot = currentSource
-							continue
-						}
-					}
+					_ = stencilTouched
 					if contentTouched {
 						if _, err := engine.contentModules(siteRoot); err != nil {
 							fmt.Fprintln(os.Stderr, "[stack] site content sync failed:", err)
@@ -302,7 +295,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 		}()
 	}
 
-	workers, err := engine.startWatchWorkers(ctx, buildCfg, tailwindCacheRoot, stencilCacheRoot, assetBuildDir)
+	workers, err := engine.startWatchWorkers(ctx, buildCfg, tailwindCacheRoot, assetBuildDir)
 	if err != nil {
 		mirrorCancel()
 		select {
@@ -311,7 +304,7 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 		}
 		return err
 	}
-	outputPaths := engine.devOutputWatchPaths(assetBuildDir, stencilCacheRoot)
+	outputPaths := engine.devOutputWatchPaths(assetBuildDir)
 	if len(outputPaths) > 0 {
 		fmt.Fprintf(os.Stderr, "[stack] site dev watching %d outputs\n", len(outputPaths))
 		for _, path := range outputPaths {
@@ -330,7 +323,6 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 			ticker := time.NewTicker(cfg.PollInterval)
 			defer ticker.Stop()
 			var dirty bool
-			var stencilDirty bool
 			var lastChange time.Time
 			for {
 				select {
@@ -345,12 +337,6 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 					if !snapshotsEqual(outputSnapshot, current) {
 						changed := diffSnapshotPaths(outputSnapshot, current)
 						fmt.Fprintf(os.Stderr, "[stack] site outputs changed: %s\n", strings.Join(changed, ", "))
-						for _, path := range changed {
-							if strings.HasPrefix(path, filepath.Join(stencilCacheRoot, "dist")) {
-								stencilDirty = true
-								break
-							}
-						}
 						outputSnapshot = current
 						dirty = true
 						lastChange = time.Now()
@@ -362,18 +348,11 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 					if time.Since(lastChange) < cfg.PollInterval {
 						continue
 					}
-					if stencilDirty {
-						if err := engine.syncDevOutputs(assetBuildDir, stencilCacheRoot); err != nil {
-							fmt.Fprintln(os.Stderr, "[stack] site output sync failed:", err)
-							continue
-						}
-					}
 					if err := mirrorSiteAssets(assetBuildDir, assetMirrorDir); err != nil {
 						fmt.Fprintln(os.Stderr, "[stack] site asset mirror failed:", err)
 						continue
 					}
 					dirty = false
-					stencilDirty = false
 				}
 			}
 		}()

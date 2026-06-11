@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/cleanstartup/stack/activity"
 	assetpkg "github.com/cleanstartup/stack/asset"
@@ -43,13 +44,15 @@ func (r mountRouteRegistration) register(reg *Registry) {
 }
 
 type Builder struct {
-	routes   []routeRegistration
-	mounts   []mountRouteRegistration
-	tailwind *tailwindpkg.Registry
-	stencil  *stencilpkg.Registry
-	content  *ContentRegistry
-	layouts  *LayoutRegistry
-	assets   *AssetRegistry
+	routes      []routeRegistration
+	mounts      []mountRouteRegistration
+	tailwind    *tailwindpkg.Registry
+	stencil     *stencilpkg.Registry
+	content     *ContentRegistry
+	layouts     *LayoutRegistry
+	assets      *AssetRegistry
+	requiredCSS []string
+	requiredJS  []string
 }
 
 func NewBuilder() *Builder {
@@ -120,16 +123,16 @@ func (b *Builder) TailwindCSS(src AssetSource) AssetRef {
 	if b == nil || b.tailwind == nil {
 		return AssetRef{}
 	}
-	ref := b.tailwind.AddInput(wrapTailwindSource(src))
-	return AssetRef{Kind: AssetKind(ref.Kind), ID: ref.ID, Files: append([]string{}, ref.Files...)}
+	_ = b.tailwind.AddInput(wrapTailwindSource(src))
+	return AssetRef{Kind: AssetKindCSS, ID: "app.css"}
 }
 
 func (b *Builder) Stencil(src AssetSource) AssetRef {
 	if b == nil || b.stencil == nil {
 		return AssetRef{}
 	}
-	ref := b.stencil.AddInput(wrapStencilSource(src))
-	return AssetRef{Kind: AssetKind(ref.Kind), ID: ref.ID, Files: append([]string{}, ref.Files...)}
+	_ = b.stencil.AddInput(wrapStencilSource(src))
+	return AssetRef{Kind: AssetKindJS, ID: "stack", Files: []string{"stack.esm.js"}}
 }
 
 func (b *Builder) Content(baseDir string, includes ...string) {
@@ -148,6 +151,20 @@ func (b *Builder) Layouts(baseDir string, includes ...string) {
 
 func (b *Builder) JS(src AssetSource) AssetRef   { return b.Add(AssetKindJS, src) }
 func (b *Builder) File(src AssetSource) AssetRef { return b.Add(AssetKindFile, src) }
+
+func (b *Builder) RequireCSS(names ...string) {
+	if b == nil {
+		return
+	}
+	b.requiredCSS = appendUniqueStrings(b.requiredCSS, names...)
+}
+
+func (b *Builder) RequireJS(names ...string) {
+	if b == nil {
+		return
+	}
+	b.requiredJS = appendUniqueStrings(b.requiredJS, names...)
+}
 
 func (b *Builder) TailwindScan(paths ...string) {
 	if b == nil || b.tailwind == nil {
@@ -200,14 +217,46 @@ func (b *Builder) Manifest() AssetManifest {
 		manifest = b.assets.Manifest()
 	}
 	if b.tailwind != nil && len(b.tailwind.Inputs()) > 0 {
-		ref := b.tailwind.BundleRef()
-		manifest.Styles = append(manifest.Styles, AssetRef{Kind: AssetKind(ref.Kind), ID: ref.ID, Files: append([]string{}, ref.Files...)})
+		manifest.Styles = append(manifest.Styles, AssetRef{Kind: AssetKindCSS, ID: "app.css"})
 	}
 	if b.stencil != nil && len(b.stencil.Inputs()) > 0 {
-		ref := b.stencil.BundleRef()
-		manifest.Scripts = append(manifest.Scripts, AssetRef{Kind: AssetKind(ref.Kind), ID: ref.ID, Files: append([]string{}, ref.Files...)})
+		manifest.Scripts = append(manifest.Scripts, AssetRef{Kind: AssetKindJS, ID: "stack", Files: []string{"stack.esm.js"}})
+	}
+	for _, name := range b.requiredCSS {
+		manifest.Styles = append(manifest.Styles, AssetRef{Kind: AssetKindCSS, ID: name})
+	}
+	for _, name := range b.requiredJS {
+		manifest.Scripts = append(manifest.Scripts, AssetRef{Kind: AssetKindJS, ID: name})
 	}
 	return manifest
+}
+
+func appendUniqueStrings(dst []string, values ...string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(dst)+len(values))
+	for _, value := range dst {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
 func (b *Builder) registerRoutes(reg *Registry) {

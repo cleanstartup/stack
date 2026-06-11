@@ -321,7 +321,7 @@ func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 
 func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
 	r := web.NewRegistry()
-	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app", Files: []string{"app.css"}}
+	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app.css"}
 	scriptRef := web.AssetRef{Kind: web.AssetKindJS, ID: "stack", Files: []string{"stack.esm.js"}}
 	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}, Scripts: []web.AssetRef{scriptRef}})
 	a := web.Activity(
@@ -349,7 +349,7 @@ func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
 	if !strings.Contains(body, "<title>demo</title>") {
 		t.Fatalf("expected title, got %q", body)
 	}
-	if !strings.Contains(body, "<link rel=\"stylesheet\" href=\"/assets/css/app/app.css\">") {
+	if !strings.Contains(body, "<link rel=\"stylesheet\" href=\"/assets/css/app.css\">") {
 		t.Fatalf("expected stylesheet link, got %q", body)
 	}
 	if !strings.Contains(body, "<script type=\"module\" src=\"/assets/js/stack/stack.esm.js\">") {
@@ -423,7 +423,7 @@ func TestPageRendersDevReloadAndVersionedAssets(t *testing.T) {
 	devState.MarkBuilt()
 	r.SetDevState(devState)
 
-	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app", Files: []string{"app.css"}}
+	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app.css"}
 	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}})
 	a := web.Activity(
 		web.Ref("dev"),
@@ -471,7 +471,7 @@ func TestDevEventsEndpointIsMounted(t *testing.T) {
 
 func TestMountedHandlerReceivesAssetManifest(t *testing.T) {
 	r := web.NewRegistry()
-	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app", Files: []string{"app.css"}}
+	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app.css"}
 	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}})
 
 	r.Mount("/auth", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -486,7 +486,7 @@ func TestMountedHandlerReceivesAssetManifest(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "<link rel=\"stylesheet\" href=\"/assets/css/app/app.css\">") {
+	if !strings.Contains(body, "<link rel=\"stylesheet\" href=\"/assets/css/app.css\">") {
 		t.Fatalf("expected mounted handler to receive asset manifest, got %q", body)
 	}
 }

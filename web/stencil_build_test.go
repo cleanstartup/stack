@@ -58,6 +58,7 @@ func TestMaterializeProjectFilesWritesTargetWorkspaceFiles(t *testing.T) {
 	tmp := t.TempDir()
 	projectDir := filepath.Join(tmp, "cmd", "site")
 	workspaceRoot := filepath.Join(tmp, ".stack", "workspace")
+	outputDir := filepath.Join(tmp, ".assets")
 
 	cssPath := filepath.Join(tmp, "tailwind.css")
 	if err := os.WriteFile(cssPath, []byte("@import \"tailwindcss\";\n"), 0o644); err != nil {
@@ -69,7 +70,7 @@ func TestMaterializeProjectFilesWritesTargetWorkspaceFiles(t *testing.T) {
 	}
 
 	engine := NewBuildEngine(TailwindCSS(FromFile(cssPath)), Stencil(FromFile(tsPath)))
-	if err := engine.materializeProjectFiles(projectDir, workspaceRoot); err != nil {
+	if err := engine.materializeProjectFiles(projectDir, workspaceRoot, outputDir); err != nil {
 		t.Fatalf("materialize failed: %v", err)
 	}
 
@@ -83,11 +84,18 @@ func TestMaterializeProjectFilesWritesTargetWorkspaceFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(configBytes), "srcDir: '../../.stack/stencil-cache/src/assets/js'") {
-		t.Fatalf("expected config to point at mirrored workspace, got %s", string(configBytes))
+	if !strings.Contains(string(configBytes), "srcDir: '../..'") {
+		t.Fatalf("expected config to point at source root, got %s", string(configBytes))
 	}
-	if !strings.Contains(string(configBytes), "dir: '../../.stack/stencil-cache/dist'") {
-		t.Fatalf("expected config to point output at mirrored dist, got %s", string(configBytes))
+	if !strings.Contains(string(configBytes), "dir: '../../.assets/assets/js'") {
+		t.Fatalf("expected config to point output at asset dir, got %s", string(configBytes))
+	}
+	tsconfigBytes, err := os.ReadFile(filepath.Join(projectDir, "tsconfig.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(tsconfigBytes), `"../.."`) {
+		t.Fatalf("expected tsconfig to include source root, got %s", string(tsconfigBytes))
 	}
 
 	lockBytes, err := os.ReadFile(filepath.Join(projectDir, "package-lock.json"))

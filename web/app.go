@@ -123,6 +123,20 @@ func (a *WebApp) RegisterJS(src AssetSource) AssetRef {
 	return a.builder.JS(src)
 }
 
+func (a *WebApp) RequireCSS(names ...string) {
+	if a == nil || a.builder == nil {
+		return
+	}
+	a.builder.RequireCSS(names...)
+}
+
+func (a *WebApp) RequireJS(names ...string) {
+	if a == nil || a.builder == nil {
+		return
+	}
+	a.builder.RequireJS(names...)
+}
+
 func (a *WebApp) RegisterFile(src AssetSource) AssetRef {
 	return a.builder.File(src)
 }
