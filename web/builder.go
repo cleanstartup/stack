@@ -55,6 +55,10 @@ type Builder struct {
 	requiredJS  []string
 }
 
+type manifestTarget struct {
+	manifest *AssetManifest
+}
+
 func NewBuilder() *Builder {
 	return &Builder{
 		routes:   []routeRegistration{},
@@ -123,16 +127,16 @@ func (b *Builder) TailwindCSS(src AssetSource) AssetRef {
 	if b == nil || b.tailwind == nil {
 		return AssetRef{}
 	}
-	_ = b.tailwind.AddInput(wrapTailwindSource(src))
-	return AssetRef{Kind: AssetKindCSS, ID: "app.css"}
+	ref := b.tailwind.AddInput(wrapTailwindSource(src))
+	return AssetRef{Kind: AssetKind(ref.Kind), ID: ref.ID, Files: append([]string{}, ref.Files...)}
 }
 
 func (b *Builder) Stencil(src AssetSource) AssetRef {
 	if b == nil || b.stencil == nil {
 		return AssetRef{}
 	}
-	_ = b.stencil.AddInput(wrapStencilSource(src))
-	return AssetRef{Kind: AssetKindJS, ID: "stack", Files: []string{"stack.esm.js"}}
+	ref := b.stencil.AddInput(wrapStencilSource(src))
+	return AssetRef{Kind: AssetKind(ref.Kind), ID: ref.ID, Files: append([]string{}, ref.Files...)}
 }
 
 func (b *Builder) Content(baseDir string, includes ...string) {
@@ -216,11 +220,12 @@ func (b *Builder) Manifest() AssetManifest {
 	if b.assets != nil {
 		manifest = b.assets.Manifest()
 	}
-	if b.tailwind != nil && len(b.tailwind.Inputs()) > 0 {
-		manifest.Styles = append(manifest.Styles, AssetRef{Kind: AssetKindCSS, ID: "app.css"})
-	}
-	if b.stencil != nil && len(b.stencil.Inputs()) > 0 {
-		manifest.Scripts = append(manifest.Scripts, AssetRef{Kind: AssetKindJS, ID: "stack", Files: []string{"stack.esm.js"}})
+	target := &manifestTarget{manifest: &manifest}
+	for _, capability := range b.registrationCapabilities() {
+		if capability == nil {
+			continue
+		}
+		capability.Register(target)
 	}
 	for _, name := range b.requiredCSS {
 		manifest.Styles = append(manifest.Styles, AssetRef{Kind: AssetKindCSS, ID: name})
@@ -229,6 +234,20 @@ func (b *Builder) Manifest() AssetManifest {
 		manifest.Scripts = append(manifest.Scripts, AssetRef{Kind: AssetKindJS, ID: name})
 	}
 	return manifest
+}
+
+func (t *manifestTarget) RegisterCSS(ref AssetRef) {
+	if t == nil || t.manifest == nil || strings.TrimSpace(ref.ID) == "" {
+		return
+	}
+	t.manifest.Styles = append(t.manifest.Styles, ref)
+}
+
+func (t *manifestTarget) RegisterJS(ref AssetRef) {
+	if t == nil || t.manifest == nil || strings.TrimSpace(ref.ID) == "" {
+		return
+	}
+	t.manifest.Scripts = append(t.manifest.Scripts, ref)
 }
 
 func appendUniqueStrings(dst []string, values ...string) []string {

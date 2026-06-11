@@ -1,6 +1,6 @@
 # Cleanstartup Stack
 
-The Cleanstartup Stack is an opinionated build system for Go-based applications.
+The Cleanstartup Stack is an opinionated build and runtime system for Go-based applications.
 
 It uses:
 
@@ -9,57 +9,74 @@ It uses:
 - Stencil for Web Components
 - npm-compatible tooling for frontend builds
 
-The stack separates Artifact, Modules and Apps.
-
-## Artifact
-
-The Artifact defines how the repository is built.
-
-It is declared in `artifact.go`:
-
-    func main() {
-        stack.Artifact(
-            supertokens.Module(config),
-            posthog.Module(config),
-        ).Run()
-    }
-
-An Artifact defines:
-
-- modules
-- npm dependencies
-- CSS sources
-- TSX sources
-- static assets
-- build configuration
-
-The Artifact is responsible for producing build outputs.
+The stack is bundle-first: Go packages expose reusable Stack modules, and commands execute those modules as concrete applications.
 
 ## Modules
 
-Modules provide reusable functionality.
+A Go package may expose one Stack module:
+
+    package portal
+
+    func Module() stack.Module {
+        return stack.Bundle(
+            auth.Module(),
+            billing.Module(),
+            stack.WithTailwindStyles("styles"),
+            stack.WithStencilComponents("components"),
+            stack.Activity(...),
+        )
+    }
+
+This `Module()` function is the package's declarative SDK surface.
 
 A module may contribute:
 
-- npm dependencies
+- dependency modules
 - Tailwind sources
 - Stencil components
 - static assets
 - application features
+- activities, routes, and screens
 
-Example:
+Best practice: expose one `Module()` per Go package. If a package deliberately exposes multiple modules, callers must understand that each module is a separate composition root when executed.
 
-    supertokens.Module(...)
+## Composition Root
 
-A module may expose features such as:
+The module on which an app method is called is the composition root:
 
-    supertokens.EmailOtpAuth()
-    supertokens.PasswordAuth()
-    supertokens.AdminScreen()
+    func main() {
+        portal.Module().WebApp(
+            tailwind.Include(),
+            stencil.Include(),
+        )
+    }
 
-Modules define capabilities.
+The composition root owns generated metadata and asset outputs.
 
-Apps choose which capabilities to use.
+If `portal.Module()` imports `auth.Module()`, the transitive asset inputs and npm dependencies from `auth` are aggregated into the `portal` build. The dependency package is not modified.
+
+## Package Layout
+
+Recommended layout:
+
+    portal/
+      module.go
+      styles/
+      components/
+      package.json
+      package-lock.json
+      tailwind.input.css
+      stencil.config.ts
+      tsconfig.json
+      .assets/
+
+    cmd/
+      portal/
+        main.go
+        .bin/
+          portal
+
+The root package remains importable. Executable entrypoints live below `cmd/*`.
 
 ## Source Files
 
@@ -76,12 +93,7 @@ Examples:
       button/
         button.stencil.tsx
 
-    static/
-      logo.svg
-
-A module dependency may also contribute source files from the Go module cache.
-
-Example:
+A dependency module may contribute source files from the Go module cache:
 
     $GOMODCACHE/
       github.com/vendor/auth@v1.2.3/
@@ -90,7 +102,7 @@ Example:
         components/
           login-form.stencil.tsx
 
-The stack generates build configuration that references these original files.
+Generated configuration references these original files.
 
 This ensures:
 
@@ -99,212 +111,144 @@ This ensures:
 - no asset synchronization problems
 - native watch support
 
-## Generated Metadata
+## Capabilities
 
-The stack generates metadata required by frontend tooling.
+Modules contribute capabilities.
 
-Example:
+A capability has four lifecycle hooks:
 
-    stack.generated/
-      apps/
-        app/
-          tailwind.input.css
-          tailwind.config.ts
-          stencil.config.ts
+- `Install`
+- `Build`
+- `Dev`
+- `Register`
 
-Generated files reference original source locations.
+`Install` prepares generated metadata and dependencies.
 
-The generated metadata is disposable and may be recreated at any time.
+`Build` produces deployable outputs.
 
-## Asset Build
+`Dev` watches and rebuilds outputs where supported.
 
-The Artifact build process generates all frontend assets.
+`Register` installs the capability into the active target. For a WebApp this means registering CSS and JavaScript outputs with the app manifest.
 
-Outputs are written to:
+Asset builders are explicitly enabled by the command:
 
-    .assets/<app>/
+    portal.Module().WebApp(
+        tailwind.Include(),
+        stencil.Include(),
+    )
 
-Example:
+If Tailwind is included, Tailwind inputs from the active module graph are built.
+
+If Stencil is included, Stencil inputs from the active module graph are built.
+
+Generated metadata is written by capabilities to the composition root:
+
+    package.json
+    package-lock.json
+    tailwind.input.css
+    stencil.config.ts
+    tsconfig.json
+
+Build outputs are written to:
 
     .assets/
-      app/
-        manifest.json
-        styles.css
-        components.js
-        public/
 
-The generated assets are considered build artifacts and are consumed by Apps.
+Built asset capabilities register their runtime outputs with the active target.
 
-## Apps
+For a WebApp target:
 
-Apps define runtime behaviour.
+- Tailwind registers `/assets/css/app/app.css`
+- Stencil registers `/assets/js/stack/stack.esm.js`
 
-Example:
+Manual includes such as `stack.WithCSS(...)` and `stack.WithJS(...)` are only needed for externally provided assets.
 
-    //go:embed .assets/*
-    var assets embed.FS
+### npm
 
-    func main() {
-        stack.WebApp(
-            stack.Assets(assets),
-            supertokens.EmailOtpAuth(),
-            posthog.PageViewTracking(),
-        )
-    }
+The npm capability receives dependency inputs from other capabilities.
 
-Apps:
+It writes `package.json` and `package-lock.json` during `Install`, then runs the package manager as needed.
 
-- embed built assets
-- activate features
-- define routes and screens
-- start the runtime
+It does nothing during `Build`, `Dev`, and `Register`.
 
-Apps do not define:
+### Tailwind
 
-- npm dependencies
-- Tailwind configuration
-- Stencil configuration
-- frontend build pipelines
+The Tailwind capability receives CSS source inputs.
 
-Those concerns belong to the Artifact.
+It writes `tailwind.input.css` during `Install`, builds `app.css` during `Build`, watches during `Dev`, and registers the built stylesheet with WebApp targets.
 
-## Configuration
+### Stencil
 
-Configuration always comes from environment variables.
+The Stencil capability receives TypeScript and TSX component inputs.
 
-No defaults are defined in code.
+It contributes npm dependencies, writes `stencil.config.ts` and `tsconfig.json` during `Install`, builds the Stencil distribution during `Build`, watches during `Dev`, and registers the Stencil loader with WebApp targets.
 
-Development defaults may be provided through:
+## App CLI
 
-    .env
+`Module().WebApp(...)` starts the CLI for that concrete app.
 
-Production defaults may be provided through:
+Commands:
 
-    Dockerfile ENV
-
-or deployment-specific environment variables.
-
-Missing required configuration results in a startup error.
-
-## Development Mode
-
-The stack uses the native watch capabilities of the underlying tools.
-
-Examples:
-
-- Tailwind CLI watch mode
-- Stencil watch mode
-- Go source watcher
-- static asset watcher
-
-The stack acts as a process orchestrator.
-
-It starts and manages all required watch processes for a given App.
-
-Source files remain at their original location.
-
-Generated assets are continuously written to:
-
-    .assets/<app>/
-
-## Commands
+    go run ./cmd/portal install
+    go run ./cmd/portal build
+    go run ./cmd/portal dev
+    go run ./cmd/portal run
 
 ### install
 
-Purpose:
+Prepares the composition root:
 
-Prepare the build environment.
-
-Command:
-
-    go run artifact.go install
-
-Actions:
-
-- generate package.json
+- generate package metadata
 - generate TypeScript configuration
-- generate Tailwind configuration
-- generate Stencil configuration
+- generate Tailwind input metadata when Tailwind is included
+- generate Stencil configuration when Stencil is included
 - install npm dependencies
-
-The install command materializes all metadata and dependencies required for building the Artifact.
 
 ### build
 
-Purpose:
-
-Produce a production build of an App.
-
-Command:
-
-    go run artifact.go build app
-
-Actions:
+Builds everything required for deployment:
 
 - run install if required
-- build CSS assets
-- build JavaScript assets
-- collect static assets
-- generate .assets/<app>
-- build the Go binary
-
-The build command produces everything required for deployment.
+- build enabled assets into `.assets/`
+- build the current command binary into `cmd/<name>/.bin/<name>`
 
 ### dev
 
-Purpose:
-
-Start a development environment for an App.
-
-Command:
-
-    go run artifact.go dev app
-
-Actions:
+Starts a local development workflow:
 
 - run install if required
-- start Tailwind watchers
-- start Stencil watchers
-- start static asset watchers
-- rebuild assets on change
-- write outputs to .assets/<app>
-- start the application in development mode
+- start native Tailwind and Stencil watchers for enabled builders
+- start the current command runtime through its `run` subcommand
+- write rebuilt assets continuously to `.assets/`
 
-The dev command provides a complete local development workflow.
+### run
+
+Starts the runtime using already built assets.
 
 ## Responsibilities
 
-Artifact
+Modules:
 
-- defines build inputs
-- defines dependencies
-- defines modules
-- builds assets
+- define dependency modules
+- define asset inputs
+- define features and activities
 
-Modules
+Composition root:
 
-- provide assets
-- provide features
+- aggregates transitive module inputs
+- owns generated metadata
+- owns `.assets/`
 
-Build
+Commands:
 
-- generates metadata
-- generates .assets
+- choose a module
+- choose runtime/build capabilities
+- expose `install`, `build`, `dev`, and `run`
 
-Apps
+Runtime:
 
-- embed .assets
-- activate features
-- run the application
-
-Runtime
-
-- provides configuration through ENV
+- reads configuration from environment variables
+- serves the app and already built assets
 
 The central idea is:
 
-The Artifact builds assets.
-Apps consume assets.
-Source files remain at their original location.
-Configuration comes from ENV.
-Go remains the single source of truth for structure and build configuration.
+The app command executes a module graph, and the executed root module owns the generated build state.

@@ -74,10 +74,18 @@ func TestMaterializeProjectFilesWritesTargetWorkspaceFiles(t *testing.T) {
 		t.Fatalf("materialize failed: %v", err)
 	}
 
-	for _, name := range []string{"package.json", "package-lock.json", "stencil.config.ts", "tsconfig.json"} {
+	for _, name := range []string{"package.json", "package-lock.json", "tailwind.input.css", "stencil.config.ts", "tsconfig.json"} {
 		if _, err := os.Stat(filepath.Join(projectDir, name)); err != nil {
 			t.Fatalf("expected %s to exist: %v", name, err)
 		}
+	}
+
+	tailwindBytes, err := os.ReadFile(filepath.Join(projectDir, "tailwind.input.css"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(tailwindBytes), filepath.ToSlash(cssPath)) {
+		t.Fatalf("expected tailwind input to reference source css, got %s", string(tailwindBytes))
 	}
 
 	configBytes, err := os.ReadFile(filepath.Join(projectDir, "stencil.config.ts"))

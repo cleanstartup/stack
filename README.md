@@ -18,13 +18,11 @@ import (
 )
 ```
 
-The root `stack` package exposes declarative target entrypoints:
+The root `stack` package exposes declarative modules:
 
-- `stack.WebApp(...)` for Go web apps with Tailwind and Stencil
-- `stack.Site(...)` for Hugo-backed sites with the same Tailwind and Stencil asset pipeline
-- `stack.Artifact(...)` for asset-only artifacts that materialize shared build outputs into `.assets`
+- `stack.Bundle(...)` bundles multiple `Part`s into a reusable module.
+- `Module().WebApp(...)` starts the app-specific CLI for `install`, `build`, `dev`, and `run`.
 
-`stack.Module(...)` bundles multiple `Part`s into a reusable unit.
 `stack.Content(baseDir, patterns...)` materializes matching Markdown files into a temporary Hugo module, and `stack.Layouts(baseDir, patterns...)` does the same for Hugo layout and type files.
 
 ## Example
@@ -66,21 +64,21 @@ func main() {
 - Modules register activities and assets independently.
 - All CLI entry points support `--help`; unknown commands print help instead of only failing. Calling the binary without a command also shows help.
 - Command help text can be declared declaratively with `cli.WithHelp("...")` on each activity.
-- `install` materializes the per-target toolchain metadata and dependency state under `cmd/<target>/.stack`.
-- `web build` materializes assets into `cmd/<target>/.stack/public` next to the target entrypoint.
-- `web run` serves already-built assets and expects `build` to have run first.
-- `web dev` starts a `templ` supervisor for Go/templ changes and combines it with Tailwind and Stencil watch workers for the asset pipeline. The browser runs through the templ proxy; CSS/JS changes are still handled through the internal dev reload.
+- `install` materializes toolchain metadata and dependency state in the active module package.
+- `build` materializes assets into `.assets` and builds the current command binary into `cmd/<name>/.bin/<name>`.
+- `run` serves already-built assets and expects `build` to have run first.
+- `dev` starts asset watch workers and the current command runtime.
 - Web commands have their own help text: `run`, `build`, and `dev` explain themselves via `--help` and show up in the CLI listing.
 - Local dependency assets can bring watch paths, for example through `web.FromFS(..., watchPath)` or `web.WithWatchPaths(...)`.
 - `web.Mount(path, handler)` propagates the current asset manifest and dev-state context into mounted routers, and preserves the original request path so sub-apps such as auth flows can still render `web.Page` responses with the correct CSS/JS bundles and API endpoints.
-- The app-wide style set is collected automatically from all `*.css` files in the calling Go module, whether they live directly in the demo/package directory or deeper in subdirectories.
+- The app-wide style set is collected from declared Tailwind source directories and their `*.tailwind.css` files.
 - The styles build runs through a single Tailwind output (`/assets/css/app/app.css`). The Tailwind binary is downloaded automatically and cached if it is not already available.
-- The component convention automatically picks up all `*.tsx` and `*.ts` files in the Go module; Stencil components and helper logic can therefore be organized anywhere in the module, including a flat layout directly under a package or demo directory.
+- The component convention picks up declared `*.stencil.ts` and `*.stencil.tsx` files.
 - `stack.Content(baseDir, patterns...)` materializes matching content files into a temporary Hugo module so repo-local docs can live next to the source while still rendering through the site target.
 - `stack.Layouts(baseDir, patterns...)` materializes matching Hugo layout files into a temporary Hugo module so consumer repos can declare site templates explicitly.
 - The Stencil build produces a central JS output (`/assets/js/stack/stack.esm.js`). The CLI is fetched on demand through `npm exec`; you can override that via `STACK_STENCIL_BINARY`.
 - Additional Tailwind scan paths can be registered with `web.TailwindScan(...)`.
-- The demo shows the default style set through flat `cmd/demo/*.css` files plus a Stencil component with a TS helper in the same directory. The Tailwind binary is downloaded automatically; you can override it via the `STACK_TAILWIND_*` variables.
+- The demo declares styles and components from its importable root package and executes them through `cmd/app`. The Tailwind binary is downloaded automatically; you can override it via the `STACK_TAILWIND_*` variables.
 - Simple web activities can return `templ.Component` or plain text directly; set the page title with `web.WithStaticTitle(...)`. For Stencil-backed screens, `web.Screen(name, props)` renders a `screen-*` custom element and serializes props for hydration. Use `showcase.md` alongside the screen to document default props and variants. The HTML shell and the global CSS/JS assets are injected automatically by `web`. `web.Page` remains available for special cases.
 
 `STACK_TAILWIND_BINARY`, `STACK_TAILWIND_VERSION`, `STACK_TAILWIND_CACHE_DIR`, `STACK_TAILWIND_DOWNLOAD_BASE`, and `STACK_STENCIL_BINARY` override the default resolution when needed. The dev mode uses the local `templ generate --watch --proxy=... --cmd=...` supervisor for Go/templ files; the inner child mode (`--child`) is responsible for the asset watchers.
@@ -91,16 +89,13 @@ A small example now lives in the sibling module `../demo`:
 
 ```bash
 cd ../demo
-go run . install
-go run . build
-go run ./cmd/app
+go run ./cmd/app install
+go run ./cmd/app build
+go run ./cmd/app run
 go run ./cmd/site
 ```
 
-The demo artifact only defines shared assets. It does not know about the consumer binaries.
-The artifact-level `install` step writes the generated project metadata into the artifact root.
-The artifact-level `build` step writes the shared outputs into `.assets`.
-The separate `cmd/app` and `cmd/site` binaries consume those built assets.
+The demo root package exposes `demo.Module()`. The app command executes that module as a WebApp and owns `install`, `build`, `dev`, and `run`.
 
 If Hugo is not already installed, the stack will build it on demand via `go install` and cache the binary locally. The default Hugo version is pinned to `0.162.1` in code and resolved as the Hugo module tag `v0.162.1`. It can be overridden when needed.
 
@@ -114,14 +109,13 @@ Environment overrides:
 
 If a module comes from a dependency, pass its root explicitly so `stack` can find the assets. The usual building blocks are:
 
-- `stack.Styles(baseDir)` for `*.css`
-- `stack.Components(baseDir)` for `*.ts` and `*.tsx`
-- `stack.Module(...)` to bundle multiple parts into one reusable module
+- `stack.WithTailwindStyles(baseDir)` for `*.tailwind.css`
+- `stack.WithStencilComponents(baseDir)` for `*.stencil.ts` and `*.stencil.tsx`
+- `stack.Bundle(...)` to bundle multiple parts into one reusable module
 - `stack.Content(baseDir, patterns...)` for Markdown content
 - `stack.Layouts(baseDir, patterns...)` for Hugo layouts and types
 
-For the local main package, `stack.WebApp(...)` discovers the conventions automatically. External modules should compose their parts with the appropriate root or call the helpers directly with a root.
-`stack.Site(...)` follows the same asset conventions but renders the page tree through Hugo. It does not assume any specific content structure; the consumer decides which Markdown files, layouts, and site settings should be included.
+Commands should execute a module with `Module().WebApp(...)`. External modules compose their parts into the active module; generated metadata is written to the module on which `WebApp` is called.
 
 The site contract and Hugo conventions now live in `docs/site/`:
 

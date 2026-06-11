@@ -277,62 +277,66 @@ func tailwindPackageSource() string {
 }
 
 func projectPackageSource(includeTailwind, includeStencil bool) string {
+	project := newNodeProject()
+	if includeTailwind {
+		project.AddDevDependency("tailwindcss", "^4.0.0")
+		project.AddDevDependency("@tailwindcss/cli", "^4.0.0")
+	}
+	if includeStencil {
+		project.AddDevDependency("@stencil/core", "4.43.5")
+		project.AddDependency("altcha", "^3.0.2")
+		project.AddDependency("embla-carousel", "^8.6.0")
+		project.AddDependency("embla-carousel-auto-scroll", "^8.6.0")
+		project.AddDependency("htmx.org", "^2.0.10")
+		project.AddDependency("posthog-js", "^1.379.2")
+	}
+	return projectPackageSourceFromNodeProject(project)
+}
+
+func projectPackageSourceFromNodeProject(project *nodeProject) string {
 	data := map[string]any{
 		"name":    "stack-target-workspace",
 		"private": true,
 		"version": "0.0.0",
 	}
-	devDependencies := map[string]string{}
-	dependencies := map[string]string{}
-
-	if includeTailwind {
-		devDependencies["tailwindcss"] = "^4.0.0"
-		devDependencies["@tailwindcss/cli"] = "^4.0.0"
+	if project != nil && len(project.devDependencies) > 0 {
+		data["devDependencies"] = project.devDependencies
 	}
-	if includeStencil {
-		devDependencies["@stencil/core"] = "4.43.5"
-		dependencies["altcha"] = "^3.0.2"
-		dependencies["embla-carousel"] = "^8.6.0"
-		dependencies["embla-carousel-auto-scroll"] = "^8.6.0"
-		dependencies["htmx.org"] = "^2.0.10"
-		dependencies["posthog-js"] = "^1.379.2"
-	}
-	if len(devDependencies) > 0 {
-		data["devDependencies"] = devDependencies
-	}
-	if len(dependencies) > 0 {
-		data["dependencies"] = dependencies
+	if project != nil && len(project.dependencies) > 0 {
+		data["dependencies"] = project.dependencies
 	}
 	buf, _ := json.MarshalIndent(data, "", "  ")
 	return string(buf) + "\n"
 }
 
 func projectLockSource(includeTailwind, includeStencil bool) string {
+	project := newNodeProject()
+	if includeTailwind {
+		project.AddDevDependency("tailwindcss", "^4.0.0")
+		project.AddDevDependency("@tailwindcss/cli", "^4.0.0")
+	}
+	if includeStencil {
+		project.AddDevDependency("@stencil/core", "4.43.5")
+		project.AddDependency("altcha", "^3.0.2")
+		project.AddDependency("embla-carousel", "^8.6.0")
+		project.AddDependency("embla-carousel-auto-scroll", "^8.6.0")
+		project.AddDependency("htmx.org", "^2.0.10")
+		project.AddDependency("posthog-js", "^1.379.2")
+	}
+	return projectLockSourceFromNodeProject(project)
+}
+
+func projectLockSourceFromNodeProject(project *nodeProject) string {
 	root := map[string]any{
 		"name":    "stack-target-workspace",
 		"version": "0.0.0",
 	}
 
-	devDependencies := map[string]string{}
-	dependencies := map[string]string{}
-
-	if includeTailwind {
-		devDependencies["tailwindcss"] = "^4.0.0"
-		devDependencies["@tailwindcss/cli"] = "^4.0.0"
+	if project != nil && len(project.devDependencies) > 0 {
+		root["devDependencies"] = project.devDependencies
 	}
-	if includeStencil {
-		devDependencies["@stencil/core"] = "4.43.5"
-		dependencies["altcha"] = "^3.0.2"
-		dependencies["embla-carousel"] = "^8.6.0"
-		dependencies["embla-carousel-auto-scroll"] = "^8.6.0"
-		dependencies["htmx.org"] = "^2.0.10"
-		dependencies["posthog-js"] = "^1.379.2"
-	}
-	if len(devDependencies) > 0 {
-		root["devDependencies"] = devDependencies
-	}
-	if len(dependencies) > 0 {
-		root["dependencies"] = dependencies
+	if project != nil && len(project.dependencies) > 0 {
+		root["dependencies"] = project.dependencies
 	}
 
 	data := map[string]any{
@@ -345,11 +349,13 @@ func projectLockSource(includeTailwind, includeStencil bool) string {
 		"version": "0.0.0",
 	}
 	merged := map[string]string{}
-	for k, v := range devDependencies {
-		merged[k] = v
-	}
-	for k, v := range dependencies {
-		merged[k] = v
+	if project != nil {
+		for k, v := range project.devDependencies {
+			merged[k] = v
+		}
+		for k, v := range project.dependencies {
+			merged[k] = v
+		}
 	}
 	if len(merged) > 0 {
 		data["dependencies"] = merged

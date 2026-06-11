@@ -1,198 +1,90 @@
-# Target Architecture
+# Bundle Architecture
 
-This document captures the target-and-asset architecture we want for `stack`.
+Stack is bundle-first.
 
-## Core Idea
+A Go package exposes one reusable module:
 
-The system should be defined declaratively as a graph of targets and assets.
+    func Module() stack.Module
 
-- A `Target` is an executable unit or process boundary.
-- An `Asset` is a buildable artifact that targets can consume.
-- Targets may depend on other targets.
-- Targets may declare which asset types they consume.
-- Assets may be collected across dependency graphs and built once per asset type.
-- The declaration should describe structure and dependencies, not imperative execution.
+Commands execute that module:
 
-The main goal is to keep the user-facing API declarative:
+    portal.Module().WebApp(
+        tailwind.Include(),
+        stencil.Include(),
+    )
 
-- define the artifact in `main`
-- attach modules and asset requirements
-- let the runtime interpret the graph
+## Concepts
 
-There should be no `Run()` call at the end of the declarative definition.
+Module:
 
-## Target
+- reusable declaration of features, activities, assets, and dependency modules
+- owns local source paths such as `styles/` and `components/`
+- remains importable as a normal Go package
 
-`Target` means something executable or process-oriented, for example:
+Composition root:
 
-- Webapp
-- Static app with Go webserver
-- CLI
+- the module on which `.WebApp(...)` is called
+- aggregates all transitive module inputs
+- owns generated metadata and `.assets`
 
-Targets describe:
+Command:
 
-- how they compose other targets
-- which assets they consume
-- which assets they declare directly
-- which runtime mode they support
-- which input sources they need for their own behavior
+- executable entrypoint below `cmd/*`
+- exposes `install`, `build`, `dev`, and `run`
+- writes its binary to `cmd/<name>/.bin/<name>`
 
-Targets do not own asset compilation details. They only depend on built asset outputs.
+Capability:
 
-## Target Workspace
+- has `Install`, `Build`, `Dev`, and `Register` lifecycle hooks
+- is enabled explicitly by options such as `tailwind.Include()` and `stencil.Include()`
+- reads source files in place
+- writes generated metadata to the composition root
+- registers runtime outputs with the active target
 
-Each artifact has a dedicated workspace rooted at the artifact root that owns it,
-typically the repository root in an artifact-only setup.
+Examples:
 
-That directory is treated as the artifact's project root for all non-Go toolchains:
+- npm installs dependency metadata and otherwise has no runtime registration
+- Tailwind builds CSS and registers it with WebApp targets
+- Stencil builds JS and registers it with WebApp targets
 
-- `package.json`
-- `package-lock.json`
-- `tsconfig.json`
-- `stencil.config.ts`
-- other tool-specific config files as needed
+## Paths
 
-The workspace should look and behave as if the artifact lived in its own repository.
-This is important for:
+Relative module sources are resolved where they are declared:
 
-- editor and language-server discovery
-- local dependency resolution
-- lockfile-based pinning
-- tool-specific conventions that expect project-root config files
+    stack.WithTailwindStyles("styles")
+    stack.WithStencilComponents("components")
 
-The Go entrypoint remains `cmd/<target>/main.go`, but the surrounding directory is also
-the synthetic root for asset tooling.
+Generated files are written to the composition root:
 
-The artifact-wide `install` step writes the shared npm/TypeScript metadata into that
-root, so one artifact owns exactly one `package.json`, `package-lock.json`,
-`tsconfig.json`, and `stencil.config.ts`.
+    package.json
+    package-lock.json
+    tailwind.input.css
+    stencil.config.ts
+    tsconfig.json
+    .assets/
 
-## Asset
+Command binaries are written next to the command:
 
-`Asset` means a buildable artifact type, for example:
+    cmd/portal/.bin/portal
 
-- CSS from Tailwind
-- JS from Stencil
-- static files
-- content or generated markup where appropriate
+## Commands
 
-Assets are grouped by type and built centrally across all loaded modules and dependencies.
+    go run ./cmd/portal install
+    go run ./cmd/portal build
+    go run ./cmd/portal dev
+    go run ./cmd/portal run
 
-Typical asset outputs:
+`build` always builds enabled assets and the current command binary.
 
-- `dist.css`
-- `dist.js`
-- type-specific derived files
+`dev` starts enabled asset watchers and restarts/runs the current command through its `run` subcommand.
 
-Targets then include and use those built asset outputs.
+## Go Dependencies
 
-## Mode
-
-The architecture distinguishes between:
-
-- `Target`: what is being executed
-- `Mode`: how the target is executed
-
-Typical modes:
-
-- `install`
-- `build`
-- `dev`
-
-The same target should usually reuse the same context across modes.
-Mode-specific behavior belongs to the runtime or the target implementation, not to separate config models unless absolutely necessary.
-
-## Content and Sources
-
-I/O inputs should stay explicit and relatively direct.
-
-Useful source categories:
-
-- repository source files
-- content files
-- layout/template files
-- asset source files
-- generated entrypoints
-
-The preferred model is to watch real source files directly whenever possible.
-Targets and assets may expose:
-
-- source roots
-- include patterns
-- exclude patterns
-- generated entrypoints
-
-This allows the dev runtime to:
-
-- watch real repository files
-- regenerate only the necessary entry files
-- point tools at the correct source locations
-- avoid copying whole source trees unless required
-
-## Go Dependency Handling
-
-For Go-based targets and assets, the Go module system should be the primary dependency mechanism.
-
-The runtime should rely on:
+The Go module system is the source of truth for module dependencies:
 
 - `go.mod`
 - `go.work`
 - `replace` directives
+- module cache paths
 
-In the common case, Go sources do not need to be copied into a separate workspace. The runtime can execute tools directly against the real repository layout as long as the module/workspace context is correct.
-
-For npm- or TS-based asset targets, the artifact root is the primary workspace root.
-Tooling should write its root-level project files there rather than to a shared global
-workspace, so that every artifact keeps its own isolated project context.
-
-The declarative entrypoints should read naturally, for example:
-
-- `stack.WebApp(...)`
-- `stack.Site(...)`
-- `stack.Artifact(...)`
-
-## When Copying Is Useful
-
-Copying source files should be the exception, not the default.
-
-It can still be useful when:
-
-- a tool cannot work well with direct source paths
-- a tool requires a fully local and isolated workspace
-- a tool writes outputs next to its inputs
-- a hermetic, disposable workspace is desirable
-- a tool is fragile around symlinks, absolute paths, or nested module layouts
-
-If copying is needed, it should be scoped narrowly to the target or asset that truly requires it.
-
-## Suggested Shape
-
-The likely structure is:
-
-- `stack` provides the declarative facade and graph composition
-- `targets` define executable units
-- `assets` define buildable artifact types
-- `pipeline` provides generic runtime orchestration
-- `tailwind`, `stencil`, `hugo`, and similar packages implement asset- or target-specific behavior
-
-The runtime is responsible for:
-
-- watching source files
-- collecting asset inputs across dependencies
-- building assets once per asset type
-- starting and stopping processes
-- prefixing process output
-- wiring dependency targets together
-
-## Migrations
-
-This architecture implies a gradual migration away from a dev/build-first package layout toward a target-and-asset-first layout.
-
-The important direction is:
-
-- keep the declaration declarative
-- keep target dependencies explicit
-- keep asset collection centralized
-- keep asset declarations first-class on targets
-- keep source access direct whenever possible
-- keep copying as a fallback, not the base model
+Stack should reference source files directly and avoid copying source trees. Copying is only acceptable for tool-specific generated metadata or for tools that cannot operate on source paths directly.

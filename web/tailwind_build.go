@@ -12,16 +12,19 @@ import (
 
 const tailwindBundleFile = tailwindpkg.BundleFile
 
+func tailwindOutputPath(outputRoot string) string {
+	return filepath.Join(outputRoot, "assets", "css", tailwindpkg.BundleID, tailwindBundleFile)
+}
+
 func (e *BuildEngine) buildStyleBundle(ctx context.Context, workspace *Workspace, cfg BuildConfig) error {
 	if e == nil || e.builder == nil || e.builder.tailwind == nil || workspace == nil {
 		return nil
 	}
-	outputDir := filepath.Join(workspace.Out, "assets", "css")
-	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+	outputPath := tailwindOutputPath(workspace.Out)
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 		return err
 	}
 	cacheRoot := filepath.Join(filepath.Dir(workspace.Root), "tailwind-cache")
-	outputPath := filepath.Join(outputDir, tailwindBundleFile)
 	return tailwindpkg.Build(ctx, tailwindBuildWorkspaceAdapter{workspace: workspace}, cacheRoot, outputPath, e.builder.tailwind.Inputs(), e.builder.tailwind.ScanPaths(), tailwindpkg.Config{
 		Binary:       cfg.TailwindBinary,
 		Version:      cfg.TailwindVersion,

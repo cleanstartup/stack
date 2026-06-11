@@ -44,7 +44,7 @@ func TestTailwindReturnsBundleRef(t *testing.T) {
 	if ref.Kind != AssetKindCSS {
 		t.Fatalf("expected css kind, got %v", ref.Kind)
 	}
-	if ref.URL() != "/assets/css/app.css" {
+	if ref.URL() != "/assets/css/app/app.css" {
 		t.Fatalf("expected tailwind bundle url, got %q", ref.URL())
 	}
 }
@@ -118,7 +118,7 @@ func TestBuildUsesExplicitTailwindBinary(t *testing.T) {
 		t.Fatalf("build failed: %v", err)
 	}
 
-	bundlePath := filepath.Join(result.OutputDir, "assets", "css", "app.css")
+	bundlePath := filepath.Join(result.OutputDir, "assets", "css", "app", "app.css")
 	if _, err := os.Stat(bundlePath); err != nil {
 		t.Fatalf("expected tailwind bundle at %s: %v", bundlePath, err)
 	}

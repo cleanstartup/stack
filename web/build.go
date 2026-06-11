@@ -130,12 +130,18 @@ func (e *BuildEngine) Build(ctx context.Context, cfg BuildConfig) (*BuildResult,
 			return nil, err
 		}
 	}
-	if err := e.materializeProjectFiles(cfg.ProjectDir, workspace.Root, workspace.Out); err != nil {
+	installCfg := cfg
+	installCfg.OutputDir = workspace.Out
+	if err := e.installCapabilities(ctx, installCfg, workspace); err != nil {
 		return nil, err
 	}
 	if cfg.ProjectDir != "" {
 		defer func() {
-			_ = e.materializeProjectFiles(cfg.ProjectDir, workspace.Root, publishDir)
+			publishWorkspace := *workspace
+			publishWorkspace.Out = publishDir
+			publishCfg := cfg
+			publishCfg.OutputDir = publishDir
+			_ = e.installCapabilities(ctx, publishCfg, &publishWorkspace)
 		}()
 	}
 
@@ -158,10 +164,7 @@ func (e *BuildEngine) Build(ctx context.Context, cfg BuildConfig) (*BuildResult,
 			return nil, err
 		}
 	}
-	if err := e.buildStyleBundle(ctx, workspace, cfg); err != nil {
-		return nil, err
-	}
-	if err := e.buildStencilBundle(ctx, workspace, cfg); err != nil {
+	if err := e.buildCapabilities(ctx, cfg, workspace); err != nil {
 		return nil, err
 	}
 
@@ -219,7 +222,9 @@ func (e *BuildEngine) BuildAssets(ctx context.Context, cfg BuildConfig) (*BuildR
 			return nil, err
 		}
 	}
-	if err := e.materializeProjectFiles(cfg.ProjectDir, workspace.Root, workspace.Out); err != nil {
+	installCfg := cfg
+	installCfg.OutputDir = workspace.Out
+	if err := e.installCapabilities(ctx, installCfg, workspace); err != nil {
 		return nil, err
 	}
 
@@ -238,10 +243,7 @@ func (e *BuildEngine) BuildAssets(ctx context.Context, cfg BuildConfig) (*BuildR
 			return nil, err
 		}
 	}
-	if err := e.buildStyleBundle(ctx, workspace, cfg); err != nil {
-		return nil, err
-	}
-	if err := e.buildStencilBundle(ctx, workspace, cfg); err != nil {
+	if err := e.buildCapabilities(ctx, cfg, workspace); err != nil {
 		return nil, err
 	}
 
@@ -286,27 +288,9 @@ func (e *BuildEngine) Install(ctx context.Context, cfg BuildConfig) error {
 			return err
 		}
 	}
-	if err := e.materializeProjectFiles(cfg.ProjectDir, workspace.Root, workspace.Out); err != nil {
-		return err
-	}
-	if e.builder.tailwind != nil && len(e.builder.tailwind.Inputs()) > 0 {
-		if err := tailwindpkg.EnsureProjectDependencies(ctx, cfg.ProjectDir); err != nil {
-			return err
-		}
-	}
-	if e.builder.stencil != nil && len(e.builder.stencil.Inputs()) > 0 {
-		if strings.TrimSpace(cfg.ProjectDir) != "" {
-			if err := stencilpkg.EnsureProjectDependencies(ctx, cfg.ProjectDir); err != nil {
-				return err
-			}
-		} else {
-			workRoot := filepath.Join(filepath.Dir(workspace.Root), "stencil-workspace")
-			if err := stencilpkg.EnsureDependencies(ctx, workRoot); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	installCfg := cfg
+	installCfg.OutputDir = workspace.Out
+	return e.installCapabilities(ctx, installCfg, workspace)
 }
 
 func (e *BuildEngine) Serve(ctx context.Context, cfg ServeConfig) error {
@@ -432,13 +416,6 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	if cfg.Addr == "" {
 		cfg.Addr = defaultAddr
 	}
-	workspaceAbs, err := filepath.Abs(cfg.WorkspaceDir)
-	if err != nil {
-		workspaceAbs = cfg.WorkspaceDir
-	}
-	tailwindCacheRoot := filepath.Join(filepath.Dir(workspaceAbs), "tailwind-cache")
-	tailwindWorkspace := newTailwindWorkspace(tailwindCacheRoot)
-
 	if _, err := e.Build(ctx, BuildConfig{
 		ProjectDir:   cfg.ProjectDir,
 		WorkspaceDir: cfg.WorkspaceDir,
@@ -453,7 +430,11 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	watchCtx, watchCancel := context.WithCancel(ctx)
 	defer watchCancel()
 
-	workers, err := e.startWatchWorkers(watchCtx, cfg, tailwindCacheRoot, cfg.OutputDir)
+	workspace, err := NewWorkspace(cfg.WorkspaceDir)
+	if err != nil {
+		return err
+	}
+	workers, err := e.startCapabilityDevWorkers(watchCtx, cfg, workspace)
 	if err != nil {
 		return err
 	}
@@ -520,26 +501,7 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 						continue
 					}
 					fmt.Fprintf(os.Stderr, "[stack] dev sources changed: %s\n", strings.Join(changed, ", "))
-					tailwindTouched := false
-					stencilTouched := false
-					for _, path := range changed {
-						if e.devTailwindSourceChanged(path) {
-							fmt.Fprintf(os.Stderr, "[stack] dev tailwind source touched: %s\n", path)
-							tailwindTouched = true
-						}
-						if e.devStencilSourceChanged(path) {
-							fmt.Fprintf(os.Stderr, "[stack] dev stencil source touched: %s\n", path)
-							stencilTouched = true
-						}
-					}
-					if tailwindTouched {
-						if err := e.rebuildTailwindBundle(ctx, cfg, tailwindWorkspace); err != nil {
-							fmt.Fprintln(os.Stderr, "[stack] dev tailwind rebuild failed:", err)
-							sourceSnapshot = currentSource
-							continue
-						}
-					}
-					_ = stencilTouched
+					e.rebuildChangedCapabilities(ctx, cfg, workspace, changed)
 					sourceSnapshot = currentSource
 				}
 			}
@@ -589,13 +551,6 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 	if cfg.WorkspaceDir == "" {
 		cfg.WorkspaceDir = DefaultWorkspaceDir(cfg.ProjectDir)
 	}
-	workspaceAbs, err := filepath.Abs(cfg.WorkspaceDir)
-	if err != nil {
-		workspaceAbs = cfg.WorkspaceDir
-	}
-	tailwindCacheRoot := filepath.Join(filepath.Dir(workspaceAbs), "tailwind-cache")
-	tailwindWorkspace := newTailwindWorkspace(tailwindCacheRoot)
-
 	if _, err := e.BuildAssets(ctx, BuildConfig{
 		ProjectDir:   cfg.ProjectDir,
 		WorkspaceDir: cfg.WorkspaceDir,
@@ -608,7 +563,11 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 	watchCtx, watchCancel := context.WithCancel(ctx)
 	defer watchCancel()
 
-	workers, err := e.startWatchWorkers(watchCtx, cfg, tailwindCacheRoot, cfg.OutputDir)
+	workspace, err := NewWorkspace(cfg.WorkspaceDir)
+	if err != nil {
+		return err
+	}
+	workers, err := e.startCapabilityDevWorkers(watchCtx, cfg, workspace)
 	if err != nil {
 		return err
 	}
@@ -658,14 +617,7 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 						continue
 					}
 					fmt.Fprintf(os.Stderr, "[stack] dev sources changed: %s\n", strings.Join(changed, ", "))
-					for _, path := range changed {
-						if e.devTailwindSourceChanged(path) {
-							if err := e.rebuildTailwindBundle(ctx, cfg, tailwindWorkspace); err != nil {
-								fmt.Fprintln(os.Stderr, "[stack] dev tailwind rebuild failed:", err)
-							}
-							break
-						}
-					}
+					e.rebuildChangedCapabilities(ctx, cfg, workspace, changed)
 					sourceSnapshot = currentSource
 				}
 			}
@@ -691,99 +643,14 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 	}
 }
 
-func (e *BuildEngine) startWatchWorkers(ctx context.Context, cfg DevConfig, tailwindCacheRoot, outputDir string) ([]pipelinepkg.WatchWorker, error) {
-	var workers []pipelinepkg.WatchWorker
-
-	if e.builder != nil && e.builder.tailwind != nil && len(e.builder.tailwind.Inputs()) > 0 {
-		inputPath := filepath.Join(tailwindCacheRoot, "tailwind.input.css")
-		if strings.TrimSpace(cfg.ProjectDir) != "" {
-			absProjectDir, err := filepath.Abs(cfg.ProjectDir)
-			if err != nil {
-				return nil, err
-			}
-			inputPath = filepath.Join(absProjectDir, "tailwind.input.css")
-		}
-		if err := e.syncTailwindInput(newTailwindWorkspace(tailwindCacheRoot), inputPath); err != nil {
-			return nil, err
-		}
-		outputPath := filepath.Join(outputDir, "assets", "css", tailwindBundleFile)
-		if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
-			return nil, err
-		}
-		spec, err := tailwindpkg.DevCommand(ctx, tailwindpkg.Config{ProjectDir: cfg.ProjectDir}, inputPath, outputPath)
-		if err != nil {
-			return nil, err
-		}
-		worker, err := pipelinepkg.StartCommandWatchSpec(ctx, "tailwind", spec)
-		if err != nil {
-			return nil, err
-		}
-		fmt.Fprintf(os.Stderr, "[stack] tailwind watch started input=%s output=%s\n", inputPath, outputPath)
-		workers = append(workers, worker)
-	}
-
-	if e.builder != nil && e.builder.stencil != nil && len(e.builder.stencil.Inputs()) > 0 {
-		spec, err := stencilpkg.DevCommand(stencilpkg.Config{ProjectDir: cfg.ProjectDir})
-		if err != nil {
-			return nil, err
-		}
-		if err := os.MkdirAll(filepath.Join(outputDir, "assets", "js", stencilBundleID), 0o755); err != nil {
-			return nil, err
-		}
-		worker, err := pipelinepkg.StartRestartingCommandWatchSpec(ctx, "stencil", spec)
-		if err != nil {
-			return nil, err
-		}
-		fmt.Fprintf(os.Stderr, "[stack] stencil watch started output=%s\n", filepath.Join(outputDir, "assets", "js", stencilBundleID))
-		workers = append(workers, worker)
-	}
-
-	return workers, nil
-}
-
 func (e *BuildEngine) devSourceWatchPaths() []string {
 	if e == nil || e.builder == nil {
 		return nil
 	}
 	seen := map[string]struct{}{}
-	var paths []string
-	if e.builder.tailwind != nil {
-		for _, source := range e.builder.tailwind.Inputs() {
-			sourcePaths, err := tailwindpkg.SourcePaths(source)
-			if err != nil {
-				continue
-			}
-			for _, path := range sourcePaths {
-				path = strings.TrimSpace(path)
-				if path == "" || IsGeneratedLocalPath(path) {
-					continue
-				}
-				if _, exists := seen[path]; exists {
-					continue
-				}
-				seen[path] = struct{}{}
-				paths = append(paths, path)
-			}
-		}
-	}
-	if e.builder.stencil != nil {
-		for _, source := range e.builder.stencil.Inputs() {
-			sourcePaths, err := stencilpkg.SourcePaths(source)
-			if err != nil {
-				continue
-			}
-			for _, path := range sourcePaths {
-				path = strings.TrimSpace(path)
-				if path == "" || IsGeneratedLocalPath(path) {
-					continue
-				}
-				if _, exists := seen[path]; exists {
-					continue
-				}
-				seen[path] = struct{}{}
-				paths = append(paths, path)
-			}
-		}
+	paths := e.capabilitySourceWatchPaths()
+	for _, path := range paths {
+		seen[path] = struct{}{}
 	}
 	if e.builder.content != nil {
 		for _, path := range e.builder.content.WatchPaths() {
@@ -891,54 +758,16 @@ func (e *BuildEngine) needsWorkspaceMaterialization() bool {
 }
 
 func (e *BuildEngine) materializeProjectFiles(projectDir, workspaceRoot, outputDir string) error {
-	if e == nil || e.builder == nil {
-		return nil
-	}
-	projectDir = strings.TrimSpace(projectDir)
-	if projectDir == "" {
-		return nil
-	}
-	hasTailwind := e.builder.tailwind != nil && len(e.builder.tailwind.Inputs()) > 0
-	hasStencil := e.builder.stencil != nil && len(e.builder.stencil.Inputs()) > 0
-	if !hasTailwind && !hasStencil {
-		return nil
-	}
-	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+	workspace, err := NewWorkspace(workspaceRoot)
+	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(projectDir, "package.json"), []byte(projectPackageSource(hasTailwind, hasStencil)), 0o644); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(projectDir, "package-lock.json"), []byte(projectLockSource(hasTailwind, hasStencil)), 0o644); err != nil {
-		return err
-	}
-	if hasStencil {
-		srcDir := e.stencilSourceDir()
-		if strings.TrimSpace(srcDir) == "" {
-			srcDir = filepath.Join(strings.TrimSpace(workspaceRoot), "src", "assets", "js")
-		}
-		if strings.TrimSpace(outputDir) == "" {
-			outputDir = DefaultOutputDir(projectDir)
-		}
-		outDir := filepath.Join(outputDir, "assets", "js")
-		if rel, err := filepath.Rel(projectDir, srcDir); err == nil && strings.TrimSpace(rel) != "" {
-			srcDir = rel
-		}
-		if rel, err := filepath.Rel(projectDir, outDir); err == nil && strings.TrimSpace(rel) != "" {
-			outDir = rel
-		}
-		if err := os.WriteFile(filepath.Join(projectDir, "stencil.config.ts"), []byte(stencilConfigSource(srcDir, outDir)), 0o644); err != nil {
-			return err
-		}
-		includes := []string{srcDir}
-		if strings.TrimSpace(srcDir) == "" {
-			includes = nil
-		}
-		if err := os.WriteFile(filepath.Join(projectDir, "tsconfig.json"), []byte(stencilTSConfigSource(includes...)), 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
+	workspace.Out = outputDir
+	return e.installCapabilities(context.Background(), BuildConfig{
+		ProjectDir:   projectDir,
+		WorkspaceDir: workspaceRoot,
+		OutputDir:    outputDir,
+	}, workspace)
 }
 
 func (e *BuildEngine) stencilSourceFiles() []string {

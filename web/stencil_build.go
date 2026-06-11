@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 
-	pipelinepkg "github.com/cleanstartup/stack/pipeline"
 	stencilpkg "github.com/cleanstartup/stack/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/tailwind"
 )
@@ -55,51 +54,33 @@ func (e *BuildEngine) rebuildTailwindBundle(ctx context.Context, cfg DevConfig, 
 	if err := e.syncTailwindInput(workspace, inputPath); err != nil {
 		return err
 	}
-	outputPath := filepath.Join(cfg.OutputDir, "assets", "css", tailwindBundleFile)
+	outputPath := tailwindOutputPath(cfg.OutputDir)
 	fmt.Fprintf(os.Stderr, "[stack] dev tailwind rebuild input=%s output=%s\n", inputPath, outputPath)
 	return tailwindpkg.Run(ctx, tailwindpkg.Config{ProjectDir: cfg.ProjectDir}, inputPath, outputPath)
 }
 
-func (e *BuildEngine) devTailwindSourceChanged(path string) bool {
-	if e == nil || e.builder == nil || e.builder.tailwind == nil {
-		return false
-	}
-	if !isTailwindSourceFile(path) {
-		return false
-	}
-	for _, source := range e.builder.tailwind.Inputs() {
-		paths, err := tailwindpkg.SourcePaths(source)
+func sourcePathsFromTailwind(sources []tailwindpkg.Source) []string {
+	var paths []string
+	for _, source := range sources {
+		sourcePaths, err := tailwindpkg.SourcePaths(source)
 		if err != nil {
 			continue
 		}
-		for _, candidate := range paths {
-			if pipelinepkg.SourcePathMatches(candidate, path) {
-				return true
-			}
-		}
+		paths = append(paths, sourcePaths...)
 	}
-	return false
+	return paths
 }
 
-func (e *BuildEngine) devStencilSourceChanged(path string) bool {
-	if e == nil || e.builder == nil || e.builder.stencil == nil {
-		return false
-	}
-	if !isStencilSourceFile(path) {
-		return false
-	}
-	for _, source := range e.builder.stencil.Inputs() {
-		paths, err := stencilpkg.SourcePaths(source)
+func sourcePathsFromStencil(sources []stencilpkg.Source) []string {
+	var paths []string
+	for _, source := range sources {
+		sourcePaths, err := stencilpkg.SourcePaths(source)
 		if err != nil {
 			continue
 		}
-		for _, candidate := range paths {
-			if pipelinepkg.SourcePathMatches(candidate, path) {
-				return true
-			}
-		}
+		paths = append(paths, sourcePaths...)
 	}
-	return false
+	return paths
 }
 
 func isTailwindSourceFile(path string) bool {
@@ -128,7 +109,7 @@ func (e *BuildEngine) devLayoutSourceChanged(path string) bool {
 
 func (e *BuildEngine) devOutputWatchPaths(outputDir string) []string {
 	var paths []string
-	tailwindOutput := filepath.Join(outputDir, "assets", "css", tailwindBundleFile)
+	tailwindOutput := tailwindOutputPath(outputDir)
 	if _, err := os.Stat(tailwindOutput); err == nil {
 		paths = append(paths, tailwindOutput)
 	}
