@@ -12,6 +12,7 @@ import (
 	pipelinepkg "github.com/cleanstartup/stack/pipeline"
 	stencilpkg "github.com/cleanstartup/stack/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/tailwind"
+	"github.com/cleanstartup/stack/web"
 )
 
 const stencilBundleID = stencilpkg.BundleID
@@ -58,15 +59,13 @@ func (e *BuildEngine) syncStencilSourceMirror(workspaceDir string) error {
 	if err := os.MkdirAll(stencilWorkspace.Root, 0o755); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(stencilWorkspace.Src); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(stencilWorkspace.Src, 0o755); err != nil {
-		return err
-	}
 	for _, source := range e.builder.Components().Inputs() {
 		if source == nil {
 			continue
+		}
+		sourceDir := stencilWorkspace.AssetDir(web.AssetKind(stencilpkg.AssetJS), source.ID())
+		if err := os.RemoveAll(sourceDir); err != nil {
+			return err
 		}
 		if _, err := source.Materialize(stencilWorkspaceAdapter{workspace: stencilWorkspace}, stencilpkg.AssetJS); err != nil {
 			return err

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cleanstartup/stack/cli"
+	"github.com/cleanstartup/stack/web"
 )
 
 type webCLIConfig struct {
@@ -27,7 +28,7 @@ func newWebCLI(app *WebApp, opts webCLIConfig) *cli.Registry {
 		func(inv *cli.Invocation) runCommandInput {
 			return runCommandInput{
 				Addr:      stringParam(inv, defaultAddr, "addr", "a"),
-				OutputDir: stringParam(inv, defaultOutputDir, "output", "o"),
+				OutputDir: stringParam(inv, web.DefaultOutputDir(app.baseDir), "output", "o"),
 			}
 		},
 		func(ctx cli.Context[runCommandInput]) cli.Result {
@@ -47,8 +48,8 @@ func newWebCLI(app *WebApp, opts webCLIConfig) *cli.Registry {
 		"build",
 		func(inv *cli.Invocation) buildCommandInput {
 			return buildCommandInput{
-				WorkspaceDir: stringParam(inv, defaultWorkspaceDir, "workspace", "w"),
-				OutputDir:    stringParam(inv, defaultOutputDir, "output", "o"),
+				WorkspaceDir: stringParam(inv, web.DefaultWorkspaceDir(app.baseDir), "workspace", "w"),
+				OutputDir:    stringParam(inv, web.DefaultOutputDir(app.baseDir), "output", "o"),
 			}
 		},
 		func(ctx cli.Context[buildCommandInput]) cli.Result {
@@ -75,8 +76,8 @@ func newWebCLI(app *WebApp, opts webCLIConfig) *cli.Registry {
 			}
 			return devCommandInput{
 				Addr:         stringParam(inv, defaultAddr, "addr", "a"),
-				WorkspaceDir: stringParam(inv, defaultWorkspaceDir, "workspace", "w"),
-				OutputDir:    stringParam(inv, defaultOutputDir, "output", "o"),
+				WorkspaceDir: stringParam(inv, web.DefaultWorkspaceDir(app.baseDir), "workspace", "w"),
+				OutputDir:    stringParam(inv, web.DefaultOutputDir(app.baseDir), "output", "o"),
 				PollInterval: interval,
 				Child:        boolParam(inv, false, "child"),
 			}
@@ -149,4 +150,3 @@ func boolParam(inv *cli.Invocation, fallback bool, name string, aliases ...strin
 	}
 	return parsed
 }
-

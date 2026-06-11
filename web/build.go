@@ -20,10 +20,8 @@ import (
 )
 
 const (
-	defaultWorkspaceDir = ".stack/workspace"
-	defaultOutputDir    = ".stack/public"
-	defaultAddr         = ":8080"
-	defaultAssetRoot    = "assets"
+	defaultAddr      = ":8080"
+	defaultAssetRoot = "assets"
 )
 
 type BuildConfig struct {
@@ -91,6 +89,12 @@ func (e *BuildEngine) Build(ctx context.Context, cfg BuildConfig) (*BuildResult,
 	_ = ctx
 	if e == nil || e.builder == nil {
 		return nil, fmt.Errorf("build engine is nil")
+	}
+	if strings.TrimSpace(cfg.WorkspaceDir) == "" {
+		cfg.WorkspaceDir = DefaultWorkspaceDir(cfg.ProjectDir)
+	}
+	if strings.TrimSpace(cfg.OutputDir) == "" {
+		cfg.OutputDir = DefaultOutputDir(cfg.ProjectDir)
 	}
 
 	workspace, err := NewWorkspace(cfg.WorkspaceDir)
@@ -173,6 +177,12 @@ func (e *BuildEngine) BuildAssets(ctx context.Context, cfg BuildConfig) (*BuildR
 	if e == nil || e.builder == nil {
 		return nil, fmt.Errorf("build engine is nil")
 	}
+	if strings.TrimSpace(cfg.WorkspaceDir) == "" {
+		cfg.WorkspaceDir = DefaultWorkspaceDir(cfg.ProjectDir)
+	}
+	if strings.TrimSpace(cfg.OutputDir) == "" {
+		cfg.OutputDir = DefaultOutputDir(cfg.ProjectDir)
+	}
 
 	workspace, err := NewWorkspace(cfg.WorkspaceDir)
 	if err != nil {
@@ -234,7 +244,7 @@ func (e *BuildEngine) Serve(ctx context.Context, cfg ServeConfig) error {
 	}
 	outputDir := strings.TrimSpace(cfg.OutputDir)
 	if outputDir == "" {
-		outputDir = defaultOutputDir
+		outputDir = DefaultOutputDir("")
 	}
 	addr := strings.TrimSpace(cfg.Addr)
 	if addr == "" {
@@ -340,13 +350,13 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 		cfg.PollInterval = 250 * time.Millisecond
 	}
 	if cfg.OutputDir == "" {
-		cfg.OutputDir = defaultOutputDir
+		cfg.OutputDir = DefaultOutputDir(cfg.ProjectDir)
 	}
 	if abs, err := filepath.Abs(cfg.OutputDir); err == nil {
 		cfg.OutputDir = abs
 	}
 	if cfg.WorkspaceDir == "" {
-		cfg.WorkspaceDir = defaultWorkspaceDir
+		cfg.WorkspaceDir = DefaultWorkspaceDir(cfg.ProjectDir)
 	}
 	if cfg.Addr == "" {
 		cfg.Addr = defaultAddr
@@ -550,7 +560,7 @@ func (e *BuildEngine) startWatchWorkers(ctx context.Context, cfg DevConfig, tail
 			return nil, err
 		}
 		spec.WorkDir = stencilCacheRoot
-		worker, err := pipelinepkg.StartCommandWatchSpec(ctx, "stencil", spec)
+		worker, err := pipelinepkg.StartRestartingCommandWatchSpec(ctx, "stencil", spec)
 		if err != nil {
 			return nil, err
 		}
@@ -575,7 +585,7 @@ func (e *BuildEngine) devSourceWatchPaths() []string {
 			}
 			for _, path := range sourcePaths {
 				path = strings.TrimSpace(path)
-				if path == "" {
+				if path == "" || IsGeneratedLocalPath(path) {
 					continue
 				}
 				if _, exists := seen[path]; exists {
@@ -594,7 +604,7 @@ func (e *BuildEngine) devSourceWatchPaths() []string {
 			}
 			for _, path := range sourcePaths {
 				path = strings.TrimSpace(path)
-				if path == "" {
+				if path == "" || IsGeneratedLocalPath(path) {
 					continue
 				}
 				if _, exists := seen[path]; exists {
@@ -608,7 +618,7 @@ func (e *BuildEngine) devSourceWatchPaths() []string {
 	if e.builder.content != nil {
 		for _, path := range e.builder.content.WatchPaths() {
 			path = strings.TrimSpace(path)
-			if path == "" {
+			if path == "" || IsGeneratedLocalPath(path) {
 				continue
 			}
 			if _, exists := seen[path]; exists {
@@ -621,7 +631,7 @@ func (e *BuildEngine) devSourceWatchPaths() []string {
 	if e.builder.layouts != nil {
 		for _, path := range e.builder.layouts.WatchPaths() {
 			path = strings.TrimSpace(path)
-			if path == "" {
+			if path == "" || IsGeneratedLocalPath(path) {
 				continue
 			}
 			if _, exists := seen[path]; exists {
@@ -816,12 +826,24 @@ func FilterGeneratedProjectPaths(projectDir string, paths []string) []string {
 
 	out := make([]string, 0, len(paths))
 	for _, path := range paths {
-		if isGeneratedProjectFile(absProjectDir, path) {
+		if isGeneratedProjectFile(absProjectDir, path) || IsGeneratedLocalPath(path) {
 			continue
 		}
 		out = append(out, path)
 	}
 	return out
+}
+
+func IsGeneratedLocalPath(path string) bool {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "" || path == "." {
+		return false
+	}
+	needle := string(filepath.Separator) + ".stack" + string(filepath.Separator)
+	if strings.Contains(path, needle) {
+		return true
+	}
+	return filepath.Base(path) == ".stack"
 }
 
 func isGeneratedProjectFile(projectDir, path string) bool {

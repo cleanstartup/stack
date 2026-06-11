@@ -35,6 +35,8 @@ cmd/site/public/
 cmd/site/.stack/
 cmd/site/.hugo_build.lock
 cmd/site/static/assets/
+cmd/*/node_modules/
+cmd/*/.stencil/
 
 # Editor/IDE
 # .idea/

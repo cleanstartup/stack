@@ -70,11 +70,11 @@ func devChildCommand(moduleDir, baseDir string, cfg DevConfig) string {
 	}
 	workspace := strings.TrimSpace(cfg.WorkspaceDir)
 	if workspace == "" {
-		workspace = defaultWorkspaceDir
+		workspace = web.DefaultWorkspaceDir(baseDir)
 	}
 	output := strings.TrimSpace(cfg.OutputDir)
 	if output == "" {
-		output = defaultOutputDir
+		output = web.DefaultOutputDir(baseDir)
 	}
 	poll := cfg.PollInterval.String()
 	if cfg.PollInterval <= 0 {

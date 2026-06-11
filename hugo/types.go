@@ -9,11 +9,7 @@ import (
 	"github.com/cleanstartup/stack/web"
 )
 
-const (
-	defaultWorkspaceDir = ".stack/workspace"
-	defaultOutputDir    = ".stack/public"
-	defaultAddr         = ":8080"
-)
+const defaultAddr = ":8080"
 
 type BuildConfig = web.BuildConfig
 type BuildResult = web.BuildResult

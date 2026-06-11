@@ -45,15 +45,13 @@ func (e *BuildEngine) syncStencilSourceMirror(workspaceDir string) error {
 	if err := os.MkdirAll(stencilWorkspace.Root, 0o755); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(stencilWorkspace.Src); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(stencilWorkspace.Src, 0o755); err != nil {
-		return err
-	}
 	for _, source := range e.builder.stencil.Inputs() {
 		if source == nil {
 			continue
+		}
+		sourceDir := stencilWorkspace.AssetDir(AssetKind(stencilpkg.AssetJS), source.ID())
+		if err := os.RemoveAll(sourceDir); err != nil {
+			return err
 		}
 		if _, err := source.Materialize(stencilWorkspaceAdapter{workspace: stencilWorkspace}, stencilpkg.AssetJS); err != nil {
 			return err

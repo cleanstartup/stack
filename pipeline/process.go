@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	assetspkg "github.com/cleanstartup/stack/asset"
 )
@@ -17,6 +19,15 @@ type WatchWorker struct {
 	Name   string
 	Cmd    *exec.Cmd
 	DoneCh chan error
+
+	state *watchWorkerState
+}
+
+type watchWorkerState struct {
+	mu      sync.Mutex
+	cmd     *exec.Cmd
+	stopCh  chan struct{}
+	stopped bool
 }
 
 type FileSignature struct {
@@ -26,25 +37,24 @@ type FileSignature struct {
 }
 
 func StartCommandWatch(ctx context.Context, name string, workDir string, binaryPath string, args ...string) (WatchWorker, error) {
+	return startCommandWatch(ctx, name, workDir, binaryPath, false, args...)
+}
+
+func StartRestartingCommandWatch(ctx context.Context, name string, workDir string, binaryPath string, args ...string) (WatchWorker, error) {
+	return startCommandWatch(ctx, name, workDir, binaryPath, true, args...)
+}
+
+func startCommandWatch(ctx context.Context, name string, workDir string, binaryPath string, restart bool, args ...string) (WatchWorker, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	cmd := exec.CommandContext(ctx, binaryPath, args...)
-	if strings.TrimSpace(workDir) != "" {
-		cmd.Dir = workDir
-	}
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		return WatchWorker{}, fmt.Errorf("%s watch start failed via %s: %w", name, binaryPath, err)
-	}
 	worker := WatchWorker{
 		Name:   name,
-		Cmd:    cmd,
 		DoneCh: make(chan error, 1),
+		state:  &watchWorkerState{stopCh: make(chan struct{})},
 	}
 	go func() {
-		worker.DoneCh <- cmd.Wait()
+		worker.DoneCh <- worker.run(ctx, workDir, binaryPath, restart, args...)
 	}()
 	return worker, nil
 }
@@ -53,11 +63,13 @@ func StartCommandWatchSpec(ctx context.Context, name string, spec assetspkg.Comm
 	return StartCommandWatch(ctx, name, spec.WorkDir, spec.Binary, spec.Args...)
 }
 
+func StartRestartingCommandWatchSpec(ctx context.Context, name string, spec assetspkg.CommandSpec) (WatchWorker, error) {
+	return StartRestartingCommandWatch(ctx, name, spec.WorkDir, spec.Binary, spec.Args...)
+}
+
 func StopWatchWorkers(workers []WatchWorker) {
 	for _, worker := range workers {
-		if worker.Cmd != nil && worker.Cmd.Process != nil {
-			_ = worker.Cmd.Process.Kill()
-		}
+		worker.stop()
 	}
 	for _, worker := range workers {
 		if worker.DoneCh == nil {
@@ -66,6 +78,86 @@ func StopWatchWorkers(workers []WatchWorker) {
 		select {
 		case <-worker.DoneCh:
 		default:
+		}
+	}
+}
+
+func (w *WatchWorker) stop() {
+	if w == nil {
+		return
+	}
+	if w.state == nil {
+		return
+	}
+	w.state.mu.Lock()
+	if !w.state.stopped {
+		w.state.stopped = true
+		close(w.state.stopCh)
+	}
+	cmd := w.state.cmd
+	w.state.mu.Unlock()
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
+}
+
+func (w *WatchWorker) run(ctx context.Context, workDir, binaryPath string, restart bool, args ...string) error {
+	if w == nil {
+		return nil
+	}
+	if w.state == nil {
+		return nil
+	}
+	backoff := 200 * time.Millisecond
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-w.state.stopCh:
+			return nil
+		default:
+		}
+
+		cmd := exec.CommandContext(ctx, binaryPath, args...)
+		if strings.TrimSpace(workDir) != "" {
+			cmd.Dir = workDir
+		}
+		cmd.Stdout = os.Stderr
+		cmd.Stderr = os.Stderr
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("%s watch start failed via %s: %w", w.Name, binaryPath, err)
+		}
+		w.state.mu.Lock()
+		w.state.cmd = cmd
+		w.state.mu.Unlock()
+
+		err := cmd.Wait()
+		w.state.mu.Lock()
+		stopped := w.state.stopped
+		w.state.mu.Unlock()
+		if stopped || ctx.Err() != nil {
+			return err
+		}
+		if !restart {
+			return err
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[stack] %s watch exited, restarting: %v\n", w.Name, err)
+		} else {
+			fmt.Fprintf(os.Stderr, "[stack] %s watch exited, restarting\n", w.Name)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-w.state.stopCh:
+			return nil
+		case <-time.After(backoff):
+		}
+		if backoff < 2*time.Second {
+			backoff *= 2
+			if backoff > 2*time.Second {
+				backoff = 2 * time.Second
+			}
 		}
 	}
 }

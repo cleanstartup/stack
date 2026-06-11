@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	pipelinepkg "github.com/cleanstartup/stack/pipeline"
 	stencilpkg "github.com/cleanstartup/stack/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/tailwind"
 	"github.com/cleanstartup/stack/web"
@@ -87,7 +87,7 @@ func (e *BuildEngine) devSourceWatchPaths() []string {
 			}
 			for _, path := range sourcePaths {
 				path = strings.TrimSpace(path)
-				if path == "" {
+				if path == "" || web.IsGeneratedLocalPath(path) {
 					continue
 				}
 				if _, exists := seen[path]; exists {
@@ -106,7 +106,7 @@ func (e *BuildEngine) devSourceWatchPaths() []string {
 			}
 			for _, path := range sourcePaths {
 				path = strings.TrimSpace(path)
-				if path == "" {
+				if path == "" || web.IsGeneratedLocalPath(path) {
 					continue
 				}
 				if _, exists := seen[path]; exists {
@@ -120,7 +120,7 @@ func (e *BuildEngine) devSourceWatchPaths() []string {
 	if e.builder.ContentRegistry() != nil {
 		for _, path := range e.builder.ContentRegistry().WatchPaths() {
 			path = strings.TrimSpace(path)
-			if path == "" {
+			if path == "" || web.IsGeneratedLocalPath(path) {
 				continue
 			}
 			if _, exists := seen[path]; exists {
@@ -133,7 +133,7 @@ func (e *BuildEngine) devSourceWatchPaths() []string {
 	if e.builder.LayoutRegistry() != nil {
 		for _, path := range e.builder.LayoutRegistry().WatchPaths() {
 			path = strings.TrimSpace(path)
-			if path == "" {
+			if path == "" || web.IsGeneratedLocalPath(path) {
 				continue
 			}
 			if _, exists := seen[path]; exists {
@@ -147,51 +147,10 @@ func (e *BuildEngine) devSourceWatchPaths() []string {
 	return paths
 }
 
-type watchWorker struct {
-	name   string
-	cmd    *exec.Cmd
-	doneCh chan error
-}
-
-func startCommandWatch(ctx context.Context, name string, workDir string, binaryPath string, args ...string) (watchWorker, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	cmd := exec.CommandContext(ctx, binaryPath, args...)
-	if strings.TrimSpace(workDir) != "" {
-		cmd.Dir = workDir
-	}
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		return watchWorker{}, fmt.Errorf("%s watch start failed via %s: %w", name, binaryPath, err)
-	}
-	worker := watchWorker{
-		name:   name,
-		cmd:    cmd,
-		doneCh: make(chan error, 1),
-	}
-	go func() {
-		worker.doneCh <- cmd.Wait()
-	}()
-	return worker, nil
-}
+type watchWorker = pipelinepkg.WatchWorker
 
 func stopWatchWorkers(workers []watchWorker) {
-	for _, worker := range workers {
-		if worker.cmd != nil && worker.cmd.Process != nil {
-			_ = worker.cmd.Process.Kill()
-		}
-	}
-	for _, worker := range workers {
-		if worker.doneCh == nil {
-			continue
-		}
-		select {
-		case <-worker.doneCh:
-		default:
-		}
-	}
+	pipelinepkg.StopWatchWorkers(workers)
 }
 
 func (e *BuildEngine) startWatchWorkers(ctx context.Context, cfg BuildConfig, tailwindCacheRoot, stencilCacheRoot, outputDir string) ([]watchWorker, error) {
@@ -212,7 +171,7 @@ func (e *BuildEngine) startWatchWorkers(ctx context.Context, cfg BuildConfig, ta
 		if err != nil {
 			return nil, err
 		}
-		worker, err := startCommandWatch(ctx, "tailwind", spec.WorkDir, spec.Binary, spec.Args...)
+		worker, err := pipelinepkg.StartCommandWatchSpec(ctx, "tailwind", spec)
 		if err != nil {
 			return nil, err
 		}
@@ -226,7 +185,7 @@ func (e *BuildEngine) startWatchWorkers(ctx context.Context, cfg BuildConfig, ta
 		if err != nil {
 			return nil, err
 		}
-		worker, err := startCommandWatch(ctx, "stencil", spec.WorkDir, spec.Binary, spec.Args...)
+		worker, err := pipelinepkg.StartRestartingCommandWatchSpec(ctx, "stencil", spec)
 		if err != nil {
 			return nil, err
 		}

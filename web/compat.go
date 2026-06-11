@@ -200,11 +200,11 @@ func devChildCommand(moduleDir, baseDir string, cfg DevConfig) string {
 	}
 	workspace := strings.TrimSpace(cfg.WorkspaceDir)
 	if workspace == "" {
-		workspace = defaultWorkspaceDir
+		workspace = DefaultWorkspaceDir(baseDir)
 	}
 	output := strings.TrimSpace(cfg.OutputDir)
 	if output == "" {
-		output = defaultOutputDir
+		output = DefaultOutputDir(baseDir)
 	}
 	poll := cfg.PollInterval.String()
 	if cfg.PollInterval <= 0 {

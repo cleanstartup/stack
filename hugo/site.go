@@ -23,16 +23,20 @@ func (a *WebApp) buildSite(ctx context.Context, cfg BuildConfig) (*BuildResult, 
 	if a == nil || engine.builder == nil {
 		return nil, fmt.Errorf("target is nil")
 	}
+	projectBase := strings.TrimSpace(cfg.ProjectDir)
+	if projectBase == "" {
+		projectBase = a.baseDir
+	}
 	outputDir := strings.TrimSpace(cfg.OutputDir)
 	if outputDir == "" {
-		outputDir = defaultOutputDir
+		outputDir = web.DefaultOutputDir(projectBase)
 	}
 	if abs, err := filepath.Abs(outputDir); err == nil {
 		outputDir = abs
 	}
 	workspaceRoot := strings.TrimSpace(cfg.WorkspaceDir)
 	if workspaceRoot == "" {
-		workspaceRoot = defaultWorkspaceDir
+		workspaceRoot = web.DefaultWorkspaceDir(projectBase)
 	}
 
 	if err := os.RemoveAll(outputDir); err != nil {
@@ -49,6 +53,7 @@ func (a *WebApp) buildSite(ctx context.Context, cfg BuildConfig) (*BuildResult, 
 	assetBuildDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets")
 	assetModuleDir := filepath.Join(filepath.Dir(workspaceAbs), "site-assets-module")
 	if _, err := engine.BuildAssets(ctx, BuildConfig{
+		ProjectDir:           cfg.ProjectDir,
 		WorkspaceDir:         cfg.WorkspaceDir,
 		OutputDir:            assetBuildDir,
 		TailwindBinary:       cfg.TailwindBinary,
@@ -97,6 +102,10 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 	if a == nil || engine.builder == nil {
 		return fmt.Errorf("target is nil")
 	}
+	projectBase := strings.TrimSpace(cfg.ProjectDir)
+	if projectBase == "" {
+		projectBase = a.baseDir
+	}
 	if cfg.DevState == nil {
 		cfg.DevState = NewDevState()
 	}
@@ -104,10 +113,10 @@ func (a *WebApp) devSite(ctx context.Context, cfg DevConfig) error {
 		cfg.PollInterval = 250 * time.Millisecond
 	}
 	if strings.TrimSpace(cfg.OutputDir) == "" {
-		cfg.OutputDir = defaultOutputDir
+		cfg.OutputDir = web.DefaultOutputDir(projectBase)
 	}
 	if strings.TrimSpace(cfg.WorkspaceDir) == "" {
-		cfg.WorkspaceDir = defaultWorkspaceDir
+		cfg.WorkspaceDir = web.DefaultWorkspaceDir(projectBase)
 	}
 	if strings.TrimSpace(cfg.Addr) == "" {
 		cfg.Addr = defaultAddr

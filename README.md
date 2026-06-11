@@ -65,7 +65,7 @@ func main() {
 - Modules register activities and assets independently.
 - All CLI entry points support `--help`; unknown commands print help instead of only failing. Calling the binary without a command also shows help.
 - Command help text can be declared declaratively with `cli.WithHelp("...")` on each activity.
-- `web build` materializes assets into `.stack/public`.
+- `web build` materializes assets into `cmd/<target>/.stack/public` next to the target entrypoint.
 - `web run` serves already-built assets and expects `build` to have run first.
 - `web dev` starts a `templ` supervisor for Go/templ changes and combines it with Tailwind and Stencil watch workers for the asset pipeline. The browser runs through the templ proxy; CSS/JS changes are still handled through the internal dev reload.
 - Web commands have their own help text: `run`, `build`, and `dev` explain themselves via `--help` and show up in the CLI listing.

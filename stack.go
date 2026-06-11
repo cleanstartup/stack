@@ -16,11 +16,7 @@ import (
 	"github.com/cleanstartup/stack/web"
 )
 
-const (
-	defaultWorkspaceDir = ".stack/workspace"
-	defaultOutputDir    = ".stack/public"
-	defaultAddr         = ":8080"
-)
+const defaultAddr = ":8080"
 
 type Mode string
 
@@ -48,6 +44,9 @@ type Target struct {
 	OutputDir    string
 	Addr         string
 	PollInterval time.Duration
+
+	workspaceDirSet bool
+	outputDirSet    bool
 
 	Assets   []hugo.Part
 	Parts    []hugo.Part
@@ -102,8 +101,6 @@ func newTarget(kind TargetKind, opts ...TargetOption) *Target {
 		Kind:         kind,
 		Name:         string(kind),
 		BaseDir:      web.CallerDir(2),
-		WorkspaceDir: defaultWorkspaceDir,
-		OutputDir:    defaultOutputDir,
 		Addr:         defaultAddr,
 		PollInterval: 250 * time.Millisecond,
 	}
@@ -116,6 +113,7 @@ func newTarget(kind TargetKind, opts ...TargetOption) *Target {
 	if strings.TrimSpace(t.Name) == "" {
 		t.Name = string(kind)
 	}
+	t.applyPathDefaults()
 	return t
 }
 
@@ -138,6 +136,7 @@ func WithBaseDir(baseDir string) TargetOption {
 			return
 		}
 		t.BaseDir = baseDir
+		t.applyPathDefaults()
 	}
 }
 
@@ -151,6 +150,7 @@ func WithWorkspaceDir(workspaceDir string) TargetOption {
 			return
 		}
 		t.WorkspaceDir = workspaceDir
+		t.workspaceDirSet = true
 	}
 }
 
@@ -164,6 +164,7 @@ func WithOutputDir(outputDir string) TargetOption {
 			return
 		}
 		t.OutputDir = outputDir
+		t.outputDirSet = true
 	}
 }
 
@@ -319,8 +320,8 @@ func (t *Target) registry(parentCtx context.Context) *cli.Registry {
 		"build",
 		func(inv *cli.Invocation) buildInput {
 			return buildInput{
-				WorkspaceDir: stringParam(inv, t.WorkspaceDir, "workspace", "w"),
-				OutputDir:    stringParam(inv, t.OutputDir, "output", "o"),
+				WorkspaceDir: stringParam(inv, t.workspaceDir(), "workspace", "w"),
+				OutputDir:    stringParam(inv, t.outputDir(), "output", "o"),
 			}
 		},
 		func(ctx cli.Context[buildInput]) cli.Result {
@@ -347,8 +348,8 @@ func (t *Target) registry(parentCtx context.Context) *cli.Registry {
 				interval = t.PollInterval
 			}
 			return devInput{
-				WorkspaceDir: stringParam(inv, t.WorkspaceDir, "workspace", "w"),
-				OutputDir:    stringParam(inv, t.OutputDir, "output", "o"),
+				WorkspaceDir: stringParam(inv, t.workspaceDir(), "workspace", "w"),
+				OutputDir:    stringParam(inv, t.outputDir(), "output", "o"),
 				Addr:         stringParam(inv, t.Addr, "addr", "a"),
 				PollInterval: interval,
 			}
@@ -393,28 +394,19 @@ func (t *Target) resolveExecution(cfg Context) Context {
 		return cfg
 	}
 	if strings.TrimSpace(cfg.WorkspaceDir) == "" {
-		cfg.WorkspaceDir = t.WorkspaceDir
+		cfg.WorkspaceDir = t.workspaceDir()
 	}
 	if strings.TrimSpace(cfg.ProjectDir) == "" {
 		cfg.ProjectDir = t.baseDir()
 	}
 	if strings.TrimSpace(cfg.OutputDir) == "" {
-		cfg.OutputDir = t.OutputDir
+		cfg.OutputDir = t.outputDir()
 	}
 	if strings.TrimSpace(cfg.Addr) == "" {
 		cfg.Addr = t.Addr
 	}
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = t.PollInterval
-	}
-	if strings.TrimSpace(cfg.WorkspaceDir) == "" {
-		cfg.WorkspaceDir = defaultWorkspaceDir
-	}
-	if strings.TrimSpace(cfg.ProjectDir) == "" {
-		cfg.ProjectDir = t.baseDir()
-	}
-	if strings.TrimSpace(cfg.OutputDir) == "" {
-		cfg.OutputDir = defaultOutputDir
 	}
 	if strings.TrimSpace(cfg.Addr) == "" {
 		cfg.Addr = defaultAddr
@@ -517,6 +509,38 @@ func (t *Target) baseDir() string {
 		return web.CallerDir(2)
 	}
 	return baseDir
+}
+
+func (t *Target) applyPathDefaults() {
+	if t == nil {
+		return
+	}
+	if !t.workspaceDirSet {
+		t.WorkspaceDir = web.DefaultWorkspaceDir(t.baseDir())
+	}
+	if !t.outputDirSet {
+		t.OutputDir = web.DefaultOutputDir(t.baseDir())
+	}
+}
+
+func (t *Target) workspaceDir() string {
+	if t == nil {
+		return ""
+	}
+	if strings.TrimSpace(t.WorkspaceDir) != "" {
+		return t.WorkspaceDir
+	}
+	return web.DefaultWorkspaceDir(t.baseDir())
+}
+
+func (t *Target) outputDir() string {
+	if t == nil {
+		return ""
+	}
+	if strings.TrimSpace(t.OutputDir) != "" {
+		return t.OutputDir
+	}
+	return web.DefaultOutputDir(t.baseDir())
 }
 
 func (t *Target) pollIntervalString() string {
