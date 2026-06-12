@@ -194,10 +194,78 @@ func configSource(srcDir, outDir string) string {
 		outDir = "dist"
 	}
 	return `import type { Config } from '@stencil/core';
+import { resolve as resolvePath, dirname, join as joinPath } from 'path';
+import { existsSync, readdirSync, lstatSync, realpathSync } from 'fs';
+
+const stencilSrcDir = resolvePath('` + filepath.ToSlash(srcDir) + `');
+
+// Map each symlink target (real dir) → its link path inside stencilSrcDir.
+// This lets us remap any real-path module ID back to its symlink equivalent so
+// that Stencil's compilerCtx (keyed by symlink path) can serve the module.
+const realToLink = new Map<string, string>();
+try {
+  for (const entry of readdirSync(stencilSrcDir)) {
+    const linkPath = joinPath(stencilSrcDir, entry);
+    if (lstatSync(linkPath).isSymbolicLink()) {
+      realToLink.set(realpathSync(linkPath), linkPath);
+    }
+  }
+} catch {}
+
+function remapToSymlink(id: string): string | null {
+  const absId = resolvePath(id); // resolve relative to CWD if not already absolute
+  for (const [realBase, linkBase] of realToLink) {
+    if (absId === realBase || absId.startsWith(realBase + '/')) {
+      return linkBase + absId.slice(realBase.length);
+    }
+  }
+  return null;
+}
+
+function preserveStencilSymlinks() {
+  return {
+    name: 'preserve-stencil-symlinks',
+    resolveId(source: string, importer: string | undefined): string | null {
+      // If source is already within the symlink srcDir tree, return it
+      // absolute to prevent node-resolve from following the symlink.
+      if (source === stencilSrcDir || source.startsWith(stencilSrcDir + '/')) {
+        return source;
+      }
+      const absSource = resolvePath(source);
+      if (absSource === stencilSrcDir || absSource.startsWith(stencilSrcDir + '/')) {
+        return absSource;
+      }
+
+      // Remap absolute real-path IDs (entry points and resolved imports).
+      const remapped = remapToSymlink(source);
+      if (remapped && existsSync(remapped)) return remapped;
+
+      // Remap relative imports when importer is already inside the symlink tree.
+      if (!importer || !source.startsWith('.')) return null;
+      if (!importer.startsWith(stencilSrcDir)) return null;
+      const resolved = resolvePath(dirname(importer), source);
+      // Try exact path first, then with extensions.
+      if (existsSync(resolved)) return resolved;
+      for (const ext of ['.tsx', '.ts', '.js', '.mjs']) {
+        if (existsSync(resolved + ext)) return resolved + ext;
+      }
+      // Resolved is inside the symlink tree but file not found — let other plugins handle it.
+      const remappedResolved = remapToSymlink(resolved);
+      if (remappedResolved && existsSync(remappedResolved)) return remappedResolved;
+      return null;
+    },
+  };
+}
 
 export const config: Config = {
   namespace: 'stack',
   srcDir: '` + filepath.ToSlash(srcDir) + `',
+  tsCompilerOptions: {
+    preserveSymlinks: true,
+  },
+  rollupPlugins: {
+    before: [preserveStencilSymlinks()],
+  },
   outputTargets: [
     {
       type: 'dist',
@@ -234,6 +302,7 @@ func tsconfigSource(include ...string) string {
     "lib": ["dom", "es2017"],
     "module": "esnext",
     "moduleResolution": "node",
+    "preserveSymlinks": true,
     "target": "es2017"
   },
   "include": ` + string(includeJSON) + `

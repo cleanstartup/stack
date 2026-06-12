@@ -98,6 +98,14 @@ func StencilScan(paths ...string) Part {
 	return partFunc(func(app *WebApp) { app.RegisterStencilScan(paths...) })
 }
 
+func NPMDependency(name, version string) Part {
+	return partFunc(func(app *WebApp) { app.builder.AddNPMDependency(name, version, false) })
+}
+
+func NPMDevDependency(name, version string) Part {
+	return partFunc(func(app *WebApp) { app.builder.AddNPMDependency(name, version, true) })
+}
+
 func Mount(path string, handler http.Handler) Part {
 	return partFunc(func(app *WebApp) {
 		if app == nil || handler == nil {

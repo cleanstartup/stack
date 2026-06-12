@@ -43,12 +43,19 @@ func (r mountRouteRegistration) register(reg *Registry) {
 	reg.Mount(r.path, r.handler)
 }
 
+type npmDep struct {
+	name    string
+	version string
+	dev     bool
+}
+
 type Builder struct {
 	routes   []routeRegistration
 	mounts   []mountRouteRegistration
 	tailwind *tailwindpkg.Registry
 	stencil  *stencilpkg.Registry
 	assets   *AssetRegistry
+	npm      []npmDep
 }
 
 type manifestTarget struct {
@@ -63,6 +70,13 @@ func NewBuilder() *Builder {
 		stencil:  stencilpkg.NewRegistry(),
 		assets:   NewAssetRegistry(),
 	}
+}
+
+func (b *Builder) AddNPMDependency(name, version string, dev bool) {
+	if b == nil || strings.TrimSpace(name) == "" {
+		return
+	}
+	b.npm = append(b.npm, npmDep{name: strings.TrimSpace(name), version: strings.TrimSpace(version), dev: dev})
 }
 
 func AddActivity[P any, I any](b *Builder, def *activity.Definition[P, I], resolver activity.Resolver[P, I]) {

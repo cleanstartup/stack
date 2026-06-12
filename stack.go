@@ -16,7 +16,6 @@ import (
 	"github.com/a-h/templ"
 	"github.com/cleanstartup/stack/activity"
 	"github.com/cleanstartup/stack/cli"
-	stencilpkg "github.com/cleanstartup/stack/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/tailwind"
 	"github.com/cleanstartup/stack/web"
 )
@@ -136,12 +135,14 @@ func WithTailwindStyles(baseDir ...string) Part {
 
 func WithStencilComponents(baseDir ...string) Part {
 	root := resolveCallerDirArg(1, baseDir...)
-	files := stencilpkg.DiscoverComponents(root)
 	return gatedPart{
-		part:    stencilComponentsPart(root, files),
+		part:    stencilComponentsPart(root),
 		stencil: true,
 	}
 }
+
+func NPMDependency(name, version string) Part    { return web.NPMDependency(name, version) }
+func NPMDevDependency(name, version string) Part { return web.NPMDevDependency(name, version) }
 
 func CSS(src AssetSource) Part                     { return web.CSS(src) }
 func TailwindCSS(src AssetSource) Part             { return gatedPart{part: web.TailwindCSS(src), tailwind: true} }
@@ -546,13 +547,13 @@ func tailwindStylesPart(baseDir string, files []string) web.Part {
 	)
 }
 
-func stencilComponentsPart(baseDir string, files []string) web.Part {
-	if strings.TrimSpace(baseDir) == "" || len(files) == 0 {
+func stencilComponentsPart(baseDir string) web.Part {
+	if strings.TrimSpace(baseDir) == "" {
 		return web.Compose()
 	}
 	return web.Compose(
 		web.StencilScan(baseDir),
-		web.Stencil(web.FromFiles(baseDir, files...)),
+		web.Stencil(web.FromDir(baseDir)),
 	)
 }
 

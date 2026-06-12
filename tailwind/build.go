@@ -171,9 +171,6 @@ func materializeSource(source Source, workspace Workspace) ([]string, error) {
 	if source == nil {
 		return nil, nil
 	}
-	if paths, err := SourcePaths(source); err == nil && len(paths) > 0 {
-		return paths, nil
-	}
 	return source.Materialize(workspace, AssetCSS)
 }
 

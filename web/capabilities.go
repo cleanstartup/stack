@@ -25,6 +25,15 @@ func (e *BuildEngine) capabilities() []capability.Capability {
 		stencilpkg.AddNPMDependencies(project)
 		caps = append(caps, stencilpkg.NewCapability(e.builder.stencil, stencilConfig))
 	}
+	if e != nil && e.builder != nil {
+		for _, dep := range e.builder.npm {
+			if dep.dev {
+				project.AddDevDependency(dep.name, dep.version)
+			} else {
+				project.AddDependency(dep.name, dep.version)
+			}
+		}
+	}
 	if !project.Empty() {
 		caps = append([]capability.Capability{npmpkg.NewCapability(project)}, caps...)
 	}
