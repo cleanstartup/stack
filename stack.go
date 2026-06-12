@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -68,7 +69,17 @@ type activityPart struct {
 type webAppConfig struct {
 	features webAppFeatures
 	parts    []web.Part
+	assetsFS fs.FS
 }
+
+type embeddedAssetsOpt struct{ fs fs.FS }
+
+func (e embeddedAssetsOpt) Apply(_ *web.WebApp) {}
+
+// EmbedAssets returns a WebAppOption that tells the run command to serve
+// assets from the provided embedded filesystem instead of the local .assets/
+// directory. Use this in release builds to serve assets embedded in the binary.
+func EmbedAssets(f fs.FS) web.Part { return embeddedAssetsOpt{fs: f} }
 
 type buildInput struct {
 	WorkspaceDir string
@@ -195,6 +206,7 @@ func (b *bundle) WebApp(opts ...WebAppOption) {
 		workspaceDir: filepath.Join(root, ".stack", "workspace"),
 		addr:         defaultAddr,
 		poll:         250 * time.Millisecond,
+		assetsFS:     cfg.assetsFS,
 	})
 	runRegistry(registry, os.Args[1:])
 }
@@ -240,6 +252,8 @@ func parseWebAppOptions(opts ...WebAppOption) webAppConfig {
 			cfg.features.tailwind = true
 		case stencilInclude:
 			cfg.features.stencil = true
+		case embeddedAssetsOpt:
+			cfg.assetsFS = typed.fs
 		case web.Part:
 			cfg.parts = append(cfg.parts, typed)
 		}
@@ -283,6 +297,7 @@ type bundleCLIConfig struct {
 	outputDir    string
 	addr         string
 	poll         time.Duration
+	assetsFS     fs.FS
 }
 
 func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
@@ -306,6 +321,7 @@ func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
 			if err := app.Engine().Serve(cfg.ctx, web.ServeConfig{
 				Addr:      ctx.Data().Addr,
 				OutputDir: ctx.Data().OutputDir,
+				AssetsFS:  cfg.assetsFS,
 			}); err != nil {
 				return cli.Error(err.Error())
 			}
