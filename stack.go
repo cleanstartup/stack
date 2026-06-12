@@ -137,9 +137,8 @@ func Element(name string, props any) templ.Component            { return web.Ele
 
 func WithTailwindStyles(baseDir ...string) Part {
 	root := resolveCallerDirArg(1, baseDir...)
-	files := tailwindpkg.DiscoverStyles(root)
 	return gatedPart{
-		part:     tailwindStylesPart(root, files),
+		part:     tailwindStylesPart(root),
 		tailwind: true,
 	}
 }
@@ -553,13 +552,28 @@ func resolveCallerPaths(skip int, values ...string) []string {
 	return out
 }
 
-func tailwindStylesPart(baseDir string, files []string) web.Part {
-	if strings.TrimSpace(baseDir) == "" || len(files) == 0 {
+type lazyTailwindSource struct{ baseDir string }
+
+func (s lazyTailwindSource) ID() string { return "lazy-styles:" + s.baseDir }
+
+func (s lazyTailwindSource) Materialize(_ web.AssetWorkspace, _ web.AssetKind) ([]string, error) {
+	return tailwindpkg.DiscoverStyles(s.baseDir), nil
+}
+
+func (s lazyTailwindSource) WatchPaths() []string {
+	if s.baseDir == "" {
+		return nil
+	}
+	return []string{s.baseDir}
+}
+
+func tailwindStylesPart(baseDir string) web.Part {
+	if strings.TrimSpace(baseDir) == "" {
 		return web.Compose()
 	}
 	return web.Compose(
 		web.TailwindScan(baseDir),
-		web.TailwindCSS(web.FromFiles(baseDir, files...)),
+		web.TailwindCSS(lazyTailwindSource{baseDir: baseDir}),
 	)
 }
 
