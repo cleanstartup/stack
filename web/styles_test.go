@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	tailwindpkg "github.com/cleanstartup/stack/tailwind"
 )
 
 func TestCSSReturnsDirectAssetRef(t *testing.T) {
@@ -58,15 +60,16 @@ func TestTailwindInputUsesSourcePathsDirectly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app := NewApp(TailwindCSS(FromFile(cssPath)))
-	cache := newTailwindWorkspace(filepath.Join(tmp, "tailwind-cache"))
+	builder := NewBuilder()
+	builder.TailwindCSS(FromFile(cssPath))
+	cache := testTailwindWorkspace{root: filepath.Join(tmp, "tailwind-cache")}
 
-	input, err := app.engine.tailwindInput(cache)
+	input, err := builder.tailwind.Input(cache)
 	if err != nil {
 		t.Fatalf("tailwind input failed: %v", err)
 	}
 
-	if strings.Contains(input, filepath.ToSlash(cache.AssetDir(AssetKindCSS, AssetID(cssPath)))) {
+	if strings.Contains(input, filepath.ToSlash(cache.AssetDir(tailwindpkg.AssetCSS, AssetID(cssPath)))) {
 		t.Fatalf("did not expect mirrored css source in input, got %q", input)
 	}
 	if !strings.Contains(input, "@import \""+filepath.ToSlash(cssPath)+"\";") {
@@ -75,6 +78,14 @@ func TestTailwindInputUsesSourcePathsDirectly(t *testing.T) {
 	if strings.Contains(input, "/* stack:") {
 		t.Fatalf("did not expect inline stack marker in input, got %q", input)
 	}
+}
+
+type testTailwindWorkspace struct {
+	root string
+}
+
+func (w testTailwindWorkspace) AssetDir(kind tailwindpkg.AssetKind, id string) string {
+	return filepath.Join(w.root, "src", "assets", string(kind), id)
 }
 
 func TestTailwindRegistryTracksWatchPaths(t *testing.T) {

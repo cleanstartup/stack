@@ -44,15 +44,11 @@ func (r mountRouteRegistration) register(reg *Registry) {
 }
 
 type Builder struct {
-	routes      []routeRegistration
-	mounts      []mountRouteRegistration
-	tailwind    *tailwindpkg.Registry
-	stencil     *stencilpkg.Registry
-	content     *ContentRegistry
-	layouts     *LayoutRegistry
-	assets      *AssetRegistry
-	requiredCSS []string
-	requiredJS  []string
+	routes   []routeRegistration
+	mounts   []mountRouteRegistration
+	tailwind *tailwindpkg.Registry
+	stencil  *stencilpkg.Registry
+	assets   *AssetRegistry
 }
 
 type manifestTarget struct {
@@ -65,8 +61,6 @@ func NewBuilder() *Builder {
 		mounts:   []mountRouteRegistration{},
 		tailwind: tailwindpkg.NewRegistry(),
 		stencil:  stencilpkg.NewRegistry(),
-		content:  NewContentRegistry(),
-		layouts:  NewLayoutRegistry(),
 		assets:   NewAssetRegistry(),
 	}
 }
@@ -139,36 +133,8 @@ func (b *Builder) Stencil(src AssetSource) AssetRef {
 	return AssetRef{Kind: AssetKind(ref.Kind), ID: ref.ID, Files: append([]string{}, ref.Files...)}
 }
 
-func (b *Builder) Content(baseDir string, includes ...string) {
-	if b == nil || b.content == nil {
-		return
-	}
-	b.content.Add(baseDir, includes...)
-}
-
-func (b *Builder) Layouts(baseDir string, includes ...string) {
-	if b == nil || b.layouts == nil {
-		return
-	}
-	b.layouts.Add(baseDir, includes...)
-}
-
 func (b *Builder) JS(src AssetSource) AssetRef   { return b.Add(AssetKindJS, src) }
 func (b *Builder) File(src AssetSource) AssetRef { return b.Add(AssetKindFile, src) }
-
-func (b *Builder) RequireCSS(names ...string) {
-	if b == nil {
-		return
-	}
-	b.requiredCSS = appendUniqueStrings(b.requiredCSS, names...)
-}
-
-func (b *Builder) RequireJS(names ...string) {
-	if b == nil {
-		return
-	}
-	b.requiredJS = appendUniqueStrings(b.requiredJS, names...)
-}
 
 func (b *Builder) TailwindScan(paths ...string) {
 	if b == nil || b.tailwind == nil {
@@ -198,20 +164,6 @@ func (b *Builder) Components() *stencilpkg.Registry {
 	return b.stencil
 }
 
-func (b *Builder) ContentRegistry() *ContentRegistry {
-	if b == nil {
-		return nil
-	}
-	return b.content
-}
-
-func (b *Builder) LayoutRegistry() *LayoutRegistry {
-	if b == nil {
-		return nil
-	}
-	return b.layouts
-}
-
 func (b *Builder) Manifest() AssetManifest {
 	if b == nil {
 		return AssetManifest{}
@@ -226,12 +178,6 @@ func (b *Builder) Manifest() AssetManifest {
 			continue
 		}
 		capability.Register(target)
-	}
-	for _, name := range b.requiredCSS {
-		manifest.Styles = append(manifest.Styles, AssetRef{Kind: AssetKindCSS, ID: name})
-	}
-	for _, name := range b.requiredJS {
-		manifest.Scripts = append(manifest.Scripts, AssetRef{Kind: AssetKindJS, ID: name})
 	}
 	return manifest
 }
@@ -248,34 +194,6 @@ func (t *manifestTarget) RegisterJS(ref AssetRef) {
 		return
 	}
 	t.manifest.Scripts = append(t.manifest.Scripts, ref)
-}
-
-func appendUniqueStrings(dst []string, values ...string) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(dst)+len(values))
-	for _, value := range dst {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, exists := seen[value]; exists {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, exists := seen[value]; exists {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
 }
 
 func (b *Builder) registerRoutes(reg *Registry) {

@@ -56,6 +56,20 @@ func (w *Workspace) AssetDir(kind AssetKind, id string) string {
 	return filepath.Join(w.Src, "assets", string(kind), id)
 }
 
+func (w *Workspace) RootDir() string {
+	if w == nil {
+		return ""
+	}
+	return w.Root
+}
+
+func (w *Workspace) OutputDir() string {
+	if w == nil {
+		return ""
+	}
+	return w.Out
+}
+
 func (w *Workspace) TailwindAssetDir(kind AssetKind, id string) string {
 	if w == nil {
 		return ""

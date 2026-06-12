@@ -2,161 +2,15 @@ package web
 
 import (
 	"encoding/json"
-	"fmt"
 	"net"
-	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
+
+	npmpkg "github.com/cleanstartup/stack/npm"
+	stencilpkg "github.com/cleanstartup/stack/stencil"
+	tailwindpkg "github.com/cleanstartup/stack/tailwind"
 )
-
-const siteModuleImportPath = "github.com/cleanstartup/stack/site"
-const siteAssetsModuleImportPath = "github.com/cleanstartup/stack/site-assets"
-
-func Content(baseDir string, includes ...string) Part {
-	return partFunc(func(app *WebApp) { app.RegisterContent(baseDir, includes...) })
-}
-
-func Layouts(baseDir string, includes ...string) Part {
-	return partFunc(func(app *WebApp) { app.RegisterLayouts(baseDir, includes...) })
-}
-
-func SiteConfig(opts SiteOptions) Part {
-	return partFunc(func(app *WebApp) { app.RegisterSiteConfig(opts) })
-}
-
-func siteConfigFiles(moduleRoot string, siteConfig *SiteOptions, modules ...HugoModule) ([]string, error) {
-	moduleRoot = strings.TrimSpace(moduleRoot)
-	if moduleRoot == "" {
-		return nil, fmt.Errorf("site config paths are required")
-	}
-	files := make([]string, 0, 2)
-	if siteConfig != nil {
-		configPath, err := writeSiteConfig(moduleRoot, *siteConfig)
-		if err != nil {
-			return nil, err
-		}
-		if strings.TrimSpace(configPath) != "" {
-			files = append(files, configPath)
-		}
-	}
-	moduleConfig, err := writeSiteModuleConfig(moduleRoot, modules...)
-	if err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(moduleConfig) != "" {
-		files = append(files, moduleConfig)
-	}
-	return files, nil
-}
-
-func writeSiteConfig(moduleRoot string, opts SiteOptions) (string, error) {
-	if err := os.MkdirAll(moduleRoot, 0o755); err != nil {
-		return "", err
-	}
-	configPath := filepath.Join(moduleRoot, "site.hugo.toml")
-	content, err := siteConfigToml(opts)
-	if err != nil {
-		return "", err
-	}
-	if strings.TrimSpace(content) == "" {
-		_ = os.Remove(configPath)
-		return "", nil
-	}
-	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
-		return "", err
-	}
-	return configPath, nil
-}
-
-func writeSiteModuleConfig(moduleRoot string, modules ...HugoModule) (string, error) {
-	if err := os.MkdirAll(moduleRoot, 0o755); err != nil {
-		return "", err
-	}
-	configPath := filepath.Join(moduleRoot, "site.module.hugo.toml")
-	content, err := hugoModuleConfig(modules...)
-	if err != nil {
-		return "", err
-	}
-	if strings.TrimSpace(content) == "" {
-		_ = os.Remove(configPath)
-		return "", nil
-	}
-	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
-		return "", err
-	}
-	return configPath, nil
-}
-
-func siteHugoModule() HugoModule {
-	return HugoModule{ImportPath: siteModuleImportPath, ReplacePath: siteModuleDir()}
-}
-
-func siteAssetHugoModule(assetModuleDir string) HugoModule {
-	return HugoModule{ImportPath: siteAssetsModuleImportPath, ReplacePath: strings.TrimSpace(assetModuleDir)}
-}
-
-func hugoModuleConfig(modules ...HugoModule) (string, error) {
-	normalized := normalizeHugoModules(modules...)
-	if len(normalized) == 0 {
-		return "", nil
-	}
-	var b strings.Builder
-	b.WriteString("[module]\n")
-	if replacements := hugoModuleReplacements(normalized...); replacements != "" {
-		b.WriteString("replacements = \"")
-		b.WriteString(replacements)
-		b.WriteString("\"\n")
-	}
-	for _, mod := range normalized {
-		b.WriteString("  [[module.imports]]\n")
-		b.WriteString("  path = \"")
-		b.WriteString(mod.ImportPath)
-		b.WriteString("\"\n")
-	}
-	return b.String(), nil
-}
-
-func normalizeHugoModules(modules ...HugoModule) []HugoModule {
-	if len(modules) == 0 {
-		return nil
-	}
-	out := make([]HugoModule, 0, len(modules))
-	seen := map[string]struct{}{}
-	for _, mod := range modules {
-		mod.ImportPath = strings.TrimSpace(mod.ImportPath)
-		mod.ReplacePath = strings.TrimSpace(mod.ReplacePath)
-		if mod.ImportPath == "" {
-			continue
-		}
-		if _, ok := seen[mod.ImportPath]; ok {
-			continue
-		}
-		out = append(out, mod)
-		seen[mod.ImportPath] = struct{}{}
-	}
-	return out
-}
-
-func hugoModuleReplacements(modules ...HugoModule) string {
-	parts := make([]string, 0, len(modules))
-	for _, mod := range modules {
-		if strings.TrimSpace(mod.ReplacePath) == "" {
-			continue
-		}
-		parts = append(parts, mod.ImportPath+" -> "+filepath.ToSlash(mod.ReplacePath))
-	}
-	return strings.Join(parts, ",")
-}
-
-func siteModuleDir() string {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		return ""
-	}
-	return filepath.Join(filepath.Dir(filepath.Dir(file)), "site")
-}
 
 func templProxyURL(addr string) string {
 	addr = strings.TrimSpace(addr)
@@ -277,89 +131,22 @@ func tailwindPackageSource() string {
 }
 
 func projectPackageSource(includeTailwind, includeStencil bool) string {
-	project := newNodeProject()
-	if includeTailwind {
-		project.AddDevDependency("tailwindcss", "^4.0.0")
-		project.AddDevDependency("@tailwindcss/cli", "^4.0.0")
-	}
-	if includeStencil {
-		project.AddDevDependency("@stencil/core", "4.43.5")
-		project.AddDependency("altcha", "^3.0.2")
-		project.AddDependency("embla-carousel", "^8.6.0")
-		project.AddDependency("embla-carousel-auto-scroll", "^8.6.0")
-		project.AddDependency("htmx.org", "^2.0.10")
-		project.AddDependency("posthog-js", "^1.379.2")
-	}
-	return projectPackageSourceFromNodeProject(project)
-}
-
-func projectPackageSourceFromNodeProject(project *nodeProject) string {
-	data := map[string]any{
-		"name":    "stack-target-workspace",
-		"private": true,
-		"version": "0.0.0",
-	}
-	if project != nil && len(project.devDependencies) > 0 {
-		data["devDependencies"] = project.devDependencies
-	}
-	if project != nil && len(project.dependencies) > 0 {
-		data["dependencies"] = project.dependencies
-	}
-	buf, _ := json.MarshalIndent(data, "", "  ")
-	return string(buf) + "\n"
+	project := newNPMProject(includeTailwind, includeStencil)
+	return project.PackageJSON()
 }
 
 func projectLockSource(includeTailwind, includeStencil bool) string {
-	project := newNodeProject()
-	if includeTailwind {
-		project.AddDevDependency("tailwindcss", "^4.0.0")
-		project.AddDevDependency("@tailwindcss/cli", "^4.0.0")
-	}
-	if includeStencil {
-		project.AddDevDependency("@stencil/core", "4.43.5")
-		project.AddDependency("altcha", "^3.0.2")
-		project.AddDependency("embla-carousel", "^8.6.0")
-		project.AddDependency("embla-carousel-auto-scroll", "^8.6.0")
-		project.AddDependency("htmx.org", "^2.0.10")
-		project.AddDependency("posthog-js", "^1.379.2")
-	}
-	return projectLockSourceFromNodeProject(project)
+	project := newNPMProject(includeTailwind, includeStencil)
+	return project.PackageLockJSON()
 }
 
-func projectLockSourceFromNodeProject(project *nodeProject) string {
-	root := map[string]any{
-		"name":    "stack-target-workspace",
-		"version": "0.0.0",
+func newNPMProject(includeTailwind, includeStencil bool) *npmpkg.Project {
+	project := npmpkg.NewProject()
+	if includeTailwind {
+		tailwindpkg.AddNPMDependencies(project)
 	}
-
-	if project != nil && len(project.devDependencies) > 0 {
-		root["devDependencies"] = project.devDependencies
+	if includeStencil {
+		stencilpkg.AddNPMDependencies(project)
 	}
-	if project != nil && len(project.dependencies) > 0 {
-		root["dependencies"] = project.dependencies
-	}
-
-	data := map[string]any{
-		"name":            "stack-target-workspace",
-		"lockfileVersion": 3,
-		"requires":        true,
-		"packages": map[string]any{
-			"": root,
-		},
-		"version": "0.0.0",
-	}
-	merged := map[string]string{}
-	if project != nil {
-		for k, v := range project.devDependencies {
-			merged[k] = v
-		}
-		for k, v := range project.dependencies {
-			merged[k] = v
-		}
-	}
-	if len(merged) > 0 {
-		data["dependencies"] = merged
-	}
-	buf, _ := json.MarshalIndent(data, "", "  ")
-	return string(buf) + "\n"
+	return project
 }

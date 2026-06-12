@@ -1,6 +1,6 @@
 # stack
 
-`stack` is a small Go foundation for building activities, web handlers, CLIs, and Hugo-backed sites with a shared model.
+`stack` is a small Go foundation for building activities, web handlers, CLIs, and asset-backed web apps with a shared model.
 
 ## Packages
 
@@ -22,8 +22,6 @@ The root `stack` package exposes declarative modules:
 
 - `stack.Bundle(...)` bundles multiple `Part`s into a reusable module.
 - `Module().WebApp(...)` starts the app-specific CLI for `install`, `build`, `dev`, and `run`.
-
-`stack.Content(baseDir, patterns...)` materializes matching Markdown files into a temporary Hugo module, and `stack.Layouts(baseDir, patterns...)` does the same for Hugo layout and type files.
 
 ## Example
 
@@ -74,8 +72,6 @@ func main() {
 - The app-wide style set is collected from declared Tailwind source directories and their `*.tailwind.css` files.
 - The styles build runs through a single Tailwind output (`/assets/css/app/app.css`). The Tailwind binary is downloaded automatically and cached if it is not already available.
 - The component convention picks up declared `*.stencil.ts` and `*.stencil.tsx` files.
-- `stack.Content(baseDir, patterns...)` materializes matching content files into a temporary Hugo module so repo-local docs can live next to the source while still rendering through the site target.
-- `stack.Layouts(baseDir, patterns...)` materializes matching Hugo layout files into a temporary Hugo module so consumer repos can declare site templates explicitly.
 - The Stencil build produces a central JS output (`/assets/js/stack/stack.esm.js`). The CLI is fetched on demand through `npm exec`; you can override that via `STACK_STENCIL_BINARY`.
 - Additional Tailwind scan paths can be registered with `web.TailwindScan(...)`.
 - The demo declares styles and components from its importable root package and executes them through `cmd/app`. The Tailwind binary is downloaded automatically; you can override it via the `STACK_TAILWIND_*` variables.
@@ -92,18 +88,9 @@ cd ../demo
 go run ./cmd/app install
 go run ./cmd/app build
 go run ./cmd/app run
-go run ./cmd/site
 ```
 
 The demo root package exposes `demo.Module()`. The app command executes that module as a WebApp and owns `install`, `build`, `dev`, and `run`.
-
-If Hugo is not already installed, the stack will build it on demand via `go install` and cache the binary locally. The default Hugo version is pinned to `0.162.1` in code and resolved as the Hugo module tag `v0.162.1`. It can be overridden when needed.
-
-Environment overrides:
-
-- `STACK_HUGO_BINARY` to use a preinstalled binary
-- `STACK_HUGO_VERSION` to override the pinned Hugo version built via Go. You can pass either `0.162.1` or `v0.162.1`.
-- `STACK_HUGO_CACHE_DIR` to change the local Hugo cache location
 
 ## External Modules
 
@@ -112,12 +99,5 @@ If a module comes from a dependency, pass its root explicitly so `stack` can fin
 - `stack.WithTailwindStyles(baseDir)` for `*.tailwind.css`
 - `stack.WithStencilComponents(baseDir)` for `*.stencil.ts` and `*.stencil.tsx`
 - `stack.Bundle(...)` to bundle multiple parts into one reusable module
-- `stack.Content(baseDir, patterns...)` for Markdown content
-- `stack.Layouts(baseDir, patterns...)` for Hugo layouts and types
 
 Commands should execute a module with `Module().WebApp(...)`. External modules compose their parts into the active module; generated metadata is written to the module on which `WebApp` is called.
-
-The site contract and Hugo conventions now live in `docs/site/`:
-
-- [`docs/site/architecture.md`](docs/site/architecture.md)
-- [`docs/site/hugo.md`](docs/site/hugo.md)

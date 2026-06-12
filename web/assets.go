@@ -1,9 +1,6 @@
 package web
 
-import (
-	assetpkg "github.com/cleanstartup/stack/asset"
-	hugosupportpkg "github.com/cleanstartup/stack/hugosupport"
-)
+import assetpkg "github.com/cleanstartup/stack/asset"
 
 type AssetKind = assetpkg.AssetKind
 
@@ -21,26 +18,22 @@ type WatchPathsProvider = assetpkg.WatchPathsProvider
 type AssetEntry = assetpkg.AssetEntry
 type AssetRegistry = assetpkg.AssetRegistry
 type AssetManifest = assetpkg.AssetManifest
-type ContentRegistry = hugosupportpkg.ContentRegistry
-type LayoutRegistry = hugosupportpkg.LayoutRegistry
 
 var (
-	NewAssetRegistry   = assetpkg.NewAssetRegistry
-	NewContentRegistry = hugosupportpkg.NewContentRegistry
-	NewLayoutRegistry  = hugosupportpkg.NewLayoutRegistry
-	WithWatchPaths     = assetpkg.WithWatchPaths
-	FromFile           = assetpkg.FromFile
-	FromDir            = assetpkg.FromDir
-	FromFiles          = assetpkg.FromFiles
-	FromFS             = assetpkg.FromFS
-	Generated          = assetpkg.Generated
-	AssetURL           = assetpkg.AssetURL
-	CallerDir          = assetpkg.CallerDir
-	SourcePaths        = assetpkg.SourcePaths
-	AssetID            = assetpkg.AssetID
-	CleanWatchPaths    = assetpkg.CleanWatchPaths
-	CopyFile           = assetpkg.CopyFile
-	CopyDir            = assetpkg.CopyDir
-	CopyFS             = assetpkg.CopyFS
-	ListFiles          = assetpkg.ListFiles
+	NewAssetRegistry = assetpkg.NewAssetRegistry
+	WithWatchPaths   = assetpkg.WithWatchPaths
+	FromFile         = assetpkg.FromFile
+	FromDir          = assetpkg.FromDir
+	FromFiles        = assetpkg.FromFiles
+	FromFS           = assetpkg.FromFS
+	Generated        = assetpkg.Generated
+	AssetURL         = assetpkg.AssetURL
+	CallerDir        = assetpkg.CallerDir
+	SourcePaths      = assetpkg.SourcePaths
+	AssetID          = assetpkg.AssetID
+	CleanWatchPaths  = assetpkg.CleanWatchPaths
+	CopyFile         = assetpkg.CopyFile
+	CopyDir          = assetpkg.CopyDir
+	CopyFS           = assetpkg.CopyFS
+	ListFiles        = assetpkg.ListFiles
 )

@@ -33,9 +33,6 @@ type BuildConfig struct {
 	TailwindCacheDir     string
 	TailwindDownloadBase string
 	StencilBinary        string
-	HugoBinary           string
-	HugoVersion          string
-	HugoCacheDir         string
 }
 
 type ServeConfig struct {
@@ -652,64 +649,8 @@ func (e *BuildEngine) devSourceWatchPaths() []string {
 	for _, path := range paths {
 		seen[path] = struct{}{}
 	}
-	if e.builder.content != nil {
-		for _, path := range e.builder.content.WatchPaths() {
-			path = strings.TrimSpace(path)
-			if path == "" || IsGeneratedLocalPath(path) {
-				continue
-			}
-			if _, exists := seen[path]; exists {
-				continue
-			}
-			seen[path] = struct{}{}
-			paths = append(paths, path)
-		}
-	}
-	if e.builder.layouts != nil {
-		for _, path := range e.builder.layouts.WatchPaths() {
-			path = strings.TrimSpace(path)
-			if path == "" || IsGeneratedLocalPath(path) {
-				continue
-			}
-			if _, exists := seen[path]; exists {
-				continue
-			}
-			seen[path] = struct{}{}
-			paths = append(paths, path)
-		}
-	}
 	sort.Strings(paths)
 	return paths
-}
-
-func (e *BuildEngine) contentModules(moduleRoot string) ([]HugoModule, error) {
-	if e == nil || e.builder == nil || e.builder.content == nil {
-		return nil, nil
-	}
-	mods, err := e.builder.content.Modules(moduleRoot)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]HugoModule, 0, len(mods))
-	for _, mod := range mods {
-		out = append(out, HugoModule{ImportPath: mod.ImportPath, ReplacePath: mod.ReplacePath})
-	}
-	return out, nil
-}
-
-func (e *BuildEngine) layoutModules(moduleRoot string) ([]HugoModule, error) {
-	if e == nil || e.builder == nil || e.builder.layouts == nil {
-		return nil, nil
-	}
-	mods, err := e.builder.layouts.Modules(moduleRoot)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]HugoModule, 0, len(mods))
-	for _, mod := range mods {
-		out = append(out, HugoModule{ImportPath: mod.ImportPath, ReplacePath: mod.ReplacePath})
-	}
-	return out, nil
 }
 
 func (e *BuildEngine) materializeAssets(workspace *Workspace) error {
@@ -854,19 +795,6 @@ func (e *BuildEngine) watchPaths() []string {
 		}
 	}
 	if e.builder.assets == nil {
-		if e.builder.content != nil {
-			for _, p := range e.builder.content.WatchPaths() {
-				p = strings.TrimSpace(p)
-				if p == "" {
-					continue
-				}
-				if _, exists := seen[p]; exists {
-					continue
-				}
-				seen[p] = struct{}{}
-				paths = append(paths, p)
-			}
-		}
 		sort.Strings(paths)
 		return paths
 	}
@@ -883,19 +811,6 @@ func (e *BuildEngine) watchPaths() []string {
 				seen[p] = struct{}{}
 				paths = append(paths, p)
 			}
-		}
-	}
-	if e.builder.content != nil {
-		for _, p := range e.builder.content.WatchPaths() {
-			p = strings.TrimSpace(p)
-			if p == "" {
-				continue
-			}
-			if _, exists := seen[p]; exists {
-				continue
-			}
-			seen[p] = struct{}{}
-			paths = append(paths, p)
 		}
 	}
 	sort.Strings(paths)

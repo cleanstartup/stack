@@ -160,7 +160,7 @@ For a WebApp target:
 - Tailwind registers `/assets/css/app/app.css`
 - Stencil registers `/assets/js/stack/stack.esm.js`
 
-Manual includes such as `stack.WithCSS(...)` and `stack.WithJS(...)` are only needed for externally provided assets.
+Static CSS and JavaScript can still be contributed as source assets, but built Tailwind and Stencil outputs register themselves with the active target.
 
 ### npm
 

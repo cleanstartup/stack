@@ -19,17 +19,8 @@ type appRuntime struct {
 	app *WebApp
 }
 
-type siteRuntime struct {
-	app *WebApp
-}
-
-func newWebRuntime(app *WebApp, target TargetKind) webRuntime {
-	switch target {
-	case TargetHugo:
-		return &siteRuntime{app: app}
-	default:
-		return &appRuntime{app: app}
-	}
+func newWebRuntime(app *WebApp) webRuntime {
+	return &appRuntime{app: app}
 }
 
 func (r *appRuntime) Build(ctx context.Context, cfg BuildConfig) (*BuildResult, error) {
@@ -59,36 +50,6 @@ func (r *appRuntime) CLI() *cli.Registry {
 		buildHelp: "materialize assets into the output directory",
 		devHelp:   "run the templ supervisor and asset watch loop",
 		useTempl:  true,
-	})
-}
-
-func (r *siteRuntime) Build(ctx context.Context, cfg BuildConfig) (*BuildResult, error) {
-	if r == nil || r.app == nil || r.app.engine == nil {
-		return nil, fmt.Errorf("target is nil")
-	}
-	return r.app.engine.Build(ctx, cfg)
-}
-
-func (r *siteRuntime) Serve(ctx context.Context, cfg ServeConfig) error {
-	if r == nil || r.app == nil || r.app.engine == nil {
-		return fmt.Errorf("target is nil")
-	}
-	return r.app.engine.Serve(ctx, cfg)
-}
-
-func (r *siteRuntime) Dev(ctx context.Context, cfg DevConfig) error {
-	if r == nil || r.app == nil || r.app.engine == nil {
-		return fmt.Errorf("target is nil")
-	}
-	return r.app.engine.Dev(ctx, cfg)
-}
-
-func (r *siteRuntime) CLI() *cli.Registry {
-	return newWebCLI(r.app, webCLIConfig{
-		runHelp:   "serve the already built hugo site",
-		buildHelp: "render the hugo site and materialize assets into the output directory",
-		devHelp:   "run hugo server and the asset watch loop",
-		useTempl:  false,
 	})
 }
 
@@ -141,9 +102,6 @@ func newWebCLI(app *WebApp, opts webCLIConfig) *cli.Registry {
 			})
 			if err != nil {
 				return cli.Error(err.Error())
-			}
-			if app.target == TargetHugo {
-				return cli.Textf("rendered %d files into %s", len(result.Assets), result.OutputDir)
 			}
 			return cli.Textf("built %d assets into %s", len(result.Assets), result.OutputDir)
 		},

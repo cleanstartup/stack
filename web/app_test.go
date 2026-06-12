@@ -52,28 +52,6 @@ func TestBuildMaterializesAssets(t *testing.T) {
 	}
 }
 
-func TestWebAppCollectsHugoModulesFromModules(t *testing.T) {
-	tmp := t.TempDir()
-	cssPath := filepath.Join(tmp, "style.css")
-	if err := os.WriteFile(cssPath, []byte("body{color:red}"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	app := web.NewApp(web.Module(
-		web.CSS(web.FromFile(cssPath)),
-	).WithHugo(
-		web.HugoModule{ImportPath: "github.com/cleanstartup/branding", ReplacePath: "/tmp/branding"},
-	))
-
-	modules := app.HugoModules()
-	if len(modules) != 1 {
-		t.Fatalf("expected one collected hugo module, got %d", len(modules))
-	}
-	if modules[0].ImportPath != "github.com/cleanstartup/branding" {
-		t.Fatalf("unexpected import path: %q", modules[0].ImportPath)
-	}
-}
-
 func TestWebCLIHelpIncludesCommandSummaries(t *testing.T) {
 	app := web.NewApp()
 
@@ -89,23 +67,5 @@ func TestWebCLIHelpIncludesCommandSummaries(t *testing.T) {
 	}
 	if !strings.Contains(res.Stdout, "dev - run the templ supervisor and asset watch loop") {
 		t.Fatalf("expected dev help summary, got %q", res.Stdout)
-	}
-}
-
-func TestHugoCLIHelpIncludesSiteSummaries(t *testing.T) {
-	app := web.NewHugo()
-
-	res := app.CLI().Execute([]string{"--help"})
-	if res.ExitCode != 0 {
-		t.Fatalf("expected help exit 0, got %d", res.ExitCode)
-	}
-	if !strings.Contains(res.Stdout, "run - serve the already built hugo site") {
-		t.Fatalf("expected hugo run help summary, got %q", res.Stdout)
-	}
-	if !strings.Contains(res.Stdout, "build - render the hugo site and materialize assets into the output directory") {
-		t.Fatalf("expected hugo build help summary, got %q", res.Stdout)
-	}
-	if !strings.Contains(res.Stdout, "dev - run hugo server and the asset watch loop") {
-		t.Fatalf("expected hugo dev help summary, got %q", res.Stdout)
 	}
 }

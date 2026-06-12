@@ -11,17 +11,10 @@ type Part interface {
 	Apply(*WebApp)
 }
 
-type HugoModule struct {
-	ImportPath  string
-	ReplacePath string
-}
-
 type Contributor = Part
 
 type Bundle interface {
 	Part
-	WithHugo(mods ...HugoModule) Bundle
-	HugoModules() []HugoModule
 }
 
 type partFunc func(*WebApp)
@@ -35,7 +28,6 @@ func (f partFunc) Apply(app *WebApp) {
 
 type bundle struct {
 	parts []Part
-	hugo  []HugoModule
 }
 
 func Module(parts ...Part) Bundle {
@@ -54,23 +46,6 @@ func (b *bundle) Apply(app *WebApp) {
 	}
 }
 
-func (b *bundle) WithHugo(mods ...HugoModule) Bundle {
-	if b == nil || len(mods) == 0 {
-		return b
-	}
-	b.hugo = appendUniqueHugoModules(b.hugo, mods...)
-	return b
-}
-
-func (b *bundle) HugoModules() []HugoModule {
-	if b == nil || len(b.hugo) == 0 {
-		return nil
-	}
-	out := make([]HugoModule, 0, len(b.hugo))
-	out = append(out, b.hugo...)
-	return out
-}
-
 func cloneParts(parts []Part) []Part {
 	if len(parts) == 0 {
 		return nil
@@ -78,35 +53,6 @@ func cloneParts(parts []Part) []Part {
 	out := make([]Part, 0, len(parts))
 	out = append(out, parts...)
 	return out
-}
-
-func appendUniqueHugoModules(dst []HugoModule, mods ...HugoModule) []HugoModule {
-	if len(mods) == 0 {
-		return dst
-	}
-	if dst == nil {
-		dst = make([]HugoModule, 0, len(mods))
-	}
-	existing := make(map[string]struct{}, len(dst))
-	for _, mod := range dst {
-		if strings.TrimSpace(mod.ImportPath) == "" {
-			continue
-		}
-		existing[mod.ImportPath] = struct{}{}
-	}
-	for _, mod := range mods {
-		mod.ImportPath = strings.TrimSpace(mod.ImportPath)
-		mod.ReplacePath = strings.TrimSpace(mod.ReplacePath)
-		if mod.ImportPath == "" {
-			continue
-		}
-		if _, ok := existing[mod.ImportPath]; ok {
-			continue
-		}
-		dst = append(dst, mod)
-		existing[mod.ImportPath] = struct{}{}
-	}
-	return dst
 }
 
 func Compose(parts ...Part) Part {
@@ -138,24 +84,6 @@ func Stencil(src AssetSource) Part {
 
 func JS(src AssetSource) Part {
 	return partFunc(func(app *WebApp) { app.RegisterJS(src) })
-}
-
-func WithCSS(names ...string) Part {
-	return partFunc(func(app *WebApp) {
-		if app == nil || app.builder == nil {
-			return
-		}
-		app.builder.RequireCSS(names...)
-	})
-}
-
-func WithJS(names ...string) Part {
-	return partFunc(func(app *WebApp) {
-		if app == nil || app.builder == nil {
-			return
-		}
-		app.builder.RequireJS(names...)
-	})
 }
 
 func File(src AssetSource) Part {

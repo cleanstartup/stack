@@ -245,7 +245,7 @@ func TestURIUsesRegisteredQualifiedPath(t *testing.T) {
 	web.Reset()
 	group := web.DefaultGroup("wallet")
 	a := web.Activity(
-		web.Ref("show"),
+		activity.Ref("show"),
 		func(ctx activity.Context) activity.Result { return "ok" },
 	)
 
@@ -260,7 +260,7 @@ func TestURIUsesRegisteredQualifiedPath(t *testing.T) {
 func TestURIOkBeforeRegistration(t *testing.T) {
 	web.Reset()
 	a := web.Activity(
-		web.Ref("show"),
+		activity.Ref("show"),
 		func(ctx activity.Context) activity.Result { return "ok" },
 	)
 
@@ -272,7 +272,7 @@ func TestURIOkBeforeRegistration(t *testing.T) {
 
 func TestURIFallsBackToPathFromIDForUnregisteredRef(t *testing.T) {
 	web.Reset()
-	got := web.URI(web.Ref("backup.intro"))
+	got := web.URI(activity.Ref("backup.intro"))
 	if got != "/backup/intro" {
 		t.Fatalf("expected /backup/intro, got %q", got)
 	}
@@ -281,7 +281,7 @@ func TestURIFallsBackToPathFromIDForUnregisteredRef(t *testing.T) {
 func TestURIFallsBackToPathFromIDForUnregisteredActivity(t *testing.T) {
 	web.Reset()
 	a := web.Activity(
-		web.Ref("backup.intro"),
+		activity.Ref("backup.intro"),
 		func(ctx activity.Context) activity.Result { return "ok" },
 	)
 
@@ -302,7 +302,7 @@ func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 	})
 
 	a := web.Activity(
-		web.Ref("tracked"),
+		activity.Ref("tracked"),
 		func(ctx activity.Context) activity.Result { return "ok" },
 	)
 	web.RegisterWebActivity(r, a)
@@ -325,7 +325,7 @@ func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
 	scriptRef := web.AssetRef{Kind: web.AssetKindJS, ID: "stack", Files: []string{"stack.esm.js"}}
 	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}, Scripts: []web.AssetRef{scriptRef}})
 	a := web.Activity(
-		web.Ref("page"),
+		activity.Ref("page"),
 		func(ctx activity.Context) activity.Result {
 			return templBody(func(_ context.Context, w io.Writer) error {
 				_, err := io.WriteString(w, "hello")
@@ -363,7 +363,7 @@ func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
 func TestPageRendersTemplComponentBody(t *testing.T) {
 	r := web.NewRegistry()
 	a := web.Activity(
-		web.Ref("templ"),
+		activity.Ref("templ"),
 		func(ctx activity.Context) activity.Result {
 			return templBody(func(_ context.Context, w io.Writer) error {
 				_, err := io.WriteString(w, "<strong>templ body</strong>")
@@ -391,7 +391,7 @@ func TestPageRendersTemplComponentBody(t *testing.T) {
 func TestScreenRendersCustomElementWithProps(t *testing.T) {
 	r := web.NewRegistry()
 	a := web.Activity(
-		web.Ref("screen"),
+		activity.Ref("screen"),
 		func(ctx activity.Context) activity.Result {
 			return web.Page{Title: "screen", Body: web.Screen("abc", map[string]any{
 				"title": "Hello",
@@ -426,7 +426,7 @@ func TestPageRendersDevReloadAndVersionedAssets(t *testing.T) {
 	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app.css"}
 	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}})
 	a := web.Activity(
-		web.Ref("dev"),
+		activity.Ref("dev"),
 		func(ctx activity.Context) activity.Result {
 			return "hello"
 		}, web.WithStaticTitle("dev"),

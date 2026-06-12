@@ -16,33 +16,23 @@ import (
 	"github.com/a-h/templ"
 	"github.com/cleanstartup/stack/activity"
 	"github.com/cleanstartup/stack/cli"
-	"github.com/cleanstartup/stack/hugo"
+	stencilpkg "github.com/cleanstartup/stack/stencil"
+	tailwindpkg "github.com/cleanstartup/stack/tailwind"
 	"github.com/cleanstartup/stack/web"
 )
 
 const defaultAddr = ":8080"
 
-type Mode string
-
-const (
-	ModeRun     Mode = "run"
-	ModeInstall Mode = "install"
-	ModeBuild   Mode = "build"
-	ModeDev     Mode = "dev"
-)
-
-type Part = hugo.Part
+type Part = web.Part
 type URIRef = activity.URIRef
 type Page = web.Page
-type SiteOptions = hugo.SiteOptions
-type HugoModule = hugo.HugoModule
-type AssetSource = hugo.AssetSource
+type AssetSource = web.AssetSource
 
 type Module interface {
 	Part
 	WebApp(opts ...WebAppOption)
 
-	partsFor(features webAppFeatures) []hugo.Part
+	partsFor(features webAppFeatures) []web.Part
 	rootDir() string
 }
 
@@ -62,23 +52,23 @@ type stencilInclude interface {
 }
 
 type bundle struct {
-	parts []hugo.Part
+	parts []web.Part
 	root  string
 }
 
 type gatedPart struct {
-	part     hugo.Part
+	part     web.Part
 	tailwind bool
 	stencil  bool
 }
 
 type activityPart struct {
-	activity *hugo.WebActivity[struct{}]
+	activity *web.WebActivity[struct{}]
 }
 
 type webAppConfig struct {
 	features webAppFeatures
-	parts    []hugo.Part
+	parts    []web.Part
 }
 
 type buildInput struct {
@@ -103,16 +93,16 @@ type devInput struct {
 	PollInterval time.Duration
 }
 
-func Bundle(parts ...hugo.Part) Module {
+func Bundle(parts ...web.Part) Module {
 	return &bundle{
 		parts: cloneParts(parts),
 		root:  web.CallerDir(1),
 	}
 }
 
-func Extend(base Module, parts ...hugo.Part) Module {
+func Extend(base Module, parts ...web.Part) Module {
 	root := web.CallerDir(1)
-	var merged []hugo.Part
+	var merged []web.Part
 	if base != nil {
 		root = strings.TrimSpace(base.rootDir())
 		merged = append(merged, base)
@@ -124,72 +114,56 @@ func Extend(base Module, parts ...hugo.Part) Module {
 	}
 }
 
-func Compose(parts ...hugo.Part) hugo.Part { return hugo.Compose(parts...) }
+func Compose(parts ...web.Part) web.Part { return web.Compose(parts...) }
 
-func Activity(ref activity.URIRef, handler func(activity.Context) activity.Result, opts ...hugo.ActivityOption[struct{}]) Part {
-	act := hugo.Activity(ref, handler, opts...)
+func Activity(ref activity.URIRef, handler func(activity.Context) activity.Result, opts ...web.ActivityOption[struct{}]) Part {
+	act := web.Activity(ref, handler, opts...)
 	return activityPart{activity: act}
 }
 
-func Ref(id string) activity.URIRef                              { return activity.Ref(id) }
-func RootRef() activity.URIRef                                   { return activity.RootRef() }
-func WithStaticTitle(title string) hugo.ActivityOption[struct{}] { return hugo.WithStaticTitle(title) }
-func Screen(name string, props any) templ.Component              { return web.Screen(name, props) }
-func Element(name string, props any) templ.Component             { return web.Element(name, props) }
+func WithStaticTitle(title string) web.ActivityOption[struct{}] { return web.WithStaticTitle(title) }
+func Screen(name string, props any) templ.Component             { return web.Screen(name, props) }
+func Element(name string, props any) templ.Component            { return web.Element(name, props) }
 
 func WithTailwindStyles(baseDir ...string) Part {
+	root := resolveCallerDirArg(1, baseDir...)
+	files := tailwindpkg.DiscoverStyles(root)
 	return gatedPart{
-		part:     hugo.Styles(resolveCallerDirArg(1, baseDir...)),
+		part:     tailwindStylesPart(root, files),
 		tailwind: true,
 	}
 }
 
 func WithStencilComponents(baseDir ...string) Part {
+	root := resolveCallerDirArg(1, baseDir...)
+	files := stencilpkg.DiscoverComponents(root)
 	return gatedPart{
-		part:    hugo.Components(resolveCallerDirArg(1, baseDir...)),
+		part:    stencilComponentsPart(root, files),
 		stencil: true,
 	}
 }
 
-func ConventionalAssets(baseDir ...string) Part {
-	return gatedPart{
-		part:     hugo.ConventionalAssets(resolveCallerDirArg(1, baseDir...)),
-		tailwind: true,
-	}
-}
-
-func Content(baseDir string, includes ...string) Part {
-	return hugo.Content(resolveCallerPath(1, baseDir), includes...)
-}
-
-func Layouts(baseDir string, includes ...string) Part {
-	return hugo.Layouts(resolveCallerPath(1, baseDir), includes...)
-}
-
-func SiteConfig(opts SiteOptions) Part             { return hugo.SiteConfig(opts) }
-func CSS(src AssetSource) Part                     { return hugo.CSS(src) }
-func TailwindCSS(src AssetSource) Part             { return gatedPart{part: hugo.TailwindCSS(src), tailwind: true} }
-func JS(src AssetSource) Part                      { return hugo.JS(src) }
-func WithCSS(names ...string) Part                 { return hugo.WithCSS(names...) }
-func WithJS(names ...string) Part                  { return hugo.WithJS(names...) }
-func File(src AssetSource) Part                    { return hugo.File(src) }
-func Mount(path string, handler http.Handler) Part { return hugo.Mount(path, handler) }
+func CSS(src AssetSource) Part                     { return web.CSS(src) }
+func TailwindCSS(src AssetSource) Part             { return gatedPart{part: web.TailwindCSS(src), tailwind: true} }
+func JS(src AssetSource) Part                      { return web.JS(src) }
+func File(src AssetSource) Part                    { return web.File(src) }
+func Mount(path string, handler http.Handler) Part { return web.Mount(path, handler) }
 
 func TailwindScan(paths ...string) Part {
 	return gatedPart{
-		part:     hugo.TailwindScan(resolveCallerPaths(1, paths...)...),
+		part:     web.TailwindScan(resolveCallerPaths(1, paths...)...),
 		tailwind: true,
 	}
 }
 
 func StencilScan(paths ...string) Part {
 	return gatedPart{
-		part:    hugo.StencilScan(resolveCallerPaths(1, paths...)...),
+		part:    web.StencilScan(resolveCallerPaths(1, paths...)...),
 		stencil: true,
 	}
 }
 
-func (b *bundle) Apply(app *hugo.WebApp) {
+func (b *bundle) Apply(app *web.WebApp) {
 	if b == nil || app == nil {
 		return
 	}
@@ -209,7 +183,7 @@ func (b *bundle) WebApp(opts ...WebAppOption) {
 	}
 	commandDir := web.CallerDir(1)
 	parts := append(b.partsFor(cfg.features), cfg.parts...)
-	app := hugo.NewApp(parts...)
+	app := web.NewApp(parts...)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	registry := newBundleWebAppCLI(app, bundleCLIConfig{
@@ -224,11 +198,11 @@ func (b *bundle) WebApp(opts ...WebAppOption) {
 	runRegistry(registry, os.Args[1:])
 }
 
-func (b *bundle) partsFor(features webAppFeatures) []hugo.Part {
+func (b *bundle) partsFor(features webAppFeatures) []web.Part {
 	if b == nil {
 		return nil
 	}
-	var out []hugo.Part
+	var out []web.Part
 	for _, part := range b.parts {
 		out = append(out, filteredPart(part, features)...)
 	}
@@ -242,17 +216,17 @@ func (b *bundle) rootDir() string {
 	return b.root
 }
 
-func (p gatedPart) Apply(app *hugo.WebApp) {
+func (p gatedPart) Apply(app *web.WebApp) {
 	if p.part != nil {
 		p.part.Apply(app)
 	}
 }
 
-func (p activityPart) Apply(app *hugo.WebApp) {
-	if app == nil || p.activity == nil || app.Core() == nil {
+func (p activityPart) Apply(app *web.WebApp) {
+	if app == nil || p.activity == nil {
 		return
 	}
-	app.Core().Apply(p.activity)
+	p.activity.Apply(app)
 }
 
 func parseWebAppOptions(opts ...WebAppOption) webAppConfig {
@@ -265,14 +239,14 @@ func parseWebAppOptions(opts ...WebAppOption) webAppConfig {
 			cfg.features.tailwind = true
 		case stencilInclude:
 			cfg.features.stencil = true
-		case hugo.Part:
+		case web.Part:
 			cfg.parts = append(cfg.parts, typed)
 		}
 	}
 	return cfg
 }
 
-func filteredPart(part hugo.Part, features webAppFeatures) []hugo.Part {
+func filteredPart(part web.Part, features webAppFeatures) []web.Part {
 	if part == nil {
 		return nil
 	}
@@ -286,16 +260,16 @@ func filteredPart(part hugo.Part, features webAppFeatures) []hugo.Part {
 		if gated.stencil && !features.stencil {
 			return nil
 		}
-		return []hugo.Part{gated.part}
+		return []web.Part{gated.part}
 	}
-	return []hugo.Part{part}
+	return []web.Part{part}
 }
 
-func cloneParts(parts []hugo.Part) []hugo.Part {
+func cloneParts(parts []web.Part) []web.Part {
 	if len(parts) == 0 {
 		return nil
 	}
-	out := make([]hugo.Part, 0, len(parts))
+	out := make([]web.Part, 0, len(parts))
 	out = append(out, parts...)
 	return out
 }
@@ -310,7 +284,7 @@ type bundleCLIConfig struct {
 	poll         time.Duration
 }
 
-func newBundleWebAppCLI(app *hugo.WebApp, cfg bundleCLIConfig) *cli.Registry {
+func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
 	r := cli.NewRegistry()
 	if app == nil {
 		return r
@@ -328,7 +302,7 @@ func newBundleWebAppCLI(app *hugo.WebApp, cfg bundleCLIConfig) *cli.Registry {
 			}
 		},
 		func(ctx cli.Context[runInput]) cli.Result {
-			if err := app.Engine().Serve(cfg.ctx, hugo.ServeConfig{
+			if err := app.Engine().Serve(cfg.ctx, web.ServeConfig{
 				Addr:      ctx.Data().Addr,
 				OutputDir: ctx.Data().OutputDir,
 			}); err != nil {
@@ -349,7 +323,7 @@ func newBundleWebAppCLI(app *hugo.WebApp, cfg bundleCLIConfig) *cli.Registry {
 			}
 		},
 		func(ctx cli.Context[installInput]) cli.Result {
-			if err := app.Engine().Install(cfg.ctx, hugo.BuildConfig{
+			if err := app.Engine().Install(cfg.ctx, web.BuildConfig{
 				ProjectDir:   cfg.projectDir,
 				WorkspaceDir: ctx.Data().WorkspaceDir,
 				OutputDir:    ctx.Data().OutputDir,
@@ -371,7 +345,7 @@ func newBundleWebAppCLI(app *hugo.WebApp, cfg bundleCLIConfig) *cli.Registry {
 			}
 		},
 		func(ctx cli.Context[buildInput]) cli.Result {
-			result, err := app.Engine().BuildAssets(cfg.ctx, hugo.BuildConfig{
+			result, err := app.Engine().BuildAssets(cfg.ctx, web.BuildConfig{
 				ProjectDir:   cfg.projectDir,
 				WorkspaceDir: ctx.Data().WorkspaceDir,
 				OutputDir:    ctx.Data().OutputDir,
@@ -404,7 +378,7 @@ func newBundleWebAppCLI(app *hugo.WebApp, cfg bundleCLIConfig) *cli.Registry {
 			}
 		},
 		func(ctx cli.Context[devInput]) cli.Result {
-			if err := runWebAppDev(cfg.ctx, app, cfg.commandDir, hugo.DevConfig{
+			if err := runWebAppDev(cfg.ctx, app, cfg.commandDir, web.DevConfig{
 				ProjectDir:   cfg.projectDir,
 				WorkspaceDir: ctx.Data().WorkspaceDir,
 				OutputDir:    ctx.Data().OutputDir,
@@ -422,7 +396,7 @@ func newBundleWebAppCLI(app *hugo.WebApp, cfg bundleCLIConfig) *cli.Registry {
 	return r
 }
 
-func runWebAppDev(parent context.Context, app *hugo.WebApp, commandDir string, cfg hugo.DevConfig) error {
+func runWebAppDev(parent context.Context, app *web.WebApp, commandDir string, cfg web.DevConfig) error {
 	if app == nil {
 		return errors.New("web app is nil")
 	}
@@ -480,7 +454,7 @@ func buildCurrentCommand(ctx context.Context, commandDir string) error {
 	return cmd.Run()
 }
 
-func startCurrentCommand(ctx context.Context, commandDir string, cfg hugo.DevConfig) (*exec.Cmd, error) {
+func startCurrentCommand(ctx context.Context, commandDir string, cfg web.DevConfig) (*exec.Cmd, error) {
 	commandDir = strings.TrimSpace(commandDir)
 	if commandDir == "" {
 		return nil, errors.New("command dir is empty")
@@ -560,6 +534,26 @@ func resolveCallerPaths(skip int, values ...string) []string {
 		out = append(out, resolveCallerPath(skip+1, value))
 	}
 	return out
+}
+
+func tailwindStylesPart(baseDir string, files []string) web.Part {
+	if strings.TrimSpace(baseDir) == "" || len(files) == 0 {
+		return web.Compose()
+	}
+	return web.Compose(
+		web.TailwindScan(baseDir),
+		web.TailwindCSS(web.FromFiles(baseDir, files...)),
+	)
+}
+
+func stencilComponentsPart(baseDir string, files []string) web.Part {
+	if strings.TrimSpace(baseDir) == "" || len(files) == 0 {
+		return web.Compose()
+	}
+	return web.Compose(
+		web.StencilScan(baseDir),
+		web.Stencil(web.FromFiles(baseDir, files...)),
+	)
 }
 
 func resolveCallerPath(skip int, value string) string {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cleanstartup/stack/hugo"
+	"github.com/cleanstartup/stack/web"
 )
 
 type testTailwindInclude struct{}
@@ -25,7 +25,7 @@ func TestModuleRecordsCallerPackageDir(t *testing.T) {
 }
 
 func TestBundleWebAppCLIHelp(t *testing.T) {
-	app := hugo.NewApp(Bundle().partsFor(webAppFeatures{})...)
+	app := web.NewApp(Bundle().partsFor(webAppFeatures{})...)
 	registry := newBundleWebAppCLI(app, bundleCLIConfig{
 		projectDir:   t.TempDir(),
 		commandDir:   t.TempDir(),
@@ -47,7 +47,7 @@ func TestBundleWebAppCLIHelp(t *testing.T) {
 
 func TestBundleFeatureGating(t *testing.T) {
 	part := gatedPart{part: CSS(nil), tailwind: true}
-	bundle := &bundle{parts: []hugo.Part{part}, root: t.TempDir()}
+	bundle := &bundle{parts: []web.Part{part}, root: t.TempDir()}
 
 	if got := bundle.partsFor(webAppFeatures{}); len(got) != 0 {
 		t.Fatalf("expected gated tailwind part to be skipped, got %d parts", len(got))
@@ -70,13 +70,13 @@ func TestBuiltAssetsRegisterTheirWebAppOutputs(t *testing.T) {
 
 	bundle := &bundle{
 		root: root,
-		parts: []hugo.Part{
+		parts: []web.Part{
 			WithTailwindStyles(stylesDir),
 			WithStencilComponents(componentsDir),
 		},
 	}
-	app := hugo.NewApp(bundle.partsFor(webAppFeatures{tailwind: true, stencil: true})...)
-	manifest := app.Core().Engine().Builder().Manifest()
+	app := web.NewApp(bundle.partsFor(webAppFeatures{tailwind: true, stencil: true})...)
+	manifest := app.Engine().Builder().Manifest()
 
 	if got := len(manifest.Styles); got != 1 {
 		t.Fatalf("expected one registered stylesheet, got %d", got)
