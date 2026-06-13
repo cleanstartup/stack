@@ -502,6 +502,12 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	if err != nil {
 		return err
 	}
+
+	goSnapshot, err := pipelinepkg.SnapshotPaths([]string{cfg.ProjectDir})
+	if err != nil {
+		return err
+	}
+
 	dirty := false
 	var lastChange time.Time
 
@@ -516,6 +522,20 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 		case err := <-errCh:
 			return err
 		case <-ticker.C:
+			if cfg.ProjectDir != "" {
+				currentGo, err := pipelinepkg.SnapshotPaths([]string{cfg.ProjectDir})
+				if err != nil {
+					return err
+				}
+				if !pipelinepkg.SnapshotsEqual(goSnapshot, currentGo) {
+					changed := pipelinepkg.DiffSnapshotPaths(goSnapshot, currentGo)
+					changed = filterGoSourcePaths(changed)
+					if len(changed) > 0 {
+						fmt.Fprintf(os.Stderr, "[stack] Go sources changed (%s) — restart dev to apply\n", strings.Join(changed, ", "))
+					}
+					goSnapshot = currentGo
+				}
+			}
 			if len(sourcePaths) > 0 {
 				currentSource, err := pipelinepkg.SnapshotPaths(sourcePaths)
 				if err != nil {
@@ -846,6 +866,29 @@ func (e *BuildEngine) watchPaths() []string {
 	}
 	sort.Strings(paths)
 	return paths
+}
+
+func filterGoSourcePaths(paths []string) []string {
+	out := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if IsGeneratedLocalPath(p) {
+			continue
+		}
+		skip := false
+		for _, seg := range strings.Split(filepath.ToSlash(p), "/") {
+			if seg == "vendor" || seg == "node_modules" {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+		if filepath.Ext(p) == ".go" {
+			out = append(out, filepath.Base(p))
+		}
+	}
+	return out
 }
 
 func FilterGeneratedProjectPaths(projectDir string, paths []string) []string {

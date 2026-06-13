@@ -460,7 +460,7 @@ func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
 			}
 		},
 		func(ctx cli.Context[devInput]) cli.Result {
-			if err := runWebAppDev(cfg.ctx, app, cfg.commandDir, web.DevConfig{
+			if err := runWebAppDev(cfg.ctx, app, web.DevConfig{
 				ProjectDir:   cfg.projectDir,
 				WorkspaceDir: ctx.Data().WorkspaceDir,
 				OutputDir:    ctx.Data().OutputDir,
@@ -478,45 +478,11 @@ func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
 	return r
 }
 
-func runWebAppDev(parent context.Context, app *web.WebApp, commandDir string, cfg web.DevConfig) error {
+func runWebAppDev(parent context.Context, app *web.WebApp, cfg web.DevConfig) error {
 	if app == nil {
 		return errors.New("web app is nil")
 	}
-	devCtx, cancel := context.WithCancel(parent)
-	defer cancel()
-
-	cmd, err := startCurrentCommand(devCtx, commandDir, cfg)
-	if err != nil {
-		return err
-	}
-	cmdErr := make(chan error, 1)
-	go func() {
-		cmdErr <- cmd.Wait()
-	}()
-
-	assetErr := make(chan error, 1)
-	go func() {
-		assetErr <- app.Engine().DevAssets(devCtx, cfg)
-	}()
-
-	select {
-	case err := <-cmdErr:
-		cancel()
-		if err != nil {
-			return err
-		}
-		return nil
-	case err := <-assetErr:
-		cancel()
-		stopCommand(cmd)
-		<-cmdErr
-		return err
-	case <-parent.Done():
-		cancel()
-		stopCommand(cmd)
-		<-cmdErr
-		return parent.Err()
-	}
+	return app.Engine().Dev(parent, cfg)
 }
 
 func buildCurrentCommand(ctx context.Context, commandDir string) error {
@@ -534,38 +500,6 @@ func buildCurrentCommand(ctx context.Context, commandDir string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
-}
-
-func startCurrentCommand(ctx context.Context, commandDir string, cfg web.DevConfig) (*exec.Cmd, error) {
-	commandDir = strings.TrimSpace(commandDir)
-	if commandDir == "" {
-		return nil, errors.New("command dir is empty")
-	}
-	args := []string{
-		"run",
-		".",
-		"run",
-		"--output=" + cfg.OutputDir,
-		"--addr=" + cfg.Addr,
-	}
-	cmd := exec.CommandContext(ctx, "go", args...)
-	cmd.Dir = commandDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	return cmd, nil
-}
-
-func stopCommand(cmd *exec.Cmd) {
-	if cmd == nil || cmd.Process == nil {
-		return
-	}
-	if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM); err != nil {
-		_ = cmd.Process.Kill()
-	}
 }
 
 func runRegistry(registry *cli.Registry, args []string) {
