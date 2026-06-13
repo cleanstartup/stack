@@ -68,6 +68,13 @@ func (a *WebApp) Mount(path string, handler http.Handler) {
 	a.builder.AddMount(path, handler)
 }
 
+func (a *WebApp) RegisterDirSource(namespace, relPath, absPath string) {
+	if a == nil || a.builder == nil {
+		return
+	}
+	a.builder.RegisterDirSource(namespace, relPath, absPath)
+}
+
 func (a *WebApp) RegisterTailwindScan(paths ...string) {
 	a.builder.TailwindScan(paths...)
 }

@@ -49,13 +49,22 @@ type npmDep struct {
 	dev     bool
 }
 
+// DirSourceEntry records a module asset directory registered during Apply,
+// used by Install to sync sources to .sources/<namespace>/<relPath>/.
+type DirSourceEntry struct {
+	Namespace string
+	RelPath   string // relative path declared in assets.Dir (e.g. "client", ".")
+	AbsPath   string // resolved absolute path on disk
+}
+
 type Builder struct {
-	routes   []routeRegistration
-	mounts   []mountRouteRegistration
-	tailwind *tailwindpkg.Registry
-	stencil  *stencilpkg.Registry
-	assets   *AssetRegistry
-	npm      []npmDep
+	routes     []routeRegistration
+	mounts     []mountRouteRegistration
+	tailwind   *tailwindpkg.Registry
+	stencil    *stencilpkg.Registry
+	assets     *AssetRegistry
+	npm        []npmDep
+	dirSources []DirSourceEntry
 }
 
 type manifestTarget struct {
@@ -70,6 +79,24 @@ func NewBuilder() *Builder {
 		stencil:  stencilpkg.NewRegistry(),
 		assets:   NewAssetRegistry(),
 	}
+}
+
+func (b *Builder) RegisterDirSource(namespace, relPath, absPath string) {
+	if b == nil {
+		return
+	}
+	b.dirSources = append(b.dirSources, DirSourceEntry{
+		Namespace: namespace,
+		RelPath:   relPath,
+		AbsPath:   absPath,
+	})
+}
+
+func (b *Builder) DirSources() []DirSourceEntry {
+	if b == nil {
+		return nil
+	}
+	return append([]DirSourceEntry{}, b.dirSources...)
 }
 
 func (b *Builder) AddNPMDependency(name, version string, dev bool) {

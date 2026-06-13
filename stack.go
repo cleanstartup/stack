@@ -200,7 +200,7 @@ func (b *bundle) partsFor(features webAppFeatures) []web.Part {
 	}
 	var out []web.Part
 	for _, part := range b.parts {
-		out = append(out, filteredPart(part, features)...)
+		out = append(out, b.filteredPart(part, features)...)
 	}
 	return out
 }
@@ -238,7 +238,19 @@ func parseWebAppOptions(opts ...WebAppOption) webAppConfig {
 	return cfg
 }
 
-func filteredPart(part web.Part, features webAppFeatures) []web.Part {
+// dirSourceRegistration registers a DirSource entry into the Builder so that
+// Install can sync sources to .sources/<namespace>/<relPath>/.
+type dirSourceRegistration struct {
+	namespace string
+	relPath   string
+	absPath   string
+}
+
+func (r dirSourceRegistration) Apply(app *web.WebApp) {
+	app.RegisterDirSource(r.namespace, r.relPath, r.absPath)
+}
+
+func (b *bundle) filteredPart(part web.Part, features webAppFeatures) []web.Part {
 	if part == nil {
 		return nil
 	}
@@ -246,17 +258,18 @@ func filteredPart(part web.Part, features webAppFeatures) []web.Part {
 		return m.partsFor(features)
 	}
 	if dir, ok := part.(assetspkg.DirSource); ok {
-		return expandDirSource(dir, features)
+		return b.expandDirSource(dir, features)
 	}
 	return []web.Part{part}
 }
 
-// expandDirSource routes a DirSource to the active builders.
-// CSS files go to Tailwind, TSX files go to Stencil (when activated).
-// Unrecognised files are passed through as static assets.
-func expandDirSource(dir assetspkg.DirSource, features webAppFeatures) []web.Part {
+// expandDirSource routes a DirSource to active builders and registers it for
+// install-time source syncing. CSS goes to Tailwind, TSX to Stencil.
+func (b *bundle) expandDirSource(dir assetspkg.DirSource, features webAppFeatures) []web.Part {
 	root := dir.AbsPath()
-	var parts []web.Part
+	parts := []web.Part{
+		dirSourceRegistration{namespace: b.ns, relPath: dir.RelPath, absPath: root},
+	}
 	if features.tailwind {
 		parts = append(parts, tailwindStylesPart(root))
 	}

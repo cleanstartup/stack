@@ -285,9 +285,40 @@ func (e *BuildEngine) Install(ctx context.Context, cfg BuildConfig) error {
 			return err
 		}
 	}
+	if err := e.syncDirSources(cfg); err != nil {
+		return err
+	}
 	installCfg := cfg
 	installCfg.OutputDir = workspace.Out
 	return e.installCapabilities(ctx, installCfg, workspace)
+}
+
+// syncDirSources copies each registered DirSource into
+// .sources/<namespace>/<relPath>/ relative to the project directory.
+func (e *BuildEngine) syncDirSources(cfg BuildConfig) error {
+	if e == nil || e.builder == nil {
+		return nil
+	}
+	entries := e.builder.DirSources()
+	if len(entries) == 0 || strings.TrimSpace(cfg.ProjectDir) == "" {
+		return nil
+	}
+	sourcesDir := filepath.Join(cfg.ProjectDir, ".sources")
+	for _, entry := range entries {
+		nsPart := strings.ReplaceAll(entry.Namespace, ".", string(filepath.Separator))
+		dst := filepath.Join(sourcesDir, nsPart)
+		rel := strings.TrimSpace(entry.RelPath)
+		if rel != "" && rel != "." {
+			dst = filepath.Join(dst, filepath.FromSlash(rel))
+		}
+		if err := os.MkdirAll(dst, 0o755); err != nil {
+			return fmt.Errorf("sync sources %s: %w", entry.Namespace, err)
+		}
+		if err := copyTree(dst, entry.AbsPath); err != nil {
+			return fmt.Errorf("sync sources %s: %w", entry.Namespace, err)
+		}
+	}
+	return nil
 }
 
 func (e *BuildEngine) Serve(ctx context.Context, cfg ServeConfig) error {

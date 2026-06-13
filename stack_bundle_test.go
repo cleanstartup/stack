@@ -51,17 +51,16 @@ func TestBundleFeatureGating(t *testing.T) {
 	dir := assetspkg.DirSource{CallerDir: root, RelPath: "."}
 	b := &bundle{parts: []web.Part{dir}, root: root}
 
-	// without any builder active, DirSource expands to nothing
-	if got := b.partsFor(webAppFeatures{}); len(got) != 0 {
-		t.Fatalf("expected DirSource to expand to 0 parts without builders, got %d", len(got))
+	// DirSource always emits a registration part (for install-time source sync)
+	// plus one part per active builder.
+	if got := b.partsFor(webAppFeatures{}); len(got) != 1 {
+		t.Fatalf("expected DirSource to expand to 1 (registration only), got %d", len(got))
 	}
-	// with tailwind active, DirSource expands to a tailwind part
-	if got := b.partsFor(webAppFeatures{tailwind: true}); len(got) != 1 {
-		t.Fatalf("expected DirSource to expand to 1 tailwind part, got %d", len(got))
+	if got := b.partsFor(webAppFeatures{tailwind: true}); len(got) != 2 {
+		t.Fatalf("expected DirSource to expand to 2 parts (registration + tailwind), got %d", len(got))
 	}
-	// with both active, DirSource expands to two parts
-	if got := b.partsFor(webAppFeatures{tailwind: true, stencil: true}); len(got) != 2 {
-		t.Fatalf("expected DirSource to expand to 2 parts, got %d", len(got))
+	if got := b.partsFor(webAppFeatures{tailwind: true, stencil: true}); len(got) != 3 {
+		t.Fatalf("expected DirSource to expand to 3 parts (registration + 2 builders), got %d", len(got))
 	}
 
 	cfg := parseWebAppOptions(testTailwindInclude{})
