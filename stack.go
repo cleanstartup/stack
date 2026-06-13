@@ -16,6 +16,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/cleanstartup/stack/activity"
+	assetspkg "github.com/cleanstartup/stack/assets"
 	"github.com/cleanstartup/stack/cli"
 	tailwindpkg "github.com/cleanstartup/stack/tailwind"
 	"github.com/cleanstartup/stack/web"
@@ -32,6 +33,7 @@ type Module interface {
 	Part
 	WebApp(opts ...WebAppOption)
 
+	namespace() string
 	partsFor(features webAppFeatures) []web.Part
 	rootDir() string
 }
@@ -43,23 +45,20 @@ type webAppFeatures struct {
 	stencil  bool
 }
 
+// tailwindInclude is satisfied by assets.Tailwind().
 type tailwindInclude interface {
 	StackTailwindInclude()
 }
 
+// stencilInclude is satisfied by assets.Stencil().
 type stencilInclude interface {
 	StackStencilInclude()
 }
 
 type bundle struct {
+	ns    string
 	parts []web.Part
 	root  string
-}
-
-type gatedPart struct {
-	part     web.Part
-	tailwind bool
-	stencil  bool
 }
 
 type activityPart struct {
@@ -72,14 +71,13 @@ type webAppConfig struct {
 	assetsFS fs.FS
 }
 
-type embeddedAssetsOpt struct{ fs fs.FS }
+type embeddedAssets struct{ fs fs.FS }
 
-func (e embeddedAssetsOpt) Apply(_ *web.WebApp) {}
+func (e embeddedAssets) Apply(_ *web.WebApp) {}
 
-// EmbedAssets returns a WebAppOption that tells the run command to serve
-// assets from the provided embedded filesystem instead of the local .assets/
-// directory. Use this in release builds to serve assets embedded in the binary.
-func EmbedAssets(f fs.FS) web.Part { return embeddedAssetsOpt{fs: f} }
+// Assets returns a WebAppOption that serves the provided embedded filesystem
+// as the asset root at runtime. Pass the result of fs.Sub on your go:embed FS.
+func Assets(f fs.FS) web.Part { return embeddedAssets{fs: f} }
 
 type buildInput struct {
 	WorkspaceDir string
@@ -103,13 +101,20 @@ type devInput struct {
 	PollInterval time.Duration
 }
 
-func Bundle(parts ...web.Part) Module {
+// Bundle creates a Module with the given namespace and parts.
+// The namespace uniquely identifies the module and is used for activity IDs,
+// asset namespacing, logging, and analytics.
+// Namespace collisions are detected at composition time (WebApp call).
+func Bundle(namespace string, parts ...web.Part) Module {
 	return &bundle{
+		ns:    strings.TrimSpace(namespace),
 		parts: cloneParts(parts),
 		root:  web.CallerDir(1),
 	}
 }
 
+// Extend wraps a base Module with additional parts. Use for adding
+// runtime-only concerns (e.g. HTTP mounts) that do not belong in Module().
 func Extend(base Module, parts ...web.Part) Module {
 	root := web.CallerDir(1)
 	var merged []web.Part
@@ -135,44 +140,13 @@ func WithStaticTitle(title string) web.ActivityOption[struct{}] { return web.Wit
 func Screen(name string, props any) templ.Component             { return web.Screen(name, props) }
 func Element(name string, props any) templ.Component            { return web.Element(name, props) }
 
-func WithTailwindStyles(baseDir ...string) Part {
-	root := resolveCallerDirArg(1, baseDir...)
-	return gatedPart{
-		part:     tailwindStylesPart(root),
-		tailwind: true,
-	}
-}
-
-func WithStencilComponents(baseDir ...string) Part {
-	root := resolveCallerDirArg(1, baseDir...)
-	return gatedPart{
-		part:    stencilComponentsPart(root),
-		stencil: true,
-	}
-}
-
 func NPMDependency(name, version string) Part    { return web.NPMDependency(name, version) }
 func NPMDevDependency(name, version string) Part { return web.NPMDevDependency(name, version) }
 
 func CSS(src AssetSource) Part                     { return web.CSS(src) }
-func TailwindCSS(src AssetSource) Part             { return gatedPart{part: web.TailwindCSS(src), tailwind: true} }
 func JS(src AssetSource) Part                      { return web.JS(src) }
 func File(src AssetSource) Part                    { return web.File(src) }
 func Mount(path string, handler http.Handler) Part { return web.Mount(path, handler) }
-
-func TailwindScan(paths ...string) Part {
-	return gatedPart{
-		part:     web.TailwindScan(resolveCallerPaths(1, paths...)...),
-		tailwind: true,
-	}
-}
-
-func StencilScan(paths ...string) Part {
-	return gatedPart{
-		part:    web.StencilScan(resolveCallerPaths(1, paths...)...),
-		stencil: true,
-	}
-}
 
 func (b *bundle) Apply(app *web.WebApp) {
 	if b == nil || app == nil {
@@ -193,6 +167,9 @@ func (b *bundle) WebApp(opts ...WebAppOption) {
 		root = web.CallerDir(1)
 	}
 	commandDir := web.CallerDir(1)
+
+	validateNamespaces(b)
+
 	parts := append(b.partsFor(cfg.features), cfg.parts...)
 	app := web.NewApp(parts...)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -208,6 +185,13 @@ func (b *bundle) WebApp(opts ...WebAppOption) {
 		assetsFS:     cfg.assetsFS,
 	})
 	runRegistry(registry, os.Args[1:])
+}
+
+func (b *bundle) namespace() string {
+	if b == nil {
+		return ""
+	}
+	return b.ns
 }
 
 func (b *bundle) partsFor(features webAppFeatures) []web.Part {
@@ -228,12 +212,6 @@ func (b *bundle) rootDir() string {
 	return b.root
 }
 
-func (p gatedPart) Apply(app *web.WebApp) {
-	if p.part != nil {
-		p.part.Apply(app)
-	}
-}
-
 func (p activityPart) Apply(app *web.WebApp) {
 	if app == nil || p.activity == nil {
 		return
@@ -251,7 +229,7 @@ func parseWebAppOptions(opts ...WebAppOption) webAppConfig {
 			cfg.features.tailwind = true
 		case stencilInclude:
 			cfg.features.stencil = true
-		case embeddedAssetsOpt:
+		case embeddedAssets:
 			cfg.assetsFS = typed.fs
 		case web.Part:
 			cfg.parts = append(cfg.parts, typed)
@@ -264,19 +242,28 @@ func filteredPart(part web.Part, features webAppFeatures) []web.Part {
 	if part == nil {
 		return nil
 	}
-	if b, ok := part.(Module); ok {
-		return b.partsFor(features)
+	if m, ok := part.(Module); ok {
+		return m.partsFor(features)
 	}
-	if gated, ok := part.(gatedPart); ok {
-		if gated.tailwind && !features.tailwind {
-			return nil
-		}
-		if gated.stencil && !features.stencil {
-			return nil
-		}
-		return []web.Part{gated.part}
+	if dir, ok := part.(assetspkg.DirSource); ok {
+		return expandDirSource(dir, features)
 	}
 	return []web.Part{part}
+}
+
+// expandDirSource routes a DirSource to the active builders.
+// CSS files go to Tailwind, TSX files go to Stencil (when activated).
+// Unrecognised files are passed through as static assets.
+func expandDirSource(dir assetspkg.DirSource, features webAppFeatures) []web.Part {
+	root := dir.AbsPath()
+	var parts []web.Part
+	if features.tailwind {
+		parts = append(parts, tailwindStylesPart(root))
+	}
+	if features.stencil {
+		parts = append(parts, stencilComponentsPart(root))
+	}
+	return parts
 }
 
 func cloneParts(parts []web.Part) []web.Part {
@@ -287,6 +274,72 @@ func cloneParts(parts []web.Part) []web.Part {
 	out = append(out, parts...)
 	return out
 }
+
+// validateNamespaces panics if the same non-empty namespace appears in more
+// than one module in the composed tree.
+func validateNamespaces(root Module) {
+	seen := map[string]struct{}{}
+	var walk func(part web.Part)
+	walk = func(part web.Part) {
+		if part == nil {
+			return
+		}
+		if m, ok := part.(Module); ok {
+			if ns := strings.TrimSpace(m.namespace()); ns != "" {
+				if _, exists := seen[ns]; exists {
+					panic(fmt.Sprintf("stack: duplicate module namespace %q", ns))
+				}
+				seen[ns] = struct{}{}
+			}
+			// walk the module's raw parts (not filtered) to catch all children
+			if b, ok := part.(*bundle); ok {
+				for _, p := range b.parts {
+					walk(p)
+				}
+			}
+		}
+	}
+	walk(root)
+}
+
+// --- internal builder helpers ---
+
+type lazyTailwindSource struct{ baseDir string }
+
+func (s lazyTailwindSource) ID() string { return "lazy-styles:" + s.baseDir }
+
+func (s lazyTailwindSource) Materialize(_ web.AssetWorkspace, _ web.AssetKind) ([]string, error) {
+	return tailwindpkg.DiscoverStyles(s.baseDir), nil
+}
+
+func (s lazyTailwindSource) WatchPaths() []string {
+	if s.baseDir == "" {
+		return nil
+	}
+	return []string{s.baseDir}
+}
+
+func tailwindStylesPart(baseDir string) web.Part {
+	if strings.TrimSpace(baseDir) == "" {
+		return web.Compose()
+	}
+	return web.Compose(
+		web.TailwindScan(baseDir),
+		web.TailwindCSS(lazyTailwindSource{baseDir: baseDir}),
+	)
+}
+
+func stencilComponentsPart(baseDir string) web.Part {
+	if strings.TrimSpace(baseDir) == "" {
+		return web.Compose()
+	}
+	return web.Compose(
+		web.StencilScan(baseDir),
+		web.Stencil(web.FromDir(baseDir)),
+	)
+}
+
+// --- CLI ---
 
 type bundleCLIConfig struct {
 	ctx          context.Context
@@ -535,66 +588,4 @@ func stringParam(inv *cli.Invocation, fallback string, name string, aliases ...s
 		return fallback
 	}
 	return value
-}
-
-func resolveCallerDirArg(skip int, values ...string) string {
-	if len(values) == 0 {
-		return resolveCallerPath(skip+1, "")
-	}
-	return resolveCallerPath(skip+1, values[0])
-}
-
-func resolveCallerPaths(skip int, values ...string) []string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		out = append(out, resolveCallerPath(skip+1, value))
-	}
-	return out
-}
-
-type lazyTailwindSource struct{ baseDir string }
-
-func (s lazyTailwindSource) ID() string { return "lazy-styles:" + s.baseDir }
-
-func (s lazyTailwindSource) Materialize(_ web.AssetWorkspace, _ web.AssetKind) ([]string, error) {
-	return tailwindpkg.DiscoverStyles(s.baseDir), nil
-}
-
-func (s lazyTailwindSource) WatchPaths() []string {
-	if s.baseDir == "" {
-		return nil
-	}
-	return []string{s.baseDir}
-}
-
-func tailwindStylesPart(baseDir string) web.Part {
-	if strings.TrimSpace(baseDir) == "" {
-		return web.Compose()
-	}
-	return web.Compose(
-		web.TailwindScan(baseDir),
-		web.TailwindCSS(lazyTailwindSource{baseDir: baseDir}),
-	)
-}
-
-func stencilComponentsPart(baseDir string) web.Part {
-	if strings.TrimSpace(baseDir) == "" {
-		return web.Compose()
-	}
-	return web.Compose(
-		web.StencilScan(baseDir),
-		web.Stencil(web.FromDir(baseDir)),
-	)
-}
-
-func resolveCallerPath(skip int, value string) string {
-	value = strings.TrimSpace(value)
-	if value != "" && filepath.IsAbs(value) {
-		return filepath.Clean(value)
-	}
-	baseDir := web.CallerDir(skip + 1)
-	if value == "" {
-		return baseDir
-	}
-	return filepath.Clean(filepath.Join(baseDir, value))
 }
