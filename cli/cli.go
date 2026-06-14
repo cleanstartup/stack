@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/cleanstartup/stack/activity"
+	"github.com/cleanstartup/stack/param"
 )
 
 type Result struct {
@@ -67,6 +68,7 @@ type CliActivity[C any] struct {
 type handlerContext[C any] struct {
 	runtime *RuntimeContext
 	data    C
+	inv     *Invocation
 }
 
 type stringParamConfig struct {
@@ -192,7 +194,7 @@ func RegisterActivity[C any](r *Registry, a *CliActivity[C]) {
 			return Error(inv.Error().Error())
 		}
 		ctx := &RuntimeContext{}
-		hctx := &handlerContext[C]{runtime: ctx, data: decoded}
+		hctx := &handlerContext[C]{runtime: ctx, data: decoded, inv: inv}
 
 		exec := a.handler
 		for idx := len(a.middlewares) - 1; idx >= 0; idx-- {
@@ -443,6 +445,16 @@ func (c *handlerContext[C]) Error(err error) activity.Result {
 	}
 	return c.runtime.Error(err)
 }
+
+// Resolve implements param.Resolver so activity.Param[T] works in CLI handlers.
+func (c *handlerContext[C]) Resolve(names []string) (string, bool) {
+	if c == nil || c.inv == nil {
+		return "", false
+	}
+	return c.inv.lookupStringParam(ParamKey{names: names})
+}
+
+var _ param.Resolver = (*handlerContext[struct{}])(nil)
 
 func (i *Invocation) IntParam(key ParamKey, validators ...IntValidator) int {
 	raw, ok := i.lookupStringParam(key)
