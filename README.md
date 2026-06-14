@@ -187,13 +187,77 @@ go run ./cmd/app run       # serve already-built assets
 
 All commands support `--help`. Calling the binary without a command shows help.
 
+### CLI Target
+
+A CLI Target is a standalone command-line application. It is defined with `stack.CLI()` and activated by calling `CLIApp()`.
+
+```go
+// internal/cli/cli.go
+package cli
+
+import (
+    "github.com/cleanstartup/stack"
+    stackcli "github.com/cleanstartup/stack/cli"
+)
+
+func CLIModule() stack.CLIModule {
+    return stack.CLI(
+        stackcli.Group("setup",    checkCmd, encryptionCmd),
+        stackcli.Group("codebook", discloseCmd),
+        stackcli.Group("user",     importCmd, syncCmd),
+    )
+}
+
+// cmd/cli/main.go
+func main() { cli.CLIModule().CLIApp() }
+```
+
+### Params
+
+Parameters are declared as typed descriptors and read inside handlers using `activity.Param`. The same declaration works across CLI and web handlers.
+
+```go
+import (
+    "github.com/cleanstartup/stack/activity"
+    "github.com/cleanstartup/stack/param"
+    stackcli "github.com/cleanstartup/stack/cli"
+)
+
+var userID  = param.String("user-id", param.Required[string]())
+var verbose = param.Bool("verbose", param.WithDefault(false))
+var mnemonic = param.String("mnemonic",
+    param.Required[string](),
+    param.WithPrompt[string]("Decryption Key (Mnemonic): "),
+)
+
+var showUserCmd = stackcli.Activity(
+    "show",
+    func(inv *stackcli.Invocation) struct{} { return struct{}{} },
+    func(ctx stackcli.Context[struct{}]) stackcli.Result {
+        id      := activity.Param(ctx, userID)
+        verbose := activity.Param(ctx, verbose)
+        ctx.Stdout("user=%s verbose=%t\n", id, verbose)
+        return stackcli.Done()
+    },
+)
+```
+
+| Constructor | Type | Options |
+|---|---|---|
+| `param.String(name, opts...)` | `Param[string]` | `Required`, `WithDefault`, `WithAlias`, `WithPrompt` |
+| `param.Int(name, opts...)`    | `Param[int]`    | `Required`, `WithDefault`, `WithAlias` |
+| `param.Bool(name, opts...)`   | `Param[bool]`   | `Required`, `WithDefault`, `WithAlias` |
+
+`WithPrompt` is supported by CLI handlers. When the flag is not provided, the user is asked interactively. Web handlers ignore the prompt and return the default.
+
 ## Packages
 
-- `stack`: root package — `Bundle`, `Extend`, `Assets`, `Mount`, `CSS`, `JS`, `File`
+- `stack`: root package — `Bundle`, `Extend`, `CLI`, `Assets`, `Mount`, `CSS`, `JS`, `File`
 - `assets`: asset source descriptors — `Dir`, `StaticDir`, `Use`, `Tailwind`, `Stencil`
-- `activity`: typed activity definitions, instances, URI building and execution helpers
-- `web`: HTTP registration, routing, asset pipelines and request decoding
-- `cli`: command registration, parsing, help text and execution
+- `param`: typed parameter descriptors — `String`, `Int`, `Bool`, `Required`, `WithDefault`, `WithAlias`, `WithPrompt`
+- `activity`: typed activity definitions, instances, URI building, `Param[T]()` helper
+- `web`: HTTP registration, routing, asset pipelines and request decoding; implements `param.Resolver`
+- `cli`: command registration, `Group()`, `BuildRegistry()`, help text and execution; implements `param.Resolver` and `param.Prompter`
 - `config`: env-based config loading with `.env` support
 
 ## Environment Variables
