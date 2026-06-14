@@ -187,40 +187,26 @@ go run ./cmd/app run       # serve already-built assets
 
 All commands support `--help`. Calling the binary without a command shows help.
 
-### CLI Target
+### Activities
 
-A CLI Target uses the same `stack.Bundle()` as a web Module. `stack.Group()` adds CLI commands; `WebApp()` ignores them. `CLIApp()` ignores web-only parts.
+An Activity is the core unit of application logic. It is transport-agnostic: the same definition can register as a web route, a CLI command, or both. Targets pick up only what they are declared to handle.
 
 ```go
-// internal/cli/module.go
-package cli
+var userID = param.String("user-id", param.Required[string]())
 
-import (
-    "github.com/cleanstartup/stack"
-    stackcli "github.com/cleanstartup/stack/cli"
+var showUser = stack.Activity("user.show",
+    func(ctx activity.Context) activity.Result {
+        id := activity.Param(ctx, userID) // works in web and CLI
+        // ...
+    },
+    stack.WithView(),                       // → WebApp: GET /user/show
+    stack.WithCommand("user", "show"),      // → CLIApp: user show
+    stack.WithMiddleware(analytics.Track()), // applied in both targets
+    stack.WithHelp("Show a user by ID"),
 )
 
 func Module() stack.Module {
-    return stack.Bundle("myapp",
-        stack.Group("setup",    checkCmd, encryptionCmd),
-        stack.Group("codebook", discloseCmd),
-        stack.Group("user",     importCmd, syncCmd),
-    )
-}
-
-// cmd/cli/main.go
-func main() { cli.Module().CLIApp() }
-```
-
-A Module that serves both web and CLI targets from one definition:
-
-```go
-func Module() stack.Module {
-    return stack.Bundle("myapp",
-        assets.Dir("."),               // → WebApp only
-        stack.Activity(ref, handler),  // → WebApp only
-        stack.Group("user", importCmd, syncCmd), // → CLIApp only
-    )
+    return stack.Bundle("myapp", showUser) // one entry, both targets
 }
 
 // cmd/web/main.go
@@ -230,33 +216,43 @@ func main() { myapp.Module().WebApp(assets.Tailwind()) }
 func main() { myapp.Module().CLIApp() }
 ```
 
-### Params
+`WithView()` accepts optional web-specific options such as `web.WithStaticTitle(...)`. `WithCommand("group", "name")` defines the CLI command path; multiple activities sharing a group name are placed in the same CLI group automatically.
 
-Parameters are declared as typed descriptors and read inside handlers using `activity.Param`. The same declaration works across CLI and web handlers.
+CLI-only commands (without a web route) use `stack.Group()` with `*cli.CliActivity` values directly:
 
 ```go
-import (
-    "github.com/cleanstartup/stack/activity"
-    "github.com/cleanstartup/stack/param"
-    stackcli "github.com/cleanstartup/stack/cli"
-)
+stackcli "github.com/cleanstartup/stack/cli"
 
-var userID  = param.String("user-id", param.Required[string]())
-var verbose = param.Bool("verbose", param.WithDefault(false))
+var importCmd = stackcli.Activity("import", decode, handler)
+var syncCmd   = stackcli.Activity("sync",   decode, handler)
+
+func Module() stack.Module {
+    return stack.Bundle("myapp",
+        stack.Group("user", importCmd, syncCmd), // CLIApp only
+    )
+}
+```
+
+### Params
+
+Parameters are declared as typed descriptors and resolved from context using `activity.Param`. The same declaration works across web and CLI handlers — each transport provides values from its own source (query string / path params for web, flags for CLI).
+
+```go
+var userID   = param.String("user-id", param.Required[string]())
+var verbose  = param.Bool("verbose",   param.WithDefault(false))
 var mnemonic = param.String("mnemonic",
     param.Required[string](),
     param.WithPrompt[string]("Decryption Key (Mnemonic): "),
 )
 
-var showUserCmd = stackcli.Activity(
-    "show",
-    func(inv *stackcli.Invocation) struct{} { return struct{}{} },
-    func(ctx stackcli.Context[struct{}]) stackcli.Result {
-        id      := activity.Param(ctx, userID)
+var showUser = stack.Activity("user.show",
+    func(ctx activity.Context) activity.Result {
+        id  := activity.Param(ctx, userID)
         verbose := activity.Param(ctx, verbose)
-        ctx.Stdout("user=%s verbose=%t\n", id, verbose)
-        return stackcli.Done()
+        // ...
     },
+    stack.WithView(),
+    stack.WithCommand("user", "show"),
 )
 ```
 
@@ -266,14 +262,37 @@ var showUserCmd = stackcli.Activity(
 | `param.Int(name, opts...)`    | `Param[int]`    | `Required`, `WithDefault`, `WithAlias` |
 | `param.Bool(name, opts...)`   | `Param[bool]`   | `Required`, `WithDefault`, `WithAlias` |
 
-`WithPrompt` is supported by CLI handlers. When the flag is not provided, the user is asked interactively. Web handlers ignore the prompt and return the default.
+`WithPrompt` is supported by CLI handlers: when the flag is not provided, the user is prompted interactively. Web handlers fall back to the default value.
+
+### Middleware
+
+`activity.ContextMiddleware` runs at the `activity.Context` level, making it transport-agnostic. Attach it to an activity with `stack.WithMiddleware()` and it is applied in both web and CLI targets.
+
+```go
+// A middleware that works in both web and CLI:
+func Track() activity.ContextMiddleware {
+    return func(next activity.ContextHandler) activity.ContextHandler {
+        return func(ctx activity.Context) activity.Result {
+            result := next(ctx)
+            // record event...
+            return result
+        }
+    }
+}
+
+var showUser = stack.Activity("user.show", handler,
+    stack.WithMiddleware(Track()),
+)
+```
+
+Execution order within a web handler: typed middlewares → cross-target middlewares → registry-wide `GlobalMiddleware`.
 
 ## Packages
 
-- `stack`: root package — `Bundle`, `Extend`, `Group`, `Assets`, `Mount`, `CSS`, `JS`, `File`
+- `stack`: root package — `Bundle`, `Extend`, `Activity`, `Group`, `WithView`, `WithCommand`, `WithMiddleware`, `WithHelp`, `Assets`, `Mount`, `CSS`, `JS`, `File`
 - `assets`: asset source descriptors — `Dir`, `StaticDir`, `Use`, `Tailwind`, `Stencil`
 - `param`: typed parameter descriptors — `String`, `Int`, `Bool`, `Required`, `WithDefault`, `WithAlias`, `WithPrompt`
-- `activity`: typed activity definitions, instances, URI building, `Param[T]()` helper
+- `activity`: `Param[T]()`, `ContextMiddleware`, `ContextHandler`, `ApplyMiddlewares`, URI building
 - `web`: HTTP registration, routing, asset pipelines and request decoding; implements `param.Resolver`
 - `cli`: command registration, `Group()`, `BuildRegistry()`, help text and execution; implements `param.Resolver` and `param.Prompter`
 - `config`: env-based config loading with `.env` support
