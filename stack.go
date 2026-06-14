@@ -63,8 +63,76 @@ type bundle struct {
 	root  string
 }
 
-type activityPart struct {
-	activity *web.WebActivity[struct{}]
+// ActivityDef is a transport-agnostic activity definition.
+// Use WithView() to register it as a web route and WithCommand() to register
+// it as a CLI command. Both can be set on the same definition.
+type ActivityDef struct {
+	id      string
+	handler func(activity.Context) activity.Result
+	crossMW []activity.ContextMiddleware
+	help    string
+	// web
+	hasView  bool
+	viewOpts []web.ActivityOption[struct{}]
+	// cli
+	hasCommand bool
+	cmdPath    []string
+}
+
+// ActivityOption configures an ActivityDef.
+type ActivityOption func(*ActivityDef)
+
+// WithView registers the activity as a web route. Optional web-specific opts
+// (e.g. web.WithStaticTitle) can be passed here.
+func WithView(opts ...web.ActivityOption[struct{}]) ActivityOption {
+	return func(a *ActivityDef) {
+		a.hasView = true
+		a.viewOpts = append(a.viewOpts, opts...)
+	}
+}
+
+// WithCommand registers the activity as a CLI command. The path segments define
+// the group hierarchy and command name, e.g. WithCommand("user", "show") →
+// subcommand "show" under group "user".
+func WithCommand(path ...string) ActivityOption {
+	return func(a *ActivityDef) {
+		a.hasCommand = true
+		a.cmdPath = path
+	}
+}
+
+// WithMiddleware attaches cross-target middleware to the activity.
+// Applied in both web and CLI targets.
+func WithMiddleware(mw ...activity.ContextMiddleware) ActivityOption {
+	return func(a *ActivityDef) {
+		a.crossMW = append(a.crossMW, mw...)
+	}
+}
+
+// WithHelp sets the help text shown in CLI --help output.
+func WithHelp(text string) ActivityOption {
+	return func(a *ActivityDef) { a.help = text }
+}
+
+// Apply registers the activity as a web route if WithView was set.
+// Implements web.Part — ignored by CLIApp.
+func (a *ActivityDef) Apply(app *web.WebApp) {
+	if a == nil || !a.hasView {
+		return
+	}
+	opts := append([]web.ActivityOption[struct{}]{
+		web.WithCrossMiddleware[struct{}](a.crossMW...),
+	}, a.viewOpts...)
+	web.Activity(activity.Ref(a.id), a.handler, opts...).Apply(app)
+}
+
+// ID returns the activity ID, satisfying the URIRef-compatible interface for
+// use with web.URI().
+func (a *ActivityDef) ID() string {
+	if a == nil {
+		return ""
+	}
+	return a.id
 }
 
 type webAppConfig struct {
@@ -133,17 +201,18 @@ func Extend(base Module, parts ...web.Part) Module {
 
 func Compose(parts ...web.Part) web.Part { return web.Compose(parts...) }
 
-func Activity(ref activity.URIRef, handler func(activity.Context) activity.Result, opts ...web.ActivityOption[struct{}]) Part {
-	act := web.Activity(ref, handler, opts...)
-	return activityPart{activity: act}
+// Activity defines a transport-agnostic activity. Use WithView() and/or
+// WithCommand() to declare which targets it participates in.
+func Activity(id string, handler func(activity.Context) activity.Result, opts ...ActivityOption) *ActivityDef {
+	a := &ActivityDef{id: strings.TrimSpace(id), handler: handler}
+	for _, opt := range opts {
+		opt(a)
+	}
+	return a
 }
 
-func WithStaticTitle(title string) web.ActivityOption[struct{}] { return web.WithStaticTitle(title) }
-
-// WithMiddleware attaches cross-target middleware to a stack.Activity.
-// The same middleware is applied identically in web and CLI targets.
-func WithMiddleware(mw ...activity.ContextMiddleware) web.ActivityOption[struct{}] {
-	return web.WithCrossMiddleware[struct{}](mw...)
+func WithStaticTitle(title string) ActivityOption {
+	return WithView(web.WithStaticTitle(title))
 }
 func Screen(name string, props any) templ.Component             { return web.Screen(name, props) }
 func Element(name string, props any) templ.Component            { return web.Element(name, props) }
@@ -207,23 +276,49 @@ func (b *bundle) WebApp(opts ...WebAppOption) {
 }
 
 func (b *bundle) CLIApp() {
-	var cmds []cli.Command
-	b.collectCLICommands(&cmds)
-	runRegistry(cli.BuildRegistry(cmds...), os.Args[1:])
+	r := cli.NewRegistry()
+	b.buildCLIRegistry(r)
+	runRegistry(r, os.Args[1:])
 }
 
-func (b *bundle) collectCLICommands(out *[]cli.Command) {
+func (b *bundle) buildCLIRegistry(r *cli.Registry) {
 	if b == nil {
 		return
 	}
 	for _, part := range b.parts {
 		switch p := part.(type) {
 		case cliGroup:
-			*out = append(*out, p.cmd)
+			cli.RegisterCommand(r, p.cmd)
+		case *ActivityDef:
+			if p.hasCommand {
+				registerActivityCLI(r, p)
+			}
 		case *bundle:
-			p.collectCLICommands(out)
+			p.buildCLIRegistry(r)
 		}
 	}
+}
+
+func registerActivityCLI(r *cli.Registry, a *ActivityDef) {
+	target := r
+	for _, group := range a.cmdPath[:len(a.cmdPath)-1] {
+		target = target.GetOrCreateGroup(group)
+	}
+	name := a.cmdPath[len(a.cmdPath)-1]
+	handler := activity.ApplyMiddlewares(a.handler, a.crossMW)
+	cmd := cli.Activity(
+		name,
+		func(inv *cli.Invocation) struct{} { return struct{}{} },
+		func(ctx cli.Context[struct{}]) cli.Result {
+			result := handler(ctx)
+			if r, ok := result.(cli.Result); ok {
+				return r
+			}
+			return cli.Done()
+		},
+		cli.WithHelp[struct{}](a.help),
+	)
+	cli.RegisterActivity(target, cmd)
 }
 
 func (b *bundle) namespace() string {
@@ -251,12 +346,6 @@ func (b *bundle) rootDir() string {
 	return b.root
 }
 
-func (p activityPart) Apply(app *web.WebApp) {
-	if app == nil || p.activity == nil {
-		return
-	}
-	p.activity.Apply(app)
-}
 
 func parseWebAppOptions(opts ...WebAppOption) webAppConfig {
 	cfg := webAppConfig{}

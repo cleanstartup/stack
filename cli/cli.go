@@ -244,6 +244,18 @@ func (r *Registry) Group(path string) *Registry {
 	return child
 }
 
+// GetOrCreateGroup returns the existing sub-registry for name, or creates one.
+// Use this when multiple activities share the same group name.
+func (r *Registry) GetOrCreateGroup(name string) *Registry {
+	if r == nil {
+		panic("registry is nil")
+	}
+	if sub, ok := r.mounts[name]; ok {
+		return sub
+	}
+	return r.Group(name)
+}
+
 func (r *Registry) Run(args []string) int {
 	result := r.Execute(args)
 	if result.Stdout != "" {

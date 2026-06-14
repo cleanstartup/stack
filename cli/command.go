@@ -25,6 +25,14 @@ func BuildRegistry(cmds ...Command) *Registry {
 	return r
 }
 
+// RegisterCommand registers a single Command into an existing Registry.
+func RegisterCommand(r *Registry, cmd Command) {
+	if r == nil || cmd == nil {
+		return
+	}
+	cmd.registerInto(r)
+}
+
 type group struct {
 	name string
 	cmds []Command
