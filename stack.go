@@ -139,6 +139,12 @@ func Activity(ref activity.URIRef, handler func(activity.Context) activity.Resul
 }
 
 func WithStaticTitle(title string) web.ActivityOption[struct{}] { return web.WithStaticTitle(title) }
+
+// WithMiddleware attaches cross-target middleware to a stack.Activity.
+// The same middleware is applied identically in web and CLI targets.
+func WithMiddleware(mw ...activity.ContextMiddleware) web.ActivityOption[struct{}] {
+	return web.WithCrossMiddleware[struct{}](mw...)
+}
 func Screen(name string, props any) templ.Component             { return web.Screen(name, props) }
 func Element(name string, props any) templ.Component            { return web.Element(name, props) }
 

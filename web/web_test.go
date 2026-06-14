@@ -294,7 +294,7 @@ func TestURIFallsBackToPathFromIDForUnregisteredActivity(t *testing.T) {
 func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 	r := web.NewRegistry()
 	called := false
-	r.UseGlobalMiddleware(func(next func(ctx activity.Context) activity.Result) func(ctx activity.Context) activity.Result {
+	r.UseGlobalMiddleware(func(next activity.ContextHandler) activity.ContextHandler {
 		return func(ctx activity.Context) activity.Result {
 			called = true
 			return next(ctx)

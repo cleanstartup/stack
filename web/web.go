@@ -75,20 +75,23 @@ type Context[C any] interface {
 }
 type ActivityHandler[C any] func(ctx Context[C]) activity.Result
 type ActivityMiddleware[C any] func(next ActivityHandler[C]) ActivityHandler[C]
-type GlobalMiddleware func(next func(ctx activity.Context) activity.Result) func(ctx activity.Context) activity.Result
+// GlobalMiddleware is a registry-wide middleware applied to every activity.
+// It is equivalent to activity.ContextMiddleware and can be used interchangeably.
+type GlobalMiddleware = activity.ContextMiddleware
 type ActivityOption[C any] func(a *WebActivity[C])
 type TitleFunc func(ctx activity.Context) string
 
 type URIRef = activity.URIRef
 
 type WebActivity[C any] struct {
-	id          string
-	pattern     string
-	decode      DecodeFunc[C]
-	handler     ActivityHandler[C]
-	middlewares []ActivityMiddleware[C]
-	ref         URIRef
-	title       TitleFunc
+	id               string
+	pattern          string
+	decode           DecodeFunc[C]
+	handler          ActivityHandler[C]
+	middlewares      []ActivityMiddleware[C]
+	crossMiddlewares []activity.ContextMiddleware
+	ref              URIRef
+	title            TitleFunc
 }
 
 type handlerContext[C any] struct {
@@ -258,6 +261,15 @@ func WithStaticTitle(title string) ActivityOption[struct{}] {
 	})
 }
 
+// WithCrossMiddleware attaches transport-agnostic middlewares to this activity.
+// They run at the activity.Context level, after typed middlewares and before
+// registry-wide GlobalMiddleware, so they work identically in web and CLI.
+func WithCrossMiddleware[C any](mw ...activity.ContextMiddleware) ActivityOption[C] {
+	return func(a *WebActivity[C]) {
+		a.crossMiddlewares = append(a.crossMiddlewares, mw...)
+	}
+}
+
 func WithMiddleware[C any](mw ActivityMiddleware[C]) ActivityOption[C] {
 	return func(a *WebActivity[C]) {
 		a.middlewares = append(a.middlewares, mw)
@@ -342,16 +354,17 @@ func RegisterWebActivity[C any](r *Registry, a *WebActivity[C]) {
 		for idx := len(a.middlewares) - 1; idx >= 0; idx-- {
 			exec = a.middlewares[idx](exec)
 		}
-		run := func(ac activity.Context) activity.Result {
-			typedCtx, ok := ac.(Context[C])
-			if !ok {
-				return ac.Error(fmt.Errorf("unexpected activity context type %T", ac))
-			}
-			return exec(typedCtx)
-		}
-		for idx := len(r.globalMW) - 1; idx >= 0; idx-- {
-			run = r.globalMW[idx](run)
-		}
+		run := activity.ApplyMiddlewares(
+			func(ac activity.Context) activity.Result {
+				typedCtx, ok := ac.(Context[C])
+				if !ok {
+					return ac.Error(fmt.Errorf("unexpected activity context type %T", ac))
+				}
+				return exec(typedCtx)
+			},
+			a.crossMiddlewares,
+		)
+		run = activity.ApplyMiddlewares(run, r.globalMW)
 
 		result := run(hctx)
 		if title := strings.TrimSpace(resolveTitle(a.title, hctx)); title != "" {

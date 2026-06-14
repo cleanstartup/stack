@@ -58,11 +58,12 @@ type ActivityMiddleware[C any] func(next ActivityHandler[C]) ActivityHandler[C]
 type ActivityOption[C any] func(a *CliActivity[C])
 
 type CliActivity[C any] struct {
-	id          string
-	help        string
-	decode      DecodeFunc[C]
-	handler     ActivityHandler[C]
-	middlewares []ActivityMiddleware[C]
+	id               string
+	help             string
+	decode           DecodeFunc[C]
+	handler          ActivityHandler[C]
+	middlewares      []ActivityMiddleware[C]
+	crossMiddlewares []activity.ContextMiddleware
 }
 
 type handlerContext[C any] struct {
@@ -157,6 +158,15 @@ func WithMiddleware[C any](mw ActivityMiddleware[C]) ActivityOption[C] {
 	}
 }
 
+// WithCrossMiddleware attaches transport-agnostic middlewares to this activity.
+// They run at the activity.Context level, after typed middlewares, and work
+// identically in web and CLI targets.
+func WithCrossMiddleware[C any](mw ...activity.ContextMiddleware) ActivityOption[C] {
+	return func(a *CliActivity[C]) {
+		a.crossMiddlewares = append(a.crossMiddlewares, mw...)
+	}
+}
+
 func WithHelp[C any](text string) ActivityOption[C] {
 	return func(a *CliActivity[C]) {
 		if a == nil {
@@ -200,7 +210,14 @@ func RegisterActivity[C any](r *Registry, a *CliActivity[C]) {
 		for idx := len(a.middlewares) - 1; idx >= 0; idx-- {
 			exec = a.middlewares[idx](exec)
 		}
-		result := exec(hctx)
+		run := activity.ApplyMiddlewares(
+			func(ac activity.Context) activity.Result {
+				return exec(ac.(Context[C]))
+			},
+			a.crossMiddlewares,
+		)
+		raw := run(hctx)
+		result, _ := raw.(Result)
 		return ctx.merge(result)
 	}
 	r.help[a.id] = strings.TrimSpace(a.help)
