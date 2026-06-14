@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	npmpkg "github.com/cleanstartup/stack/npm"
-	stencilpkg "github.com/cleanstartup/stack/stencil"
-	tailwindpkg "github.com/cleanstartup/stack/tailwind"
+	npmpkg "github.com/cleanstartup/stack/internal/npm"
+	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
+	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 )
 
 func templProxyURL(addr string) string {

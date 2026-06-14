@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/cleanstartup/stack/activity"
-	assetpkg "github.com/cleanstartup/stack/asset"
-	stencilpkg "github.com/cleanstartup/stack/stencil"
-	tailwindpkg "github.com/cleanstartup/stack/tailwind"
+	assetpkg "github.com/cleanstartup/stack/internal/asset"
+	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
+	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 )
 
 type routeRegistration interface {

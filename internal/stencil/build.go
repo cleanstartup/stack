@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	assetspkg "github.com/cleanstartup/stack/asset"
+	assetspkg "github.com/cleanstartup/stack/internal/asset"
 )
 
 type Config struct {

@@ -3,7 +3,7 @@ package assets
 import (
 	"path/filepath"
 
-	"github.com/cleanstartup/stack/asset"
+	"github.com/cleanstartup/stack/internal/asset"
 	"github.com/cleanstartup/stack/web"
 )
 

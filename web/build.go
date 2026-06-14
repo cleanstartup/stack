@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	pipelinepkg "github.com/cleanstartup/stack/pipeline"
-	stencilpkg "github.com/cleanstartup/stack/stencil"
-	tailwindpkg "github.com/cleanstartup/stack/tailwind"
+	pipelinepkg "github.com/cleanstartup/stack/internal/pipeline"
+	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
+	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 )
 
 const (

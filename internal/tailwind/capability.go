@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cleanstartup/stack/asset"
-	"github.com/cleanstartup/stack/capability"
-	"github.com/cleanstartup/stack/pipeline"
+	"github.com/cleanstartup/stack/internal/asset"
+	"github.com/cleanstartup/stack/internal/capability"
+	"github.com/cleanstartup/stack/internal/pipeline"
 )
 
 type ConfigResolver func(capability.Context) Config

@@ -1,6 +1,6 @@
 package stencil
 
-import npmpkg "github.com/cleanstartup/stack/npm"
+import npmpkg "github.com/cleanstartup/stack/internal/npm"
 
 func AddNPMDependencies(project *npmpkg.Project) {
 	if project == nil {

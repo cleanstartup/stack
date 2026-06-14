@@ -6,11 +6,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cleanstartup/stack/capability"
-	npmpkg "github.com/cleanstartup/stack/npm"
-	pipelinepkg "github.com/cleanstartup/stack/pipeline"
-	stencilpkg "github.com/cleanstartup/stack/stencil"
-	tailwindpkg "github.com/cleanstartup/stack/tailwind"
+	"github.com/cleanstartup/stack/internal/capability"
+	npmpkg "github.com/cleanstartup/stack/internal/npm"
+	pipelinepkg "github.com/cleanstartup/stack/internal/pipeline"
+	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
+	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 )
 
 func (e *BuildEngine) capabilities() []capability.Capability {

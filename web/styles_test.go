@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	tailwindpkg "github.com/cleanstartup/stack/tailwind"
+	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 )
 
 func TestCSSReturnsDirectAssetRef(t *testing.T) {

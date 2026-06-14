@@ -4,8 +4,8 @@ import (
 	"os"
 	"sort"
 
-	stencilpkg "github.com/cleanstartup/stack/stencil"
-	tailwindpkg "github.com/cleanstartup/stack/tailwind"
+	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
+	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 )
 
 func (e *BuildEngine) devOutputWatchPaths(outputDir string) []string {

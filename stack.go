@@ -18,7 +18,7 @@ import (
 	"github.com/cleanstartup/stack/activity"
 	assetspkg "github.com/cleanstartup/stack/assets"
 	"github.com/cleanstartup/stack/cli"
-	tailwindpkg "github.com/cleanstartup/stack/tailwind"
+	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 	"github.com/cleanstartup/stack/web"
 )
 

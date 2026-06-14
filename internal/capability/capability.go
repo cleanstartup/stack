@@ -3,8 +3,8 @@ package capability
 import (
 	"context"
 
-	"github.com/cleanstartup/stack/asset"
-	"github.com/cleanstartup/stack/pipeline"
+	"github.com/cleanstartup/stack/internal/asset"
+	"github.com/cleanstartup/stack/internal/pipeline"
 )
 
 type Context struct {

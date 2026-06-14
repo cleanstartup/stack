@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	assetspkg "github.com/cleanstartup/stack/asset"
+	assetspkg "github.com/cleanstartup/stack/internal/asset"
 )
 
 type WatchWorker struct {
