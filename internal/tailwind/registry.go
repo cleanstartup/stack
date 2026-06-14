@@ -30,6 +30,12 @@ type SourcePathsProvider interface {
 	SourcePaths() []string
 }
 
+// SourceFileProvider is implemented by sources that can provide individual
+// file paths directly, allowing CSS imports to reference originals without mirroring.
+type SourceFileProvider interface {
+	SourceFiles() []string
+}
+
 type AssetRef struct {
 	Kind  AssetKind
 	ID    string

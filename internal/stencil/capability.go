@@ -40,9 +40,9 @@ func (c Capability) Install(ctx context.Context, cfg capability.Context) error {
 		return err
 	}
 
-	srcDir, realDirs, err := c.buildSymlinkSrcDir(projectDir)
-	if err != nil {
-		return err
+	srcDir := commonSourceDir(sourceFiles(c.registry.Inputs()))
+	if rel, err := filepath.Rel(projectDir, srcDir); err == nil && strings.TrimSpace(rel) != "" {
+		srcDir = filepath.ToSlash(rel)
 	}
 
 	outDir := filepath.Join(cfg.OutputDir, "assets", "js")
@@ -52,50 +52,9 @@ func (c Capability) Install(ctx context.Context, cfg capability.Context) error {
 	if err := os.WriteFile(filepath.Join(projectDir, "stencil.config.ts"), []byte(configSource(srcDir, outDir)), 0o644); err != nil {
 		return err
 	}
-	// tsconfig includes both the symlink dir (for Stencil's native watch/discovery)
-	// and the real source dirs (so TypeScript plugin processes files after Rollup resolves symlinks).
-	includes := append([]string{srcDir}, realDirs...)
-	return os.WriteFile(filepath.Join(projectDir, "tsconfig.json"), []byte(tsconfigSource(includes...)), 0o644)
+	return os.WriteFile(filepath.Join(projectDir, "tsconfig.json"), []byte(tsconfigSource(srcDir)), 0o644)
 }
 
-// buildSymlinkSrcDir creates .stack/stencil-src/ inside projectDir with one
-// symlink per registered source pointing at its original directory. This gives
-// Stencil a narrow srcDir so --watch never scans node_modules or unrelated trees.
-// Returns the symlink dir (relative to projectDir) and the absolute real source dirs.
-func (c Capability) buildSymlinkSrcDir(projectDir string) (string, []string, error) {
-	linkRoot := filepath.Join(projectDir, ".stack", "stencil-src")
-	if err := os.RemoveAll(linkRoot); err != nil {
-		return "", nil, err
-	}
-	if err := os.MkdirAll(linkRoot, 0o755); err != nil {
-		return "", nil, err
-	}
-	var realDirs []string
-	for _, source := range c.registry.Inputs() {
-		dirs, err := SourcePaths(source)
-		if err != nil || len(dirs) == 0 {
-			continue
-		}
-		dir := strings.TrimSpace(dirs[0])
-		if dir == "" {
-			continue
-		}
-		absDir, err := filepath.Abs(dir)
-		if err != nil {
-			return "", nil, err
-		}
-		linkName := filepath.Join(linkRoot, source.ID())
-		if err := os.Symlink(absDir, linkName); err != nil {
-			return "", nil, fmt.Errorf("stencil symlink %s -> %s: %w", linkName, absDir, err)
-		}
-		realDirs = append(realDirs, filepath.ToSlash(absDir))
-	}
-	rel, err := filepath.Rel(projectDir, linkRoot)
-	if err != nil {
-		return filepath.ToSlash(linkRoot), realDirs, nil
-	}
-	return filepath.ToSlash(rel), realDirs, nil
-}
 
 func (c Capability) Build(ctx context.Context, cfg capability.Context) error {
 	if c.empty() || cfg.Workspace == nil {

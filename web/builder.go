@@ -347,6 +347,16 @@ func (a tailwindSourceAdapter) SourcePaths() []string {
 	return paths
 }
 
+func (a tailwindSourceAdapter) SourceFiles() []string {
+	if a.source == nil {
+		return nil
+	}
+	if p, ok := a.source.(assetpkg.SourceFileProvider); ok {
+		return p.SourceFiles()
+	}
+	return nil
+}
+
 func wrapTailwindSource(src AssetSource) tailwindpkg.Source {
 	if src == nil {
 		return nil

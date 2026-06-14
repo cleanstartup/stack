@@ -52,25 +52,38 @@ func (r *Registry) Input(workspace Workspace) (string, error) {
 		if source == nil {
 			continue
 		}
-		paths, err := materializeSource(source, workspace)
-		if err != nil {
-			return "", err
+		var paths []string
+		if sp, ok := source.(SourceFileProvider); ok {
+			paths = sp.SourceFiles()
 		}
-		baseDir := workspace.AssetDir(AssetCSS, source.ID())
-		for _, sourcePath := range paths {
-			if strings.TrimSpace(sourcePath) == "" {
+		if len(paths) == 0 {
+			var err error
+			paths, err = materializeSource(source, workspace)
+			if err != nil {
+				return "", err
+			}
+			baseDir := workspace.AssetDir(AssetCSS, source.ID())
+			for i, sourcePath := range paths {
+				if strings.TrimSpace(sourcePath) == "" {
+					continue
+				}
+				contentPath := filepath.Clean(filepath.FromSlash(sourcePath))
+				if !filepath.IsAbs(contentPath) {
+					if _, err := os.Stat(contentPath); err != nil {
+						contentPath = filepath.Join(baseDir, filepath.FromSlash(sourcePath))
+					} else if !strings.HasPrefix(filepath.ToSlash(contentPath), "./") && !strings.HasPrefix(filepath.ToSlash(contentPath), "../") {
+						contentPath = "." + string(filepath.Separator) + contentPath
+					}
+				}
+				paths[i] = contentPath
+			}
+		}
+		for _, p := range paths {
+			if strings.TrimSpace(p) == "" {
 				continue
 			}
-			contentPath := filepath.Clean(filepath.FromSlash(sourcePath))
-			if !filepath.IsAbs(contentPath) {
-				if _, err := os.Stat(contentPath); err != nil {
-					contentPath = filepath.Join(baseDir, filepath.FromSlash(sourcePath))
-				} else if !strings.HasPrefix(filepath.ToSlash(contentPath), "./") && !strings.HasPrefix(filepath.ToSlash(contentPath), "../") {
-					contentPath = "." + string(filepath.Separator) + contentPath
-				}
-			}
 			out.WriteString("\n@import \"")
-			out.WriteString(filepath.ToSlash(contentPath))
+			out.WriteString(filepath.ToSlash(p))
 			out.WriteString("\";\n")
 		}
 	}
