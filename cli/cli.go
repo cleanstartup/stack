@@ -454,7 +454,13 @@ func (c *handlerContext[C]) Resolve(names []string) (string, bool) {
 	return c.inv.lookupStringParam(ParamKey{names: names})
 }
 
+// Prompt implements param.Prompter for interactive CLI params.
+func (c *handlerContext[C]) Prompt(text string) (string, error) {
+	return promptString(os.Stdin, os.Stdout, text)
+}
+
 var _ param.Resolver = (*handlerContext[struct{}])(nil)
+var _ param.Prompter = (*handlerContext[struct{}])(nil)
 
 func (i *Invocation) IntParam(key ParamKey, validators ...IntValidator) int {
 	raw, ok := i.lookupStringParam(key)

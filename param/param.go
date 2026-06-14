@@ -13,12 +13,20 @@ type Resolver interface {
 	Resolve(names []string) (string, bool)
 }
 
+// Prompter is implemented by transports that support interactive prompting.
+// If the resolved value is empty and a prompt is set, the transport is asked
+// to prompt the user for a value.
+type Prompter interface {
+	Prompt(text string) (string, error)
+}
+
 // Param[T] is a typed, named parameter descriptor. Create instances with String, Int, Bool.
 type Param[T any] struct {
 	names      []string
 	required   bool
 	hasDefault bool
 	def        T
+	prompt     string
 	parse      func(string) (T, error)
 }
 
@@ -28,8 +36,11 @@ func (p Param[T]) Names() []string { return p.names }
 // Default returns the default value for this param.
 func (p Param[T]) Default() T { return p.def }
 
-// Required reports whether the param is required.
+// IsRequired reports whether the param is required.
 func (p Param[T]) IsRequired() bool { return p.required }
+
+// PromptText returns the interactive prompt text, or empty if prompting is disabled.
+func (p Param[T]) PromptText() string { return p.prompt }
 
 // Option configures a Param.
 type Option[T any] func(*Param[T])
@@ -45,6 +56,12 @@ func WithDefault[T any](v T) Option[T] {
 		p.def = v
 		p.hasDefault = true
 	}
+}
+
+// WithPrompt sets a text shown to the user when the param is not supplied and
+// the transport supports interactive prompting (e.g. CLI).
+func WithPrompt[T any](text string) Option[T] {
+	return func(p *Param[T]) { p.prompt = text }
 }
 
 // WithAlias adds additional names that can be used to supply this param.
