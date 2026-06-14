@@ -13,10 +13,13 @@ import (
 	"sync"
 
 	"github.com/cleanstartup/stack/activity"
+	"github.com/cleanstartup/stack/param"
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
 )
+
+var _ param.Resolver = (*handlerContext[struct{}])(nil)
 
 type activityMetaContextKey struct{}
 type devStateContextKey struct{}
@@ -91,6 +94,7 @@ type WebActivity[C any] struct {
 type handlerContext[C any] struct {
 	runtime *RuntimeContext
 	data    C
+	req     *Request
 }
 
 func NewRegistry() *Registry {
@@ -332,7 +336,7 @@ func RegisterWebActivity[C any](r *Registry, a *WebActivity[C]) {
 		}
 		ctx := NewContext(w, req)
 		ctx.renderError = r.errorHandler
-		hctx := &handlerContext[C]{runtime: ctx, data: decoded}
+		hctx := &handlerContext[C]{runtime: ctx, data: decoded, req: rq}
 
 		exec := a.handler
 		for idx := len(a.middlewares) - 1; idx >= 0; idx-- {
@@ -756,6 +760,25 @@ func (c *handlerContext[C]) Error(err error) activity.Result {
 		return err
 	}
 	return c.runtime.Error(err)
+}
+
+// Resolve implements param.Resolver so activity.Param[T] works in web handlers.
+// It checks path params first, then query string, for each candidate name.
+func (c *handlerContext[C]) Resolve(names []string) (string, bool) {
+	if c == nil || c.req == nil {
+		return "", false
+	}
+	for _, name := range names {
+		if v, ok := c.req.pathParams[name]; ok && v != "" {
+			return v, true
+		}
+	}
+	for _, name := range names {
+		if v := c.req.query.Get(name); v != "" {
+			return v, true
+		}
+	}
+	return "", false
 }
 
 func (c *handlerContext[C]) runtimeContext() *RuntimeContext {
