@@ -189,10 +189,10 @@ All commands support `--help`. Calling the binary without a command shows help.
 
 ### CLI Target
 
-A CLI Target is a standalone command-line application. It is defined with `stack.CLI()` and activated by calling `CLIApp()`.
+A CLI Target uses the same `stack.Bundle()` as a web Module. `stack.Group()` adds CLI commands; `WebApp()` ignores them. `CLIApp()` ignores web-only parts.
 
 ```go
-// internal/cli/cli.go
+// internal/cli/module.go
 package cli
 
 import (
@@ -200,16 +200,34 @@ import (
     stackcli "github.com/cleanstartup/stack/cli"
 )
 
-func CLIModule() stack.CLIModule {
-    return stack.CLI(
-        stackcli.Group("setup",    checkCmd, encryptionCmd),
-        stackcli.Group("codebook", discloseCmd),
-        stackcli.Group("user",     importCmd, syncCmd),
+func Module() stack.Module {
+    return stack.Bundle("myapp",
+        stack.Group("setup",    checkCmd, encryptionCmd),
+        stack.Group("codebook", discloseCmd),
+        stack.Group("user",     importCmd, syncCmd),
     )
 }
 
 // cmd/cli/main.go
-func main() { cli.CLIModule().CLIApp() }
+func main() { cli.Module().CLIApp() }
+```
+
+A Module that serves both web and CLI targets from one definition:
+
+```go
+func Module() stack.Module {
+    return stack.Bundle("myapp",
+        assets.Dir("."),               // → WebApp only
+        stack.Activity(ref, handler),  // → WebApp only
+        stack.Group("user", importCmd, syncCmd), // → CLIApp only
+    )
+}
+
+// cmd/web/main.go
+func main() { myapp.Module().WebApp(assets.Tailwind()) }
+
+// cmd/cli/main.go
+func main() { myapp.Module().CLIApp() }
 ```
 
 ### Params
@@ -252,7 +270,7 @@ var showUserCmd = stackcli.Activity(
 
 ## Packages
 
-- `stack`: root package — `Bundle`, `Extend`, `CLI`, `Assets`, `Mount`, `CSS`, `JS`, `File`
+- `stack`: root package — `Bundle`, `Extend`, `Group`, `Assets`, `Mount`, `CSS`, `JS`, `File`
 - `assets`: asset source descriptors — `Dir`, `StaticDir`, `Use`, `Tailwind`, `Stencil`
 - `param`: typed parameter descriptors — `String`, `Int`, `Bool`, `Required`, `WithDefault`, `WithAlias`, `WithPrompt`
 - `activity`: typed activity definitions, instances, URI building, `Param[T]()` helper

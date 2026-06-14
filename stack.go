@@ -33,6 +33,7 @@ type AssetSource = web.AssetSource
 type Module interface {
 	Part
 	WebApp(opts ...WebAppOption)
+	CLIApp()
 
 	namespace() string
 	partsFor(features webAppFeatures) []web.Part
@@ -149,6 +150,17 @@ func JS(src AssetSource) Part                      { return web.JS(src) }
 func File(src AssetSource) Part                    { return web.File(src) }
 func Mount(path string, handler http.Handler) Part { return web.Mount(path, handler) }
 
+// cliGroup wraps a cli.Command as a Part so it can be passed to Bundle().
+// The web target ignores it via the no-op Apply; CLIApp() picks it up.
+type cliGroup struct{ cmd cli.Command }
+
+func (g cliGroup) Apply(_ *web.WebApp) {}
+
+// Group adds a CLI command group to a Module. Ignored by WebApp targets.
+func Group(name string, cmds ...cli.Command) Part {
+	return cliGroup{cli.Group(name, cmds...)}
+}
+
 func (b *bundle) Apply(app *web.WebApp) {
 	if b == nil || app == nil {
 		return
@@ -186,6 +198,26 @@ func (b *bundle) WebApp(opts ...WebAppOption) {
 		assetsFS:     cfg.assetsFS,
 	})
 	runRegistry(registry, os.Args[1:])
+}
+
+func (b *bundle) CLIApp() {
+	var cmds []cli.Command
+	b.collectCLICommands(&cmds)
+	runRegistry(cli.BuildRegistry(cmds...), os.Args[1:])
+}
+
+func (b *bundle) collectCLICommands(out *[]cli.Command) {
+	if b == nil {
+		return
+	}
+	for _, part := range b.parts {
+		switch p := part.(type) {
+		case cliGroup:
+			*out = append(*out, p.cmd)
+		case *bundle:
+			p.collectCLICommands(out)
+		}
+	}
 }
 
 func (b *bundle) namespace() string {
