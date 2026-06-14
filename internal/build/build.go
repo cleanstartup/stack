@@ -1,4 +1,4 @@
-package web
+package build
 
 import (
 	"bytes"
@@ -17,6 +17,7 @@ import (
 	pipelinepkg "github.com/cleanstartup/stack/internal/pipeline"
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
+	"github.com/cleanstartup/stack/web"
 )
 
 const (
@@ -40,7 +41,7 @@ type ServeConfig struct {
 	OutputDir string
 	AssetsFS  fs.FS
 	AssetRoot string
-	DevState  *DevState
+	DevState  *web.DevState
 }
 
 type DevConfig struct {
@@ -51,7 +52,7 @@ type DevConfig struct {
 	AssetsFS     fs.FS
 	AssetRoot    string
 	PollInterval time.Duration
-	DevState     *DevState
+	DevState     *web.DevState
 }
 
 type MaterializedAsset struct {
@@ -68,14 +69,14 @@ type BuildResult struct {
 }
 
 type BuildEngine struct {
-	builder *Builder
+	builder *web.Builder
 }
 
-func NewBuildEngine(parts ...Part) *BuildEngine {
-	return NewApp(parts...).engine
+func NewEngine(b *web.Builder) *BuildEngine {
+	return &BuildEngine{builder: b}
 }
 
-func (e *BuildEngine) Builder() *Builder {
+func (e *BuildEngine) Builder() *web.Builder {
 	if e == nil {
 		return nil
 	}
@@ -314,7 +315,7 @@ func (e *BuildEngine) syncDirSources(cfg BuildConfig) error {
 		if err := os.MkdirAll(dst, 0o755); err != nil {
 			return fmt.Errorf("sync sources %s: %w", entry.Namespace, err)
 		}
-		if err := copyTree(dst, entry.AbsPath); err != nil {
+		if _, err := web.CopyDir(dst, entry.AbsPath); err != nil {
 			return fmt.Errorf("sync sources %s: %w", entry.Namespace, err)
 		}
 	}
@@ -334,10 +335,9 @@ func (e *BuildEngine) Serve(ctx context.Context, cfg ServeConfig) error {
 		addr = defaultAddr
 	}
 
-	registry := NewRegistry()
+	registry := e.builder.BuildRouteHandler()
 	registry.SetAssets(e.builder.Manifest())
 	registry.SetDevState(cfg.DevState)
-	e.builder.registerRoutes(registry)
 
 	assetFS := cfg.AssetsFS
 	assetRoot := strings.TrimSpace(cfg.AssetRoot)
@@ -427,7 +427,7 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 		return fmt.Errorf("build engine is nil")
 	}
 	if cfg.DevState == nil {
-		cfg.DevState = NewDevState()
+		cfg.DevState = web.NewDevState()
 	}
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = 250 * time.Millisecond
@@ -585,7 +585,7 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 		return fmt.Errorf("build engine is nil")
 	}
 	if cfg.DevState == nil {
-		cfg.DevState = NewDevState()
+		cfg.DevState = web.NewDevState()
 	}
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = 250 * time.Millisecond
@@ -708,7 +708,7 @@ func (e *BuildEngine) materializeAssets(workspace *Workspace) error {
 	if e == nil || e.builder == nil || workspace == nil {
 		return nil
 	}
-	for _, entry := range e.builder.assets.Entries() {
+	for _, entry := range e.builder.Assets().Entries() {
 		if entry.Source == nil {
 			continue
 		}
@@ -723,11 +723,12 @@ func (e *BuildEngine) needsWorkspaceMaterialization() bool {
 	if e == nil || e.builder == nil {
 		return false
 	}
-	if e.builder.assets != nil && len(e.builder.assets.Entries()) > 0 {
+	assets := e.builder.Assets()
+	if assets != nil && len(assets.Entries()) > 0 {
 		return true
 	}
-	if e.builder.tailwind != nil {
-		for _, source := range e.builder.tailwind.Inputs() {
+	if e.builder.Styles() != nil {
+		for _, source := range e.builder.Styles().Inputs() {
 			if source == nil {
 				continue
 			}
@@ -736,8 +737,8 @@ func (e *BuildEngine) needsWorkspaceMaterialization() bool {
 			}
 		}
 	}
-	if e.builder.stencil != nil {
-		for _, source := range e.builder.stencil.Inputs() {
+	if e.builder.Components() != nil {
+		for _, source := range e.builder.Components().Inputs() {
 			if source == nil {
 				continue
 			}
@@ -763,12 +764,12 @@ func (e *BuildEngine) materializeProjectFiles(projectDir, workspaceRoot, outputD
 }
 
 func (e *BuildEngine) stencilSourceFiles() []string {
-	if e == nil || e.builder == nil || e.builder.stencil == nil {
+	if e == nil || e.builder == nil || e.builder.Components() == nil {
 		return nil
 	}
 	seen := map[string]struct{}{}
 	var files []string
-	for _, source := range e.builder.stencil.Inputs() {
+	for _, source := range e.builder.Components().Inputs() {
 		paths, err := stencilpkg.SourcePaths(source)
 		if err != nil {
 			continue
@@ -819,8 +820,8 @@ func (e *BuildEngine) watchPaths() []string {
 	}
 	seen := map[string]struct{}{}
 	var paths []string
-	if e.builder.tailwind != nil {
-		for _, p := range e.builder.tailwind.WatchPaths() {
+	if e.builder.Styles() != nil {
+		for _, p := range e.builder.Styles().WatchPaths() {
 			p = strings.TrimSpace(p)
 			if p == "" {
 				continue
@@ -832,8 +833,8 @@ func (e *BuildEngine) watchPaths() []string {
 			paths = append(paths, p)
 		}
 	}
-	if e.builder.stencil != nil {
-		for _, p := range e.builder.stencil.WatchPaths() {
+	if e.builder.Components() != nil {
+		for _, p := range e.builder.Components().WatchPaths() {
 			p = strings.TrimSpace(p)
 			if p == "" {
 				continue
@@ -845,12 +846,13 @@ func (e *BuildEngine) watchPaths() []string {
 			paths = append(paths, p)
 		}
 	}
-	if e.builder.assets == nil {
+	assets := e.builder.Assets()
+	if assets == nil {
 		sort.Strings(paths)
 		return paths
 	}
-	for _, entry := range e.builder.assets.Entries() {
-		if watcher, ok := entry.Source.(WatchPathsProvider); ok {
+	for _, entry := range assets.Entries() {
+		if watcher, ok := entry.Source.(web.WatchPathsProvider); ok {
 			for _, p := range watcher.WatchPaths() {
 				p = strings.TrimSpace(p)
 				if p == "" {

@@ -1,9 +1,11 @@
-package web
+package build
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/cleanstartup/stack/web"
 )
 
 func TestFromFSCarriesWatchPaths(t *testing.T) {
@@ -12,8 +14,8 @@ func TestFromFSCarriesWatchPaths(t *testing.T) {
 	root := t.TempDir()
 	mustWriteFile(t, filepath.Join(root, "site.css"), "body { color: red; }")
 
-	source := FromFS(os.DirFS(root), ".", root)
-	watcher, ok := source.(WatchPathsProvider)
+	source := web.FromFS(os.DirFS(root), ".", root)
+	watcher, ok := source.(web.WatchPathsProvider)
 	if !ok {
 		t.Fatalf("expected FromFS source to expose watch paths")
 	}
@@ -33,7 +35,8 @@ func TestBuildEngineCollectsDependencyWatchPaths(t *testing.T) {
 	root := t.TempDir()
 	mustWriteFile(t, filepath.Join(root, "site.css"), "body { color: blue; }")
 
-	engine := NewBuildEngine(CSS(FromFS(os.DirFS(root), ".", root)))
+	app := web.NewApp(web.CSS(web.FromFS(os.DirFS(root), ".", root)))
+	engine := NewEngine(app.Builder())
 
 	got := engine.watchPaths()
 	if len(got) != 1 {
@@ -51,8 +54,8 @@ func TestWithWatchPathsAddsExtraWatchRoots(t *testing.T) {
 	inner := t.TempDir()
 	mustWriteFile(t, filepath.Join(root, "site.css"), "body { color: green; }")
 
-	source := WithWatchPaths(FromFS(os.DirFS(root), ".", root), inner)
-	watcher, ok := source.(WatchPathsProvider)
+	source := web.WithWatchPaths(web.FromFS(os.DirFS(root), ".", root), inner)
+	watcher, ok := source.(web.WatchPathsProvider)
 	if !ok {
 		t.Fatalf("expected wrapped source to expose watch paths")
 	}

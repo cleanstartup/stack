@@ -1,4 +1,4 @@
-package web
+package build
 
 import (
 	"context"
@@ -11,26 +11,27 @@ import (
 	pipelinepkg "github.com/cleanstartup/stack/internal/pipeline"
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
+	"github.com/cleanstartup/stack/web"
 )
 
 func (e *BuildEngine) capabilities() []capability.Capability {
 	project := npmpkg.NewProject()
 	var caps []capability.Capability
 
-	if e != nil && e.builder != nil && e.builder.tailwind != nil && len(e.builder.tailwind.Inputs()) > 0 {
+	if e != nil && e.builder != nil && e.builder.Styles() != nil && len(e.builder.Styles().Inputs()) > 0 {
 		tailwindpkg.AddNPMDependencies(project)
-		caps = append(caps, tailwindpkg.NewCapability(e.builder.tailwind, tailwindConfig))
+		caps = append(caps, tailwindpkg.NewCapability(e.builder.Styles(), tailwindConfig))
 	}
-	if e != nil && e.builder != nil && e.builder.stencil != nil && len(e.builder.stencil.Inputs()) > 0 {
+	if e != nil && e.builder != nil && e.builder.Components() != nil && len(e.builder.Components().Inputs()) > 0 {
 		stencilpkg.AddNPMDependencies(project)
-		caps = append(caps, stencilpkg.NewCapability(e.builder.stencil, stencilConfig))
+		caps = append(caps, stencilpkg.NewCapability(e.builder.Components(), stencilConfig))
 	}
 	if e != nil && e.builder != nil {
-		for _, dep := range e.builder.npm {
-			if dep.dev {
-				project.AddDevDependency(dep.name, dep.version)
+		for _, dep := range e.builder.NPMDeps() {
+			if dep.Dev {
+				project.AddDevDependency(dep.Name, dep.Version)
 			} else {
-				project.AddDependency(dep.name, dep.version)
+				project.AddDependency(dep.Name, dep.Version)
 			}
 		}
 	}
@@ -40,16 +41,16 @@ func (e *BuildEngine) capabilities() []capability.Capability {
 	return caps
 }
 
-func (b *Builder) registrationCapabilities() []capability.Capability {
+func registrationCapabilities(b *web.Builder) []capability.Capability {
 	if b == nil {
 		return nil
 	}
 	var caps []capability.Capability
-	if b.tailwind != nil && len(b.tailwind.Inputs()) > 0 {
-		caps = append(caps, tailwindpkg.NewCapability(b.tailwind, nil))
+	if b.Styles() != nil && len(b.Styles().Inputs()) > 0 {
+		caps = append(caps, tailwindpkg.NewCapability(b.Styles(), nil))
 	}
-	if b.stencil != nil && len(b.stencil.Inputs()) > 0 {
-		caps = append(caps, stencilpkg.NewCapability(b.stencil, nil))
+	if b.Components() != nil && len(b.Components().Inputs()) > 0 {
+		caps = append(caps, stencilpkg.NewCapability(b.Components(), nil))
 	}
 	return caps
 }
@@ -187,3 +188,6 @@ func stencilConfig(ctx capability.Context) stencilpkg.Config {
 		ProjectDir: ctx.ProjectDir,
 	}
 }
+
+// keep registrationCapabilities accessible but suppress unused warning
+var _ = registrationCapabilities

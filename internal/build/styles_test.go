@@ -1,4 +1,4 @@
-package web
+package build
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
+	"github.com/cleanstartup/stack/web"
 )
 
 func TestCSSReturnsDirectAssetRef(t *testing.T) {
@@ -20,13 +21,13 @@ func TestCSSReturnsDirectAssetRef(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	builder := NewBuilder()
-	ref := builder.CSS(FromFile(cssPath))
+	builder := web.NewBuilder()
+	ref := builder.CSS(web.FromFile(cssPath))
 
-	if ref.Kind != AssetKindCSS {
+	if ref.Kind != web.AssetKindCSS {
 		t.Fatalf("expected css kind, got %v", ref.Kind)
 	}
-	if ref.URL() != "/assets/css/"+AssetID(cssPath)+"/site.css" {
+	if ref.URL() != "/assets/css/"+web.AssetID(cssPath)+"/site.css" {
 		t.Fatalf("expected direct css asset url, got %q", ref.URL())
 	}
 }
@@ -40,10 +41,10 @@ func TestTailwindReturnsBundleRef(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	builder := NewBuilder()
-	ref := builder.TailwindCSS(FromFile(cssPath))
+	builder := web.NewBuilder()
+	ref := builder.TailwindCSS(web.FromFile(cssPath))
 
-	if ref.Kind != AssetKindCSS {
+	if ref.Kind != web.AssetKindCSS {
 		t.Fatalf("expected css kind, got %v", ref.Kind)
 	}
 	if ref.URL() != "/assets/css/app/app.css" {
@@ -60,16 +61,16 @@ func TestTailwindInputUsesSourcePathsDirectly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	builder := NewBuilder()
-	builder.TailwindCSS(FromFile(cssPath))
+	builder := web.NewBuilder()
+	builder.TailwindCSS(web.FromFile(cssPath))
 	cache := testTailwindWorkspace{root: filepath.Join(tmp, "tailwind-cache")}
 
-	input, err := builder.tailwind.Input(cache)
+	input, err := builder.Styles().Input(cache)
 	if err != nil {
 		t.Fatalf("tailwind input failed: %v", err)
 	}
 
-	if strings.Contains(input, filepath.ToSlash(cache.AssetDir(tailwindpkg.AssetCSS, AssetID(cssPath)))) {
+	if strings.Contains(input, filepath.ToSlash(cache.AssetDir(tailwindpkg.AssetCSS, web.AssetID(cssPath)))) {
 		t.Fatalf("did not expect mirrored css source in input, got %q", input)
 	}
 	if !strings.Contains(input, "@import \""+filepath.ToSlash(cssPath)+"\";") {
@@ -92,9 +93,9 @@ func TestTailwindRegistryTracksWatchPaths(t *testing.T) {
 	t.Parallel()
 
 	tmp := t.TempDir()
-	builder := NewBuilder()
+	builder := web.NewBuilder()
 	builder.TailwindScan(tmp)
-	builder.TailwindCSS(FromFS(os.DirFS(tmp), ".", tmp))
+	builder.TailwindCSS(web.FromFS(os.DirFS(tmp), ".", tmp))
 
 	paths := builder.Styles().WatchPaths()
 	if len(paths) == 0 {
@@ -119,8 +120,8 @@ func TestBuildUsesExplicitTailwindBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app := NewApp(TailwindCSS(FromFile(cssPath)))
-	result, err := app.Build(context.Background(), BuildConfig{
+	app := web.NewApp(web.TailwindCSS(web.FromFile(cssPath)))
+	result, err := NewEngine(app.Builder()).Build(context.Background(), BuildConfig{
 		WorkspaceDir:   filepath.Join(tmp, "workspace"),
 		OutputDir:      filepath.Join(tmp, "public"),
 		TailwindBinary: binaryPath,

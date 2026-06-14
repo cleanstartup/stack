@@ -4,10 +4,10 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/cleanstartup/stack/activity"
+	buildpkg "github.com/cleanstartup/stack/internal/build"
 	"github.com/cleanstartup/stack/web"
 )
 
@@ -36,7 +36,7 @@ func TestBuildMaterializesAssets(t *testing.T) {
 		}),
 		web.CSS(web.FromFile(cssPath)),
 	))
-	result, err := app.Build(context.Background(), web.BuildConfig{
+	result, err := buildpkg.NewEngine(app.Builder()).Build(context.Background(), buildpkg.BuildConfig{
 		WorkspaceDir: filepath.Join(tmp, "workspace"),
 		OutputDir:    filepath.Join(tmp, "public"),
 	})
@@ -49,23 +49,5 @@ func TestBuildMaterializesAssets(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(result.OutputDir, "assets", "css")); err != nil {
 		t.Fatalf("expected output assets directory: %v", err)
-	}
-}
-
-func TestWebCLIHelpIncludesCommandSummaries(t *testing.T) {
-	app := web.NewApp()
-
-	res := app.CLI().Execute([]string{"--help"})
-	if res.ExitCode != 0 {
-		t.Fatalf("expected help exit 0, got %d", res.ExitCode)
-	}
-	if !strings.Contains(res.Stdout, "run - serve the already built web app") {
-		t.Fatalf("expected run help summary, got %q", res.Stdout)
-	}
-	if !strings.Contains(res.Stdout, "build - materialize assets into the output directory") {
-		t.Fatalf("expected build help summary, got %q", res.Stdout)
-	}
-	if !strings.Contains(res.Stdout, "dev - run the templ supervisor and asset watch loop") {
-		t.Fatalf("expected dev help summary, got %q", res.Stdout)
 	}
 }

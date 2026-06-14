@@ -1,25 +1,16 @@
 package web
 
 import (
-	"context"
-	"fmt"
 	"net/http"
-
-	"github.com/cleanstartup/stack/cli"
 )
 
 type WebApp struct {
 	builder *Builder
-	engine  *BuildEngine
-	baseDir string
-	runtime webRuntime
 }
 
 func newWebApp() *WebApp {
 	builder := NewBuilder()
 	app := &WebApp{builder: builder}
-	app.engine = &BuildEngine{builder: builder}
-	app.runtime = newWebRuntime(app)
 	return app
 }
 
@@ -39,6 +30,13 @@ func (a *WebApp) Apply(parts ...Part) {
 		}
 		part.Apply(a)
 	}
+}
+
+func (a *WebApp) Builder() *Builder {
+	if a == nil {
+		return nil
+	}
+	return a.builder
 }
 
 func (a *WebApp) RegisterCSS(src AssetSource) AssetRef {
@@ -81,46 +79,4 @@ func (a *WebApp) RegisterTailwindScan(paths ...string) {
 
 func (a *WebApp) RegisterStencilScan(paths ...string) {
 	a.builder.StencilScan(paths...)
-}
-
-func (a *WebApp) Engine() *BuildEngine {
-	if a == nil {
-		return nil
-	}
-	return a.engine
-}
-
-func (a *WebApp) BaseDir() string {
-	if a == nil {
-		return ""
-	}
-	return a.baseDir
-}
-
-func (a *WebApp) Build(ctx context.Context, cfg BuildConfig) (*BuildResult, error) {
-	if a == nil || a.runtime == nil {
-		return nil, fmt.Errorf("target is nil")
-	}
-	return a.runtime.Build(ctx, cfg)
-}
-
-func (a *WebApp) Serve(ctx context.Context, cfg ServeConfig) error {
-	if a == nil || a.runtime == nil {
-		return fmt.Errorf("target is nil")
-	}
-	return a.runtime.Serve(ctx, cfg)
-}
-
-func (a *WebApp) Dev(ctx context.Context, cfg DevConfig) error {
-	if a == nil || a.runtime == nil {
-		return fmt.Errorf("target is nil")
-	}
-	return a.runtime.Dev(ctx, cfg)
-}
-
-func (a *WebApp) CLI() *cli.Registry {
-	if a == nil || a.runtime == nil {
-		return nil
-	}
-	return a.runtime.CLI()
 }

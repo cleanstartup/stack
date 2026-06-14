@@ -84,7 +84,7 @@ func TestBuiltAssetsRegisterTheirWebAppOutputs(t *testing.T) {
 		},
 	}
 	app := web.NewApp(b.partsFor(webAppFeatures{tailwind: true, stencil: true})...)
-	manifest := app.Engine().Builder().Manifest()
+	manifest := app.Builder().Manifest()
 
 	if got := len(manifest.Styles); got != 1 {
 		t.Fatalf("expected one registered stylesheet, got %d", got)

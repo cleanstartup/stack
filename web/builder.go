@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/cleanstartup/stack/activity"
+	"github.com/cleanstartup/stack/internal/capability"
 	assetpkg "github.com/cleanstartup/stack/internal/asset"
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
@@ -47,6 +48,13 @@ type npmDep struct {
 	name    string
 	version string
 	dev     bool
+}
+
+// NPMDep is a public representation of an npm dependency.
+type NPMDep struct {
+	Name    string
+	Version string
+	Dev     bool
 }
 
 // DirSourceEntry records a module asset directory registered during Apply,
@@ -97,6 +105,18 @@ func (b *Builder) DirSources() []DirSourceEntry {
 		return nil
 	}
 	return append([]DirSourceEntry{}, b.dirSources...)
+}
+
+// NPMDeps returns all registered npm dependencies as public NPMDep values.
+func (b *Builder) NPMDeps() []NPMDep {
+	if b == nil {
+		return nil
+	}
+	out := make([]NPMDep, 0, len(b.npm))
+	for _, dep := range b.npm {
+		out = append(out, NPMDep{Name: dep.name, Version: dep.version, Dev: dep.dev})
+	}
+	return out
 }
 
 func (b *Builder) AddNPMDependency(name, version string, dev bool) {
@@ -237,6 +257,13 @@ func (t *manifestTarget) RegisterJS(ref AssetRef) {
 	t.manifest.Scripts = append(t.manifest.Scripts, ref)
 }
 
+// BuildRouteHandler creates a new Registry and registers all routes into it.
+func (b *Builder) BuildRouteHandler() *Registry {
+	reg := NewRegistry()
+	b.registerRoutes(reg)
+	return reg
+}
+
 func (b *Builder) registerRoutes(reg *Registry) {
 	if b == nil || reg == nil {
 		return
@@ -253,6 +280,20 @@ func (b *Builder) registerRoutes(reg *Registry) {
 		}
 		mount.register(reg)
 	}
+}
+
+func (b *Builder) registrationCapabilities() []capability.Capability {
+	if b == nil {
+		return nil
+	}
+	var caps []capability.Capability
+	if b.tailwind != nil && len(b.tailwind.Inputs()) > 0 {
+		caps = append(caps, tailwindpkg.NewCapability(b.tailwind, nil))
+	}
+	if b.stencil != nil && len(b.stencil.Inputs()) > 0 {
+		caps = append(caps, stencilpkg.NewCapability(b.stencil, nil))
+	}
+	return caps
 }
 
 type tailwindWorkspaceAdapter struct {

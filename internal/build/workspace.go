@@ -1,10 +1,13 @@
-package web
+package build
 
 import (
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	assetpkg "github.com/cleanstartup/stack/internal/asset"
+	"github.com/cleanstartup/stack/web"
 )
 
 type Workspace struct {
@@ -49,7 +52,7 @@ func (w *Workspace) Clean() error {
 	return os.RemoveAll(w.Root)
 }
 
-func (w *Workspace) AssetDir(kind AssetKind, id string) string {
+func (w *Workspace) AssetDir(kind assetpkg.AssetKind, id string) string {
 	if w == nil {
 		return ""
 	}
@@ -70,14 +73,14 @@ func (w *Workspace) OutputDir() string {
 	return w.Out
 }
 
-func (w *Workspace) TailwindAssetDir(kind AssetKind, id string) string {
+func (w *Workspace) TailwindAssetDir(kind assetpkg.AssetKind, id string) string {
 	if w == nil {
 		return ""
 	}
 	return filepath.Join(w.Src, "tailwind", string(kind), id)
 }
 
-func (w *Workspace) OutputAssetDir(kind AssetKind, id string) string {
+func (w *Workspace) OutputAssetDir(kind assetpkg.AssetKind, id string) string {
 	if w == nil {
 		return ""
 	}
@@ -103,6 +106,12 @@ func (w *Workspace) SourceTailwindRoot() string {
 		return ""
 	}
 	return filepath.Join(w.Src, "tailwind")
+}
+
+// Materialize implements web.AssetWorkspace so this workspace can be passed
+// directly to AssetSource.Materialize.
+func (w *Workspace) Materialize(kind web.AssetKind, id string) string {
+	return w.AssetDir(kind, id)
 }
 
 func walkTree(root string, visit func(path string, entry fs.DirEntry) error) error {
@@ -137,7 +146,7 @@ func copyTreeExcept(dst, src string, skip func(rel string, entry fs.DirEntry) bo
 		if entry.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
-		return CopyFile(target, current)
+		return web.CopyFile(target, current)
 	})
 }
 

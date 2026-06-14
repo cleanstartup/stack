@@ -18,6 +18,7 @@ import (
 	"github.com/cleanstartup/stack/activity"
 	assetspkg "github.com/cleanstartup/stack/assets"
 	"github.com/cleanstartup/stack/cli"
+	buildpkg "github.com/cleanstartup/stack/internal/build"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 	"github.com/cleanstartup/stack/web"
 )
@@ -383,7 +384,7 @@ func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
 			}
 		},
 		func(ctx cli.Context[runInput]) cli.Result {
-			if err := app.Engine().Serve(cfg.ctx, web.ServeConfig{
+			if err := buildpkg.NewEngine(app.Builder()).Serve(cfg.ctx, buildpkg.ServeConfig{
 				Addr:      ctx.Data().Addr,
 				OutputDir: ctx.Data().OutputDir,
 				AssetsFS:  cfg.assetsFS,
@@ -405,7 +406,7 @@ func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
 			}
 		},
 		func(ctx cli.Context[installInput]) cli.Result {
-			if err := app.Engine().Install(cfg.ctx, web.BuildConfig{
+			if err := buildpkg.NewEngine(app.Builder()).Install(cfg.ctx, buildpkg.BuildConfig{
 				ProjectDir:   cfg.projectDir,
 				WorkspaceDir: ctx.Data().WorkspaceDir,
 				OutputDir:    ctx.Data().OutputDir,
@@ -427,7 +428,7 @@ func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
 			}
 		},
 		func(ctx cli.Context[buildInput]) cli.Result {
-			result, err := app.Engine().BuildAssets(cfg.ctx, web.BuildConfig{
+			result, err := buildpkg.NewEngine(app.Builder()).BuildAssets(cfg.ctx, buildpkg.BuildConfig{
 				ProjectDir:   cfg.projectDir,
 				WorkspaceDir: ctx.Data().WorkspaceDir,
 				OutputDir:    ctx.Data().OutputDir,
@@ -460,7 +461,7 @@ func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
 			}
 		},
 		func(ctx cli.Context[devInput]) cli.Result {
-			if err := runWebAppDev(cfg.ctx, app, web.DevConfig{
+			if err := runWebAppDev(cfg.ctx, app, buildpkg.DevConfig{
 				ProjectDir:   cfg.projectDir,
 				WorkspaceDir: ctx.Data().WorkspaceDir,
 				OutputDir:    ctx.Data().OutputDir,
@@ -478,11 +479,11 @@ func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
 	return r
 }
 
-func runWebAppDev(parent context.Context, app *web.WebApp, cfg web.DevConfig) error {
+func runWebAppDev(parent context.Context, app *web.WebApp, cfg buildpkg.DevConfig) error {
 	if app == nil {
 		return errors.New("web app is nil")
 	}
-	return app.Engine().Dev(parent, cfg)
+	return buildpkg.NewEngine(app.Builder()).Dev(parent, cfg)
 }
 
 func buildCurrentCommand(ctx context.Context, commandDir string) error {
