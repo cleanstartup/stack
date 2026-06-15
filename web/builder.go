@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cleanstartup/stack/activity"
 	"github.com/cleanstartup/stack/internal/capability"
 	assetpkg "github.com/cleanstartup/stack/internal/asset"
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
@@ -13,15 +12,6 @@ import (
 
 type routeRegistration interface {
 	register(*Registry)
-}
-
-type activityRouteRegistration[P any, I any] struct {
-	def      *activity.Definition[P, I]
-	resolver activity.Resolver[P, I]
-}
-
-func (r activityRouteRegistration[P, I]) register(reg *Registry) {
-	Register(reg, r.def, r.resolver)
 }
 
 type webActivityRouteRegistration[C any] struct {
@@ -124,16 +114,6 @@ func (b *Builder) AddNPMDependency(name, version string, dev bool) {
 		return
 	}
 	b.npm = append(b.npm, npmDep{name: strings.TrimSpace(name), version: strings.TrimSpace(version), dev: dev})
-}
-
-func AddActivity[P any, I any](b *Builder, def *activity.Definition[P, I], resolver activity.Resolver[P, I]) {
-	if b == nil || def == nil || resolver == nil {
-		return
-	}
-	b.routes = append(b.routes, activityRouteRegistration[P, I]{
-		def:      def,
-		resolver: resolver,
-	})
 }
 
 func AddWebActivity[C any](b *Builder, activity *WebActivity[C]) {

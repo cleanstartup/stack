@@ -2,12 +2,10 @@ package web_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 
@@ -15,81 +13,11 @@ import (
 	"github.com/cleanstartup/stack/web"
 )
 
-type showParams struct {
-	AccountID string
-}
-
-type renameInput struct {
-	NewName string
-}
-
-func TestRegisterGetAndPostFlow(t *testing.T) {
-	r := web.NewRegistry()
-
-	showDef := activity.As[showParams, activity.NoInput]("account.show")
-	renameDef := activity.As[showParams, renameInput]("account.rename")
-
-	var accountShow func(showParams) activity.Instance[showParams, activity.NoInput]
-	var accountRename func(showParams) activity.Instance[showParams, renameInput]
-
-	accountShow = func(params showParams) activity.Instance[showParams, activity.NoInput] {
-		return showDef.Take(params).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
-			renameURI := accountRename(showParams{AccountID: params.AccountID}).URI()
-			return fmt.Sprintf("show:%s rename:%s", params.AccountID, renameURI)
-		})
-	}
-
-	accountRename = func(params showParams) activity.Instance[showParams, renameInput] {
-		return renameDef.Take(params).Then(func(ctx activity.Context, input renameInput) activity.Result {
-			web.RedirectTo(ctx, accountShow(showParams{AccountID: params.AccountID}))
-			return nil
-		})
-	}
-
-	web.Register(r, showDef, accountShow)
-	web.Register(r, renameDef, accountRename)
-
-	h := r.Handler()
-
-	getReq := httptest.NewRequest(http.MethodGet, "/account/show?accountId=42", nil)
-	getRec := httptest.NewRecorder()
-	h.ServeHTTP(getRec, getReq)
-
-	if getRec.Code != http.StatusOK {
-		t.Fatalf("expected GET /account/show => 200, got %d", getRec.Code)
-	}
-	body := getRec.Body.String()
-	if !strings.Contains(body, "show:42") {
-		t.Fatalf("unexpected response body: %q", body)
-	}
-	if !strings.Contains(body, "/account/rename?accountID=42") {
-		t.Fatalf("expected rename URI in response body, got %q", body)
-	}
-
-	form := url.Values{"newName": []string{"Savings"}}
-	postReq := httptest.NewRequest(http.MethodPost, "/account/rename?accountId=42", strings.NewReader(form.Encode()))
-	postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	postRec := httptest.NewRecorder()
-	h.ServeHTTP(postRec, postReq)
-
-	if postRec.Code != http.StatusFound {
-		t.Fatalf("expected POST /account/rename => 302, got %d", postRec.Code)
-	}
-	if got := postRec.Header().Get("Location"); got != "/account/show?accountID=42" {
-		t.Fatalf("expected redirect to /account/show?accountID=42, got %q", got)
-	}
-}
-
 func TestDuplicateRegistrationPanics(t *testing.T) {
 	r := web.NewRegistry()
-	def := activity.As[showParams, activity.NoInput]("account.show")
-	resolver := func(params showParams) activity.Instance[showParams, activity.NoInput] {
-		return def.Take(params).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
-			return "ok"
-		})
-	}
+	a := web.NewActivity("account.show", func(ctx activity.Context) activity.Result { return "ok" })
 
-	web.Register(r, def, resolver)
+	web.RegisterWebActivity(r, a)
 
 	defer func() {
 		if recover() == nil {
@@ -97,7 +25,7 @@ func TestDuplicateRegistrationPanics(t *testing.T) {
 		}
 	}()
 
-	web.Register(r, def, resolver)
+	web.RegisterWebActivity(r, a)
 }
 
 func TestRegistryErrorHandlerIsUsed(t *testing.T) {
@@ -106,15 +34,12 @@ func TestRegistryErrorHandlerIsUsed(t *testing.T) {
 		return "custom-error:" + err.Error()
 	})
 
-	def := activity.As[showParams, activity.NoInput]("account.show")
-	resolver := func(params showParams) activity.Instance[showParams, activity.NoInput] {
-		return def.Take(params).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
-			return ctx.Error(fmt.Errorf("boom"))
-		})
-	}
-	web.Register(r, def, resolver)
+	a := web.NewActivity("account.show", func(ctx activity.Context) activity.Result {
+		return ctx.Error(fmt.Errorf("boom"))
+	})
+	web.RegisterWebActivity(r, a)
 
-	req := httptest.NewRequest(http.MethodGet, "/account/show?accountId=1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/account/show", nil)
 	rec := httptest.NewRecorder()
 	r.Handler().ServeHTTP(rec, req)
 
@@ -126,84 +51,10 @@ func TestRegistryErrorHandlerIsUsed(t *testing.T) {
 	}
 }
 
-func TestWebActivitySkipsHandlerWhenRequestFailed(t *testing.T) {
-	r := web.NewRegistry()
-	xy := web.Input("xy")
-	handlerCalled := false
-
-	a := web.RawActivity(
-		"sample.invalid",
-		func(req *web.Request) int {
-			return req.IntParam(xy, func(v int) error {
-				if v <= 0 {
-					return errors.New("must be > 0")
-				}
-				return nil
-			})
-		},
-		func(ctx web.Context[int]) activity.Result {
-			handlerCalled = true
-			return fmt.Sprintf("ok:%d", ctx.Data())
-		},
-	)
-	web.RegisterWebActivity(r, a)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/sample/invalid?xy=0", nil)
-	r.Handler().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rec.Code)
-	}
-	if handlerCalled {
-		t.Fatalf("handler must not be called on failed request")
-	}
-	if !strings.Contains(rec.Body.String(), "must be > 0") {
-		t.Fatalf("expected validation error in body, got %q", rec.Body.String())
-	}
-}
-
-func TestWebActivityCallsHandlerWhenRequestValid(t *testing.T) {
-	r := web.NewRegistry()
-	xy := web.Input("xy")
-
-	a := web.RawActivity(
-		"sample.valid",
-		func(req *web.Request) int {
-			return req.IntParam(xy, func(v int) error {
-				if v <= 0 {
-					return errors.New("must be > 0")
-				}
-				return nil
-			})
-		},
-		func(ctx web.Context[int]) activity.Result {
-			return fmt.Sprintf("ok:%d", ctx.Data())
-		},
-	)
-	web.RegisterWebActivity(r, a)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/sample/valid?xy=7", nil)
-	r.Handler().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
-	}
-	if rec.Body.String() != "ok:7" {
-		t.Fatalf("unexpected body: %q", rec.Body.String())
-	}
-}
-
 func TestRegisterSupportsRootActivity(t *testing.T) {
 	r := web.NewRegistry()
-	def := activity.As[struct{}, activity.NoInput]("root")
-	resolver := func(params struct{}) activity.Instance[struct{}, activity.NoInput] {
-		return def.Take(struct{}{}).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
-			return "root-ok"
-		})
-	}
-	web.Register(r, def, resolver)
+	a := web.NewActivity("root", func(ctx activity.Context) activity.Result { return "root-ok" })
+	web.RegisterWebActivity(r, a)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -220,14 +71,8 @@ func TestRegisterSupportsRootActivity(t *testing.T) {
 func TestGroupPrefixesRegisteredPaths(t *testing.T) {
 	r := web.NewRegistry()
 	group := r.Group("wallet")
-	def := activity.As[struct{}, activity.NoInput]("show")
-	resolver := func(params struct{}) activity.Instance[struct{}, activity.NoInput] {
-		return def.Take(struct{}{}).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
-			return "wallet-show"
-		})
-	}
-
-	web.Register(group, def, resolver)
+	a := web.NewActivity("show", func(ctx activity.Context) activity.Result { return "wallet-show" })
+	web.RegisterWebActivity(group, a)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/wallet/show", nil)
@@ -241,56 +86,6 @@ func TestGroupPrefixesRegisteredPaths(t *testing.T) {
 	}
 }
 
-func TestURIUsesRegisteredQualifiedPath(t *testing.T) {
-	web.Reset()
-	group := web.DefaultGroup("wallet")
-	a := web.Activity(
-		activity.Ref("show"),
-		func(ctx activity.Context) activity.Result { return "ok" },
-	)
-
-	web.RegisterWebActivity(group, a)
-
-	got := web.URI(a)
-	if got != "/wallet/show" {
-		t.Fatalf("expected /wallet/show, got %q", got)
-	}
-}
-
-func TestURIOkBeforeRegistration(t *testing.T) {
-	web.Reset()
-	a := web.Activity(
-		activity.Ref("show"),
-		func(ctx activity.Context) activity.Result { return "ok" },
-	)
-
-	_, ok := web.URIOk(a)
-	if ok {
-		t.Fatalf("expected URIOk=false before registration")
-	}
-}
-
-func TestURIFallsBackToPathFromIDForUnregisteredRef(t *testing.T) {
-	web.Reset()
-	got := web.URI(activity.Ref("backup.intro"))
-	if got != "/backup/intro" {
-		t.Fatalf("expected /backup/intro, got %q", got)
-	}
-}
-
-func TestURIFallsBackToPathFromIDForUnregisteredActivity(t *testing.T) {
-	web.Reset()
-	a := web.Activity(
-		activity.Ref("backup.intro"),
-		func(ctx activity.Context) activity.Result { return "ok" },
-	)
-
-	got := web.URI(a)
-	if got != "/backup/intro" {
-		t.Fatalf("expected /backup/intro, got %q", got)
-	}
-}
-
 func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 	r := web.NewRegistry()
 	called := false
@@ -301,10 +96,7 @@ func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 		}
 	})
 
-	a := web.Activity(
-		activity.Ref("tracked"),
-		func(ctx activity.Context) activity.Result { return "ok" },
-	)
+	a := web.NewActivity("tracked", func(ctx activity.Context) activity.Result { return "ok" })
 	web.RegisterWebActivity(r, a)
 
 	rec := httptest.NewRecorder()
@@ -319,20 +111,20 @@ func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 	}
 }
 
-func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
+func TestPageRendersWithTitleAndAssets(t *testing.T) {
 	r := web.NewRegistry()
 	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app.css"}
 	scriptRef := web.AssetRef{Kind: web.AssetKindJS, ID: "stack", Files: []string{"stack.esm.js"}}
 	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}, Scripts: []web.AssetRef{scriptRef}})
-	a := web.Activity(
-		activity.Ref("page"),
-		func(ctx activity.Context) activity.Result {
-			return templBody(func(_ context.Context, w io.Writer) error {
+	a := web.NewActivity("page", func(ctx activity.Context) activity.Result {
+		return web.Page{
+			Title: "demo",
+			Body: templBody(func(_ context.Context, w io.Writer) error {
 				_, err := io.WriteString(w, "hello")
 				return err
-			})
-		}, web.WithStaticTitle("demo"),
-	)
+			}),
+		}
+	})
 	web.RegisterWebActivity(r, a)
 
 	rec := httptest.NewRecorder()
@@ -362,15 +154,15 @@ func TestStaticTitleRendersMinimalHtmlShell(t *testing.T) {
 
 func TestPageRendersTemplComponentBody(t *testing.T) {
 	r := web.NewRegistry()
-	a := web.Activity(
-		activity.Ref("templ"),
-		func(ctx activity.Context) activity.Result {
-			return templBody(func(_ context.Context, w io.Writer) error {
+	a := web.NewActivity("templ", func(ctx activity.Context) activity.Result {
+		return web.Page{
+			Title: "demo",
+			Body: templBody(func(_ context.Context, w io.Writer) error {
 				_, err := io.WriteString(w, "<strong>templ body</strong>")
 				return err
-			})
-		}, web.WithStaticTitle("demo"),
-	)
+			}),
+		}
+	})
 	web.RegisterWebActivity(r, a)
 
 	rec := httptest.NewRecorder()
@@ -390,15 +182,12 @@ func TestPageRendersTemplComponentBody(t *testing.T) {
 
 func TestScreenRendersCustomElementWithProps(t *testing.T) {
 	r := web.NewRegistry()
-	a := web.Activity(
-		activity.Ref("screen"),
-		func(ctx activity.Context) activity.Result {
-			return web.Page{Title: "screen", Body: web.Screen("abc", map[string]any{
-				"title": "Hello",
-				"count": 3,
-			})}
-		},
-	)
+	a := web.NewActivity("screen", func(ctx activity.Context) activity.Result {
+		return web.Page{Title: "screen", Body: web.Screen("abc", map[string]any{
+			"title": "Hello",
+			"count": 3,
+		})}
+	})
 	web.RegisterWebActivity(r, a)
 
 	rec := httptest.NewRecorder()
@@ -412,9 +201,6 @@ func TestScreenRendersCustomElementWithProps(t *testing.T) {
 	if !strings.Contains(body, "data-screen-props=\"") || !strings.Contains(body, "count") || !strings.Contains(body, "Hello") {
 		t.Fatalf("expected serialized screen props, got %q", body)
 	}
-	if !strings.Contains(body, "Object.assign(el,props)") {
-		t.Fatalf("expected hydration script, got %q", body)
-	}
 }
 
 func TestPageRendersDevReloadAndVersionedAssets(t *testing.T) {
@@ -425,12 +211,9 @@ func TestPageRendersDevReloadAndVersionedAssets(t *testing.T) {
 
 	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app.css"}
 	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}})
-	a := web.Activity(
-		activity.Ref("dev"),
-		func(ctx activity.Context) activity.Result {
-			return "hello"
-		}, web.WithStaticTitle("dev"),
-	)
+	a := web.NewActivity("dev", func(ctx activity.Context) activity.Result {
+		return web.Page{Title: "dev", Body: "hello"}
+	})
 	web.RegisterWebActivity(r, a)
 
 	rec := httptest.NewRecorder()

@@ -11,10 +11,6 @@ import (
 	"github.com/cleanstartup/stack/web"
 )
 
-type smokeParams struct {
-	Name string
-}
-
 func TestBuildMaterializesAssets(t *testing.T) {
 	tmp := t.TempDir()
 	sourceDir := filepath.Join(tmp, "module-assets")
@@ -27,15 +23,10 @@ func TestBuildMaterializesAssets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	def := activity.As[smokeParams, activity.NoInput]("smoke.page")
-	app := web.NewApp(web.Module(
-		web.BindActivity(def, func(params smokeParams) activity.Instance[smokeParams, activity.NoInput] {
-			return def.Take(params).Then(func(ctx activity.Context, input activity.NoInput) activity.Result {
-				return "ok"
-			})
-		}),
+	app := web.NewApp(
+		web.NewActivity("smoke.page", func(ctx activity.Context) activity.Result { return "ok" }),
 		web.CSS(web.FromFile(cssPath)),
-	))
+	)
 	result, err := buildpkg.NewEngine(app.Builder()).Build(context.Background(), buildpkg.BuildConfig{
 		WorkspaceDir: filepath.Join(tmp, "workspace"),
 		OutputDir:    filepath.Join(tmp, "public"),

@@ -26,7 +26,6 @@ import (
 const defaultAddr = ":8080"
 
 type Part = web.Part
-type URIRef = activity.URIRef
 type Page = web.Page
 type AssetSource = web.AssetSource
 
@@ -123,7 +122,7 @@ func (a *ActivityDef) Apply(app *web.WebApp) {
 	opts := append([]web.ActivityOption[struct{}]{
 		web.WithCrossMiddleware[struct{}](a.crossMW...),
 	}, a.viewOpts...)
-	web.Activity(activity.Ref(a.id), a.handler, opts...).Apply(app)
+	web.NewActivity(a.id, a.handler, opts...).Apply(app)
 }
 
 // ID returns the activity ID, satisfying the URIRef-compatible interface for
@@ -211,9 +210,6 @@ func Activity(id string, handler func(activity.Context) activity.Result, opts ..
 	return a
 }
 
-func WithStaticTitle(title string) ActivityOption {
-	return WithView(web.WithStaticTitle(title))
-}
 func Screen(name string, props any) templ.Component             { return web.Screen(name, props) }
 func Element(name string, props any) templ.Component            { return web.Element(name, props) }
 
