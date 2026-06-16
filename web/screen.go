@@ -44,7 +44,7 @@ func Element(name string, props any) templ.Component {
 				return err
 			}
 		}
-		if _, err := io.WriteString(w, "></"+tag+"><script>(()=>{const el=document.currentScript?.previousElementSibling;if(!(el instanceof HTMLElement))return;const raw=el.getAttribute('data-screen-props')||'{}';let props={};try{props=JSON.parse(raw)}catch(_){return}Object.assign(el,props)})()</script>"); err != nil {
+		if _, err := io.WriteString(w, "></"+tag+"><script>(()=>{const el=document.currentScript?.previousElementSibling;if(!(el instanceof HTMLElement))return;const raw=el.getAttribute('data-screen-props')||'{}';let props={};try{props=JSON.parse(raw)}catch(_){return}for(const[k,v]of Object.entries(props))el.setAttribute(k,String(v))})()</script>"); err != nil {
 			return err
 		}
 		return nil
