@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -532,6 +533,11 @@ func RenderResult(w http.ResponseWriter, r *http.Request, result activity.Result
 }
 
 func defaultErrorHandler(_ *RuntimeContext, err error) activity.Result {
+	if errors.Is(err, activity.ErrNotFound) {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.NotFound(w, r)
+		})
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	})

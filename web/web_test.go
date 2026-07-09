@@ -51,6 +51,38 @@ func TestRegistryErrorHandlerIsUsed(t *testing.T) {
 	}
 }
 
+func TestDefaultErrorHandlerMapsErrNotFoundTo404(t *testing.T) {
+	r := web.NewRegistry()
+	a := web.NewActivity("payment.checkout", func(ctx activity.Context) activity.Result {
+		return ctx.Error(activity.ErrNotFound)
+	})
+	web.RegisterWebActivity(r, a)
+
+	req := httptest.NewRequest(http.MethodGet, "/payment/checkout", nil)
+	rec := httptest.NewRecorder()
+	r.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404 for activity.ErrNotFound, got %d", rec.Code)
+	}
+}
+
+func TestDefaultErrorHandlerMapsOtherErrorsTo500(t *testing.T) {
+	r := web.NewRegistry()
+	a := web.NewActivity("account.show", func(ctx activity.Context) activity.Result {
+		return ctx.Error(fmt.Errorf("boom"))
+	})
+	web.RegisterWebActivity(r, a)
+
+	req := httptest.NewRequest(http.MethodGet, "/account/show", nil)
+	rec := httptest.NewRecorder()
+	r.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500 for a generic error, got %d", rec.Code)
+	}
+}
+
 func TestRegisterSupportsRootActivity(t *testing.T) {
 	r := web.NewRegistry()
 	a := web.NewActivity("root", func(ctx activity.Context) activity.Result { return "root-ok" })
