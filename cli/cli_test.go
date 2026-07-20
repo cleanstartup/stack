@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -376,6 +377,285 @@ func TestStringParamValidateString(t *testing.T) {
 		t.Fatalf("expected exit 1, got %d", res.ExitCode)
 	}
 	if !strings.Contains(res.Stderr, "must be ok") {
+		t.Fatalf("unexpected stderr: %q", res.Stderr)
+	}
+}
+
+func TestStringParamsRepeatedWithEquals(t *testing.T) {
+	r := cli.NewRegistry()
+	with := cli.Param("with")
+
+	a := cli.Activity(
+		"sample",
+		func(inv *cli.Invocation) []string {
+			return inv.StringParams(with)
+		},
+		func(ctx cli.Context[[]string]) cli.Result {
+			return cli.Text(strings.Join(ctx.Data(), ","))
+		},
+	)
+	cli.RegisterActivity(r, a)
+
+	res := r.Execute([]string{"sample", "--with=status:lead", "--with=country:ch"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "status:lead,country:ch" {
+		t.Fatalf("unexpected stdout: %q", res.Stdout)
+	}
+}
+
+func TestStringParamsRepeatedWithSpace(t *testing.T) {
+	r := cli.NewRegistry()
+	with := cli.Param("with")
+
+	a := cli.Activity(
+		"sample",
+		func(inv *cli.Invocation) []string {
+			return inv.StringParams(with)
+		},
+		func(ctx cli.Context[[]string]) cli.Result {
+			return cli.Text(strings.Join(ctx.Data(), ","))
+		},
+	)
+	cli.RegisterActivity(r, a)
+
+	res := r.Execute([]string{"sample", "--with", "status:lead", "--with", "country:ch"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "status:lead,country:ch" {
+		t.Fatalf("unexpected stdout: %q", res.Stdout)
+	}
+}
+
+func TestStringParamsRepeatedAliases(t *testing.T) {
+	r := cli.NewRegistry()
+	with := cli.Param("with", "w")
+
+	a := cli.Activity(
+		"sample",
+		func(inv *cli.Invocation) []string {
+			return inv.StringParams(with)
+		},
+		func(ctx cli.Context[[]string]) cli.Result {
+			return cli.Text(strings.Join(ctx.Data(), ","))
+		},
+	)
+	cli.RegisterActivity(r, a)
+
+	res := r.Execute([]string{"sample", "--w=status:lead", "--w=country:ch"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "status:lead,country:ch" {
+		t.Fatalf("unexpected stdout: %q", res.Stdout)
+	}
+}
+
+func TestStringParamSingleValueCompatWithRepeatedFlag(t *testing.T) {
+	r := cli.NewRegistry()
+	with := cli.Param("with")
+
+	a := cli.Activity(
+		"sample",
+		func(inv *cli.Invocation) string {
+			return inv.StringParam(with)
+		},
+		func(ctx cli.Context[string]) cli.Result {
+			return cli.Text(ctx.Data())
+		},
+	)
+	cli.RegisterActivity(r, a)
+
+	res := r.Execute([]string{"sample", "--with=status:lead", "--with=country:ch"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "country:ch" {
+		t.Fatalf("expected last value to win, got %q", res.Stdout)
+	}
+}
+
+func TestStringParamsRequiredMissing(t *testing.T) {
+	r := cli.NewRegistry()
+	with := cli.Param("with")
+
+	a := cli.Activity(
+		"sample",
+		func(inv *cli.Invocation) []string {
+			return inv.StringParams(with, cli.Required())
+		},
+		func(ctx cli.Context[[]string]) cli.Result {
+			return cli.Text(strings.Join(ctx.Data(), ","))
+		},
+	)
+	cli.RegisterActivity(r, a)
+
+	res := r.Execute([]string{"sample"})
+	if res.ExitCode != 1 {
+		t.Fatalf("expected exit 1, got %d", res.ExitCode)
+	}
+	if !strings.Contains(res.Stderr, "missing param 'with'") {
+		t.Fatalf("unexpected stderr: %q", res.Stderr)
+	}
+}
+
+func TestStringParamsOptionalMissingReturnsEmpty(t *testing.T) {
+	r := cli.NewRegistry()
+	with := cli.Param("with")
+
+	a := cli.Activity(
+		"sample",
+		func(inv *cli.Invocation) int {
+			return len(inv.StringParams(with))
+		},
+		func(ctx cli.Context[int]) cli.Result {
+			return cli.Textf("count=%d", ctx.Data())
+		},
+	)
+	cli.RegisterActivity(r, a)
+
+	res := r.Execute([]string{"sample"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "count=0" {
+		t.Fatalf("expected empty result, got %q", res.Stdout)
+	}
+}
+
+func TestStringParamsValidateStringFailsOnOneValue(t *testing.T) {
+	r := cli.NewRegistry()
+	with := cli.Param("with")
+
+	a := cli.Activity(
+		"sample",
+		func(inv *cli.Invocation) []string {
+			return inv.StringParams(with, cli.ValidateString(func(value string) error {
+				if !strings.Contains(value, ":") {
+					return errors.New("must contain ':'")
+				}
+				return nil
+			}))
+		},
+		func(ctx cli.Context[[]string]) cli.Result {
+			return cli.Text(strings.Join(ctx.Data(), ","))
+		},
+	)
+	cli.RegisterActivity(r, a)
+
+	res := r.Execute([]string{"sample", "--with=status:lead", "--with=broken"})
+	if res.ExitCode != 1 {
+		t.Fatalf("expected exit 1, got %d", res.ExitCode)
+	}
+	if !strings.Contains(res.Stderr, "must contain ':'") {
+		t.Fatalf("unexpected stderr: %q", res.Stderr)
+	}
+}
+
+func TestIntParamsRepeated(t *testing.T) {
+	r := cli.NewRegistry()
+	n := cli.Param("n")
+
+	a := cli.Activity(
+		"sample",
+		func(inv *cli.Invocation) []int {
+			return inv.IntParams(n)
+		},
+		func(ctx cli.Context[[]int]) cli.Result {
+			d := ctx.Data()
+			parts := make([]string, len(d))
+			for idx, v := range d {
+				parts[idx] = strconv.Itoa(v)
+			}
+			return cli.Text(strings.Join(parts, ","))
+		},
+	)
+	cli.RegisterActivity(r, a)
+
+	res := r.Execute([]string{"sample", "--n=1", "--n=2", "--n=3"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "1,2,3" {
+		t.Fatalf("unexpected stdout: %q", res.Stdout)
+	}
+}
+
+func TestIntParamsOptionalMissingReturnsEmpty(t *testing.T) {
+	r := cli.NewRegistry()
+	n := cli.Param("n")
+
+	a := cli.Activity(
+		"sample",
+		func(inv *cli.Invocation) int {
+			return len(inv.IntParams(n))
+		},
+		func(ctx cli.Context[int]) cli.Result {
+			return cli.Textf("count=%d", ctx.Data())
+		},
+	)
+	cli.RegisterActivity(r, a)
+
+	res := r.Execute([]string{"sample"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "count=0" {
+		t.Fatalf("expected empty result, got %q", res.Stdout)
+	}
+}
+
+func TestIntParamsRequiredMissing(t *testing.T) {
+	r := cli.NewRegistry()
+	n := cli.Param("n")
+
+	a := cli.Activity(
+		"sample",
+		func(inv *cli.Invocation) []int {
+			return inv.IntParams(n, cli.RequiredInts())
+		},
+		func(ctx cli.Context[[]int]) cli.Result {
+			return cli.Textf("count=%d", len(ctx.Data()))
+		},
+	)
+	cli.RegisterActivity(r, a)
+
+	res := r.Execute([]string{"sample"})
+	if res.ExitCode != 1 {
+		t.Fatalf("expected exit 1, got %d", res.ExitCode)
+	}
+	if !strings.Contains(res.Stderr, "missing param 'n'") {
+		t.Fatalf("unexpected stderr: %q", res.Stderr)
+	}
+}
+
+func TestIntParamsValidateIntsFailsOnOneValue(t *testing.T) {
+	r := cli.NewRegistry()
+	n := cli.Param("n")
+
+	a := cli.Activity(
+		"sample",
+		func(inv *cli.Invocation) []int {
+			return inv.IntParams(n, cli.ValidateInts(func(v int) error {
+				if v <= 0 {
+					return errors.New("must be > 0")
+				}
+				return nil
+			}))
+		},
+		func(ctx cli.Context[[]int]) cli.Result {
+			return cli.Textf("count=%d", len(ctx.Data()))
+		},
+	)
+	cli.RegisterActivity(r, a)
+
+	res := r.Execute([]string{"sample", "--n=1", "--n=-2"})
+	if res.ExitCode != 1 {
+		t.Fatalf("expected exit 1, got %d", res.ExitCode)
+	}
+	if !strings.Contains(res.Stderr, "must be > 0") {
 		t.Fatalf("unexpected stderr: %q", res.Stderr)
 	}
 }

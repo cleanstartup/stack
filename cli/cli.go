@@ -73,7 +73,7 @@ type ParamKey struct {
 
 type Invocation struct {
 	rawArgs    []string
-	flags      map[string]string
+	flags      map[string][]string
 	pathParams pathParams
 	failed     bool
 	errs       []error
@@ -621,6 +621,111 @@ func (i *Invocation) StringParam(key ParamKey, opts ...StringParamOption) string
 	return value
 }
 
+// StringParams returns every value provided for a repeated flag, in the order
+// given, e.g. "--with=a --with=b" -> []string{"a", "b"}. Returns nil if the
+// flag was not set at all. Required() fails when no value is present but
+// allows any number of values; validators added via ValidateString run
+// against each value. Prompt() has no effect here — interactive prompting is
+// not supported for repeated params.
+func (i *Invocation) StringParams(key ParamKey, opts ...StringParamOption) []string {
+	cfg := stringParamConfig{}
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(&cfg)
+	}
+
+	values, ok := i.lookupStringParams(key)
+	if !ok {
+		if cfg.required {
+			i.Fail(fmt.Errorf("missing param '%s'", key.PrimaryName()))
+		}
+		return nil
+	}
+	for _, value := range values {
+		for _, validate := range cfg.validators {
+			if validate == nil {
+				continue
+			}
+			if err := validate(value); err != nil {
+				i.Fail(fmt.Errorf("invalid param '%s': %w", key.PrimaryName(), err))
+			}
+		}
+	}
+	return values
+}
+
+type intParamsConfig struct {
+	required   bool
+	validators []IntValidator
+}
+
+type IntParamsOption func(*intParamsConfig)
+
+// RequiredInts fails IntParams when no value is present. Any number of
+// values is otherwise allowed.
+func RequiredInts() IntParamsOption {
+	return func(cfg *intParamsConfig) {
+		if cfg == nil {
+			return
+		}
+		cfg.required = true
+	}
+}
+
+// ValidateInts adds a validator that runs against each value returned by
+// IntParams.
+func ValidateInts(validate IntValidator) IntParamsOption {
+	return func(cfg *intParamsConfig) {
+		if cfg == nil || validate == nil {
+			return
+		}
+		cfg.validators = append(cfg.validators, validate)
+	}
+}
+
+// IntParams returns every value provided for a repeated flag, parsed as
+// ints, in the order given. Returns nil if the flag was not set at all.
+// Unlike IntParam, IntParams is optional by default; use RequiredInts() to
+// require at least one value.
+func (i *Invocation) IntParams(key ParamKey, opts ...IntParamsOption) []int {
+	cfg := intParamsConfig{}
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(&cfg)
+	}
+
+	raws, ok := i.lookupStringParams(key)
+	if !ok {
+		if cfg.required {
+			i.Fail(fmt.Errorf("missing param '%s'", key.PrimaryName()))
+		}
+		return nil
+	}
+
+	values := make([]int, 0, len(raws))
+	for _, raw := range raws {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			i.Fail(fmt.Errorf("invalid int param '%s': %w", key.PrimaryName(), err))
+			continue
+		}
+		for _, validate := range cfg.validators {
+			if validate == nil {
+				continue
+			}
+			if err := validate(parsed); err != nil {
+				i.Fail(fmt.Errorf("invalid param '%s': %w", key.PrimaryName(), err))
+			}
+		}
+		values = append(values, parsed)
+	}
+	return values
+}
+
 func (i *Invocation) lookupStringParam(key ParamKey) (string, bool) {
 	if i == nil {
 		return "", false
@@ -631,11 +736,27 @@ func (i *Invocation) lookupStringParam(key ParamKey) (string, bool) {
 		}
 	}
 	for _, name := range key.names {
-		if value, ok := i.flags[name]; ok {
-			return value, true
+		if values, ok := i.flags[name]; ok && len(values) > 0 {
+			return values[len(values)-1], true
 		}
 	}
 	return "", false
+}
+
+// lookupStringParams returns all values recorded for a repeated flag, in the
+// order they were provided. Unlike lookupStringParam it does not consult
+// pathParams: dynamic path segments are inherently single-valued and don't
+// participate in repeated-flag semantics.
+func (i *Invocation) lookupStringParams(key ParamKey) ([]string, bool) {
+	if i == nil {
+		return nil, false
+	}
+	for _, name := range key.names {
+		if values, ok := i.flags[name]; ok && len(values) > 0 {
+			return values, true
+		}
+	}
+	return nil, false
 }
 
 func Prompt(text string) StringParamOption {
@@ -672,8 +793,8 @@ func (k ParamKey) PrimaryName() string {
 	return k.names[0]
 }
 
-func parseFlags(args []string) map[string]string {
-	out := map[string]string{}
+func parseFlags(args []string) map[string][]string {
+	out := map[string][]string{}
 	for idx := 0; idx < len(args); idx++ {
 		current := args[idx]
 		if strings.HasPrefix(current, "--") {
@@ -682,15 +803,16 @@ func parseFlags(args []string) map[string]string {
 				continue
 			}
 			if eq := strings.Index(nameValue, "="); eq >= 0 {
-				out[nameValue[:eq]] = nameValue[eq+1:]
+				name := nameValue[:eq]
+				out[name] = append(out[name], nameValue[eq+1:])
 				continue
 			}
 			if idx+1 < len(args) && !strings.HasPrefix(args[idx+1], "-") {
-				out[nameValue] = args[idx+1]
+				out[nameValue] = append(out[nameValue], args[idx+1])
 				idx++
 				continue
 			}
-			out[nameValue] = "true"
+			out[nameValue] = append(out[nameValue], "true")
 			continue
 		}
 		if strings.HasPrefix(current, "-") {
@@ -699,15 +821,16 @@ func parseFlags(args []string) map[string]string {
 				continue
 			}
 			if eq := strings.Index(nameValue, "="); eq >= 0 {
-				out[nameValue[:eq]] = nameValue[eq+1:]
+				name := nameValue[:eq]
+				out[name] = append(out[name], nameValue[eq+1:])
 				continue
 			}
 			if idx+1 < len(args) && !strings.HasPrefix(args[idx+1], "-") {
-				out[nameValue] = args[idx+1]
+				out[nameValue] = append(out[nameValue], args[idx+1])
 				idx++
 				continue
 			}
-			out[nameValue] = "true"
+			out[nameValue] = append(out[nameValue], "true")
 		}
 	}
 	return out
