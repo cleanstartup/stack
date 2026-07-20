@@ -7,7 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cleanstartup/stack/activity"
 	assetspkg "github.com/cleanstartup/stack/assets"
+	"github.com/cleanstartup/stack/cli"
+	"github.com/cleanstartup/stack/param"
 	"github.com/cleanstartup/stack/web"
 )
 
@@ -43,6 +46,44 @@ func TestBundleWebAppCLIHelp(t *testing.T) {
 		if !strings.Contains(result.Stdout, command) {
 			t.Fatalf("expected help to include %q, got %q", command, result.Stdout)
 		}
+	}
+}
+
+func TestBundleCLIDynamicCommandSegment(t *testing.T) {
+	selectorParam := param.String("selector")
+	show := Activity(
+		"companies.show",
+		func(ctx activity.Context) activity.Result {
+			return cli.Textf("show:%s", activity.Param(ctx, selectorParam))
+		},
+		WithCommand("companies", "{selector}", "show"),
+	)
+	list := Activity(
+		"companies.list",
+		func(ctx activity.Context) activity.Result {
+			return cli.Text("list")
+		},
+		WithCommand("companies", "list"),
+	)
+
+	b := Bundle("test.crm", show, list).(*bundle)
+	r := cli.NewRegistry()
+	b.buildCLIRegistry(r)
+
+	res := r.Execute([]string{"companies", "21-analytics", "show"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "show:21-analytics" {
+		t.Fatalf("expected extracted selector, got %q", res.Stdout)
+	}
+
+	res = r.Execute([]string{"companies", "list"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "list" {
+		t.Fatalf("expected static command to win over dynamic segment, got %q", res.Stdout)
 	}
 }
 

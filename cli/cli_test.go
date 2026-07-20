@@ -237,6 +237,120 @@ func TestStringParamRequired(t *testing.T) {
 	}
 }
 
+func TestDynamicSegmentExtraction(t *testing.T) {
+	root := cli.NewRegistry()
+	companies := root.GetOrCreateGroup("companies")
+	selectorGroup := companies.GetOrCreateGroup("{selector}")
+
+	selector := cli.Param("selector")
+	show := cli.Activity(
+		"show",
+		func(inv *cli.Invocation) string {
+			return inv.StringParam(selector)
+		},
+		func(ctx cli.Context[string]) cli.Result {
+			return cli.Textf("show:%s", ctx.Data())
+		},
+	)
+	cli.RegisterActivity(selectorGroup, show)
+
+	res := root.Execute([]string{"companies", "21-analytics", "show"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "show:21-analytics" {
+		t.Fatalf("expected extracted selector, got %q", res.Stdout)
+	}
+}
+
+func TestDynamicSegmentRemainingArgs(t *testing.T) {
+	root := cli.NewRegistry()
+	companies := root.GetOrCreateGroup("companies")
+	selectorGroup := companies.GetOrCreateGroup("{selector}")
+
+	selector := cli.Param("selector")
+	set := cli.Activity(
+		"set",
+		func(inv *cli.Invocation) [3]string {
+			return [3]string{inv.StringParam(selector), inv.Arg(0), inv.Arg(1)}
+		},
+		func(ctx cli.Context[[3]string]) cli.Result {
+			d := ctx.Data()
+			return cli.Textf("set:%s:%s=%s", d[0], d[1], d[2])
+		},
+	)
+	cli.RegisterActivity(selectorGroup, set)
+
+	res := root.Execute([]string{"companies", "21-analytics", "set", "linkedin", "https://example.com"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "set:21-analytics:linkedin=https://example.com" {
+		t.Fatalf("unexpected stdout: %q", res.Stdout)
+	}
+}
+
+func TestStaticSegmentWinsOverDynamic(t *testing.T) {
+	root := cli.NewRegistry()
+	companies := root.GetOrCreateGroup("companies")
+	selectorGroup := companies.GetOrCreateGroup("{selector}")
+
+	cli.RegisterActivity(companies, cli.Simple("list", func(ctx activity.Context) cli.Result {
+		return cli.Text("static-list")
+	}))
+	cli.RegisterActivity(selectorGroup, cli.Simple("list", func(ctx activity.Context) cli.Result {
+		return cli.Text("dynamic-list")
+	}))
+
+	res := root.Execute([]string{"companies", "list"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "static-list" {
+		t.Fatalf("expected static command to win, got %q", res.Stdout)
+	}
+
+	res = root.Execute([]string{"companies", "_all", "list"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", res.ExitCode, res.Stderr)
+	}
+	if res.Stdout != "dynamic-list" {
+		t.Fatalf("expected dynamic command for non-static selector, got %q", res.Stdout)
+	}
+}
+
+func TestDynamicSegmentHelpShowsPlaceholder(t *testing.T) {
+	root := cli.NewRegistry()
+	companies := root.GetOrCreateGroup("companies")
+	selectorGroup := companies.GetOrCreateGroup("{selector}")
+	cli.RegisterActivity(selectorGroup, cli.Simple("show", func(ctx activity.Context) cli.Result { return cli.Done() }))
+
+	res := root.Execute([]string{"companies", "--help"})
+	if res.ExitCode != 0 {
+		t.Fatalf("expected exit 0, got %d", res.ExitCode)
+	}
+	if !strings.Contains(res.Stdout, "<selector>") {
+		t.Fatalf("expected placeholder in help, got %q", res.Stdout)
+	}
+	if strings.Contains(res.Stdout, "21-analytics") {
+		t.Fatalf("help must not enumerate concrete values, got %q", res.Stdout)
+	}
+}
+
+func TestConflictingDynamicSegmentNamesPanic(t *testing.T) {
+	root := cli.NewRegistry()
+	companies := root.GetOrCreateGroup("companies")
+	companies.GetOrCreateGroup("{selector}")
+
+	defer func() {
+		if recover() == nil {
+			t.Fatalf("expected panic on conflicting dynamic segment name")
+		}
+	}()
+
+	companies.GetOrCreateGroup("{id}")
+}
+
 func TestStringParamValidateString(t *testing.T) {
 	r := cli.NewRegistry()
 	mnemonic := cli.Param("mnemonic")

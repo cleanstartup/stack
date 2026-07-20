@@ -26,10 +26,45 @@ type RuntimeContext struct {
 }
 
 type Registry struct {
-	commands map[string]func(args []string) Result
+	commands map[string]func(args []string, pp pathParams) Result
 	help     map[string]string
 	byID     map[string]string
 	mounts   map[string]*Registry
+	dynamic  *dynamicRoute
+}
+
+// dynamicRoute holds the single dynamic path segment mounted at a registry
+// level, e.g. "{selector}" -> sub-registry. Only one dynamic segment name is
+// allowed per level; static mounts and commands are always matched first.
+type dynamicRoute struct {
+	param    string
+	registry *Registry
+}
+
+// pathParams carries values captured from dynamic path segments (e.g.
+// "{selector}") down to the Invocation of the eventually matched command.
+type pathParams map[string]string
+
+func (p pathParams) with(name, value string) pathParams {
+	out := make(pathParams, len(p)+1)
+	for k, v := range p {
+		out[k] = v
+	}
+	out[name] = value
+	return out
+}
+
+// dynamicSegmentName reports the param name for a dynamic path segment like
+// "{selector}", mirroring the {name} convention chi uses for web routes.
+func dynamicSegmentName(segment string) (string, bool) {
+	if len(segment) < 3 || segment[0] != '{' || segment[len(segment)-1] != '}' {
+		return "", false
+	}
+	name := strings.TrimSpace(segment[1 : len(segment)-1])
+	if name == "" {
+		return "", false
+	}
+	return name, true
 }
 
 type ParamKey struct {
@@ -37,10 +72,11 @@ type ParamKey struct {
 }
 
 type Invocation struct {
-	rawArgs []string
-	flags   map[string]string
-	failed  bool
-	errs    []error
+	rawArgs    []string
+	flags      map[string]string
+	pathParams pathParams
+	failed     bool
+	errs       []error
 }
 
 type IntValidator func(int) error
@@ -80,7 +116,7 @@ type stringParamConfig struct {
 
 func NewRegistry() *Registry {
 	return &Registry{
-		commands: map[string]func(args []string) Result{},
+		commands: map[string]func(args []string, pp pathParams) Result{},
 		help:     map[string]string{},
 		byID:     map[string]string{},
 		mounts:   map[string]*Registry{},
@@ -197,8 +233,9 @@ func RegisterActivity[C any](r *Registry, a *CliActivity[C]) {
 		panic(fmt.Sprintf("command '%s' already registered", a.id))
 	}
 
-	r.commands[a.id] = func(args []string) Result {
+	r.commands[a.id] = func(args []string, pp pathParams) Result {
 		inv := newInvocation(args)
+		inv.pathParams = pp
 		decoded := a.decode(inv)
 		if inv.Failed() {
 			return Error(inv.Error().Error())
@@ -232,6 +269,13 @@ func (r *Registry) Mount(path string, mounted *Registry) {
 	if path == "" {
 		return
 	}
+	if name, ok := dynamicSegmentName(path); ok {
+		if r.dynamic != nil && r.dynamic.param != name {
+			panic(fmt.Sprintf("dynamic segment '{%s}' conflicts with existing dynamic segment '{%s}' at this level", name, r.dynamic.param))
+		}
+		r.dynamic = &dynamicRoute{param: name, registry: mounted}
+		return
+	}
 	r.mounts[path] = mounted
 }
 
@@ -249,6 +293,12 @@ func (r *Registry) Group(path string) *Registry {
 func (r *Registry) GetOrCreateGroup(name string) *Registry {
 	if r == nil {
 		panic("registry is nil")
+	}
+	if paramName, ok := dynamicSegmentName(name); ok {
+		if r.dynamic != nil && r.dynamic.param == paramName {
+			return r.dynamic.registry
+		}
+		return r.Group(name)
 	}
 	if sub, ok := r.mounts[name]; ok {
 		return sub
@@ -268,6 +318,13 @@ func (r *Registry) Run(args []string) int {
 }
 
 func (r *Registry) Execute(args []string) Result {
+	return r.execute(args, nil)
+}
+
+// execute matches static mounts and commands before falling back to a
+// dynamic path segment ("{name}"), threading captured path param values
+// down to whichever command ultimately handles the request.
+func (r *Registry) execute(args []string, pp pathParams) Result {
 	if r == nil {
 		return Error("registry is nil")
 	}
@@ -285,14 +342,25 @@ func (r *Registry) Execute(args []string) Result {
 		if isHelpRequest(args[1:]) {
 			return mounted.Help()
 		}
-		return mounted.Execute(args[1:])
+		return mounted.execute(args[1:], pp)
 	}
 
 	if cmd, ok := r.commands[args[0]]; ok {
 		if containsHelpFlag(args[1:]) {
 			return r.commandHelp(args[0])
 		}
-		return cmd(args[1:])
+		return cmd(args[1:], pp)
+	}
+
+	if r.dynamic != nil {
+		next := pp.with(r.dynamic.param, args[0])
+		if len(args) == 1 {
+			return r.dynamic.registry.Help()
+		}
+		if isHelpRequest(args[1:]) {
+			return r.dynamic.registry.Help()
+		}
+		return r.dynamic.registry.execute(args[1:], next)
 	}
 
 	help := r.Help()
@@ -558,6 +626,11 @@ func (i *Invocation) lookupStringParam(key ParamKey) (string, bool) {
 		return "", false
 	}
 	for _, name := range key.names {
+		if value, ok := i.pathParams[name]; ok {
+			return value, true
+		}
+	}
+	for _, name := range key.names {
 		if value, ok := i.flags[name]; ok {
 			return value, true
 		}
@@ -681,11 +754,14 @@ func (r *Registry) Help() Result {
 	}
 	var lines []string
 	lines = append(lines, "Usage: <command> [subcommand] [flags]")
-	if len(r.mounts) > 0 {
+	if len(r.mounts) > 0 || r.dynamic != nil {
 		lines = append(lines, "")
 		lines = append(lines, "Subcommands:")
 		for _, name := range sortedKeys(r.mounts) {
 			lines = append(lines, "  "+name)
+		}
+		if r.dynamic != nil {
+			lines = append(lines, "  <"+r.dynamic.param+">")
 		}
 	}
 	if len(r.commands) > 0 {
