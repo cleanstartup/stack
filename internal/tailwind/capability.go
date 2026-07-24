@@ -32,6 +32,7 @@ func (c Capability) Install(ctx context.Context, cfg plugin.Context) error {
 	if c.empty() {
 		return nil
 	}
+	AddNPMDependencies(cfg.NPM)
 	inputPath := ""
 	if strings.TrimSpace(cfg.ProjectDir) != "" {
 		inputPath = filepath.Join(cfg.ProjectDir, "tailwind.input.css")

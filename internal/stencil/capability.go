@@ -32,6 +32,7 @@ func (c Capability) Install(ctx context.Context, cfg plugin.Context) error {
 	if c.empty() {
 		return nil
 	}
+	AddNPMDependencies(cfg.NPM)
 	projectDir := strings.TrimSpace(cfg.ProjectDir)
 	if projectDir == "" {
 		return nil

@@ -1,8 +1,8 @@
 package tailwind
 
-import npmpkg "github.com/cleanstartup/stack/internal/npm"
+import "github.com/cleanstartup/stack/plugin"
 
-func AddNPMDependencies(project *npmpkg.Project) {
+func AddNPMDependencies(project plugin.NPM) {
 	if project == nil {
 		return
 	}

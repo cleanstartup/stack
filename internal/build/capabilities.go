@@ -20,9 +20,10 @@ func (e *BuildEngine) capabilities(cfg BuildConfig) []plugin.Capability {
 	}
 	project := e.npm
 	var caps []plugin.Capability
+	needsNPM := false
 
 	if e.builder != nil && e.builder.Styles() != nil && len(e.builder.Styles().Inputs()) > 0 {
-		tailwindpkg.AddNPMDependencies(project)
+		needsNPM = true
 		caps = append(caps, tailwindpkg.NewCapability(e.builder.Styles(), func(ctx plugin.Context) tailwindpkg.Config {
 			return tailwindpkg.Config{
 				Binary:       cfg.TailwindBinary,
@@ -30,11 +31,12 @@ func (e *BuildEngine) capabilities(cfg BuildConfig) []plugin.Capability {
 				CacheDir:     cfg.TailwindCacheDir,
 				DownloadBase: cfg.TailwindDownloadBase,
 				ProjectDir:   ctx.ProjectDir,
+				Bin:          ctx.Bin,
 			}
 		}))
 	}
 	if e.builder != nil && e.builder.Components() != nil && len(e.builder.Components().Inputs()) > 0 {
-		stencilpkg.AddNPMDependencies(project)
+		needsNPM = true
 		caps = append(caps, stencilpkg.NewCapability(e.builder.Components(), func(ctx plugin.Context) stencilpkg.Config {
 			return stencilpkg.Config{
 				Binary:     cfg.StencilBinary,
@@ -51,8 +53,14 @@ func (e *BuildEngine) capabilities(cfg BuildConfig) []plugin.Capability {
 			}
 		}
 	}
-	if !project.Empty() {
-		caps = append([]plugin.Capability{npmpkg.NewCapability(project)}, caps...)
+	// npm.Capability.Install writes package.json, so it must run after
+	// tailwind/stencil have had a chance to register their deps into the
+	// shared project via ctx.NPM inside their own Install() — hence appended
+	// last rather than prepended. project.Empty() alone isn't enough to
+	// decide inclusion: at this point tailwind/stencil haven't run Install()
+	// yet, so their deps aren't registered.
+	if needsNPM || !project.Empty() {
+		caps = append(caps, npmpkg.NewCapability(project))
 	}
 	return caps
 }
