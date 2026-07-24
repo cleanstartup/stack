@@ -20,8 +20,7 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
-go.work
+# Go workspace file (go.work is tracked: D8 multi-module monorepo needs it resolvable out of the box)
 go.work.sum
 
 # env file

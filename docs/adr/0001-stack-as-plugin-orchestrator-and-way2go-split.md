@@ -1,0 +1,127 @@
+# 1. Stack als Plugin-Orchestrator, App-Framework nach way2go
+
+- Status: Accepted
+- Datum: 2026-07-24
+- Autoren: Adrian Pauli, Richie (Architect)
+
+## Kontext
+
+Der Cleanstartup Stack vereint heute zwei Verantwortungen in einem Modul:
+die Orchestrierung von Build-Steps (Tailwind, Stencil) und ein
+transport-agnostisches Application-Framework (Activities, Params, Middleware,
+Web-/CLI-Runtime).
+
+Tailwind und Stencil sind bereits als internes `capability.Capability`-Interface
+modelliert (`Install/Build/Dev/Register`), aber unter `internal/` versteckt und
+in `internal/build/capabilities.go` fest reingecodet. Die Aktivierung läuft über
+Marker-Optionen (`assets.Tailwind()`) plus einen Type-Switch in `stack.go`. Neue
+Build-Steps wie Hugo lassen sich damit nicht ohne Core-Änderung ergänzen.
+
+**Primärer Treiber:** Erweiterbarkeit ohne Core-Änderung — ein neuer Build-Step
+soll als externes Go-Modul dazukommen, ohne den Stack-Core anzufassen.
+
+Der Plugin-Unterbau existiert also im Kern bereits; der Umbau ist evolutionär,
+kein Rewrite. Sekundär wird die Trennung von Build-Orchestrierung (`stack`) und
+Application-Framework (`way2go`) als eigenständiges Ziel mitgenommen.
+
+## Entscheidung
+
+### Zielarchitektur
+
+```
+way2go        (activity, param, cli, config, web-runtime)      — keine Build-Deps
+   ▲
+stack         (plugin-contract, build-engine, Bundle,          — importiert way2go
+               WebApp/CLIApp, assets-descriptors,
+               generischer Builder-Contract)
+   ▲
+tailwind  stencil  hugo   (je ein Modul, implementieren nur stack/plugin)
+   ▲
+Artifacts (fortego-app, affiliate-funnel, branding, …)  → stack + way2go + Plugins
+```
+
+Kein Zyklus: `stack` importiert nie ein Plugin — der Nutzer verdrahtet Plugins
+explizit an `WebApp()`. Plugins hängen nur am `stack/plugin`-Contract.
+
+### Entscheidungslog
+
+| #   | Entscheidung          | Gewählt                                                                                              |
+| --- | --------------------- | --------------------------------------------------------------------------------------------------- |
+| D1  | Treiber               | Erweiterbarkeit ohne Core-Änderung                                                                   |
+| D2  | Plugin-Aktivierung    | Explizit als Wert an `WebApp(hugo.Plugin(), …)`                                                      |
+| D3  | Toolchain             | stack stellt geteilte Services (1 npm-Workspace + Binary-Provisioning) via `plugin.Context`         |
+| D4  | way2go-Split          | In-Scope, dieser Umbau                                                                               |
+| D5  | Dep-Richtung          | `stack → way2go`; `WebApp/CLIApp` bleiben Orchestrierung in stack                                    |
+| D6  | Contract-Ort          | Öffentliches Paket im stack-Modul (`stack/plugin`)                                                   |
+| D7  | First-Party-Plugins   | tailwind, stencil, hugo = echte separate Module (Contract-Dogfooding)                                |
+| D8  | Repo-Layout           | Multi-Modul-Monorepo im heutigen stack-Repo; Split auf eigene Repos später                           |
+| D9  | Modulpfade            | Repo-lokal vorerst (`github.com/cleanstartup/stack/…`); Rename-Schuld bewusst                        |
+| D10 | Migration             | Harter Schnitt, keine BC-Fassade, Artifacts sofort umstellen                                         |
+| D11 | `web`-Zerlegung       | 3-teilig: Runtime→way2go, generischer Builder-Contract→stack, tailwind/stencil-Parts + Routing→Plugins |
+| D12 | Config-Ownership      | Plugin-spezifisches Env-Reading zieht ins Plugin; `stack.BuildConfig` verliert tailwind/stencil-Felder |
+| OF2 | way2go-Inventar       | `activity`, `param`, `cli`, `config`, `web`-Runtime                                                  |
+
+### Kern-Konsequenzen des Contracts
+
+- `plugin.Context` reicht die geteilten Services **öffentlich** durch:
+  npm-Workspace (`AddDependency`/`AddDevDependency`) und einen
+  Binary-Provisioning-Helper (name/version/url → cached path).
+- Plugin-spezifische Config wird vom Plugin selbst aus dem Environment gelesen.
+  `stack`s `BuildConfig` kennt keine `TailwindBinary`/`StencilBinary`-Felder mehr.
+- Ein aktives Plugin erhält die von Modulen deklarierten `assets.Dir()`-Quellen
+  und trägt seine **eigene** Discovery bei. Das heute in `stack.go`
+  (`expandDirSource`, `.css→tailwind` / `.tsx→stencil`) hartverdrahtete Routing
+  wandert in die jeweiligen Plugins.
+
+## Offene Flags
+
+- **OF1 — Artifact-Wiring:** Workspace-weites `go.work` vs. `deps/`-replace pro
+  Modul. Entscheidung vor Phase 4. Blockiert den Kernumbau nicht.
+- **OF3 — Repo-Split & Import-Rename:** Aus D9 folgt eine terminierte Schuld:
+  beim späteren Split auf eigene Repos müssen die `github.com/cleanstartup/stack/…`
+  Importpfade projektweit umbenannt werden.
+
+## Umsetzungs-Tasks
+
+### Phase 0 — Contract & Gerüst
+1. `go.work` im stack-Repo; way2go-Modul-Skelett (repo-lokaler Pfad).
+2. `internal/capability` → öffentliches `stack/plugin`; `AssetKind`/`AssetRef`/
+   `WatchWorker` mit-promoten.
+3. `plugin.Context` um öffentliche Shared-Services erweitern (npm-Workspace +
+   Binary-Provisioning). `BuildConfig any` von tailwind/stencil-Feldern befreien (D12).
+
+### Phase 1 — way2go extrahieren
+4. `activity`, `param`, `cli`, `config` → way2go.
+5. `web` zerschneiden: Runtime→way2go, Builder-Contract→stack. stack importiert
+   way2go; `WebApp/CLIApp` auf way2go-Typen umverdrahten. Hart, keine Aliases (D10).
+
+### Phase 2 — tailwind/stencil zu Plugins
+6. Module `tailwind`, `stencil`; `internal/tailwind|stencil`, npm-Deklaration,
+   Discovery, `web.TailwindCSS/StencilScan` + `expandDirSource`-Routing hineinziehen.
+7. Registrierung invertieren: Type-Switch in `capabilities()` + `assets.Tailwind()/
+   Stencil()`-Marker raus → `WebApp(tailwind.Plugin(), stencil.Plugin())`.
+
+### Phase 3 — hugo-Plugin
+8. Neues `hugo`-Modul (Content-Build + Dev-Watch), sieht ausschliesslich
+   `stack/plugin` — Beweis der Contract-Suffizienz am grünen Feld.
+
+### Phase 4 — Artifact-Migration (nach OF1)
+9. branding, fortego-app, affiliate-funnel, happend-store, fortego-ecies auf
+   way2go + explizite Plugin-Wiring umstellen.
+
+### Phase 5 — später
+10. Repo-Split, `replace`-Direktiven entfernen, Import-Rename (OF3).
+
+## Alternativen (verworfen)
+
+- **way2go-Split weglassen:** Für D1 technisch nicht nötig — der Contract ist
+  heute schon frei von templ/chi. Verworfen, weil der Split als eigenständiges
+  Concern-Trennungsziel gewollt ist (D4).
+- **Selbst-Registrierung via `init()`:** Versteckte Kopplung, Reihenfolge- und
+  Testbarkeitsprobleme; widerspricht dem expliziten Stil des Stacks (D2).
+- **Voll self-contained Plugins (eigene Toolchain je Plugin):** Doppelte
+  `node_modules`, konkurrierende npm-Installs (D3).
+- **Contract in eigenem Mini-Modul:** Sauberste Kopplung, aber ein zusätzliches
+  versioniertes Modul; verworfen zugunsten weniger Module (D6).
+- **BC-Fassade in stack:** Kleinerer Blast-Radius, aber Übergangs-Altlast; im
+  Monorepo mit go.work ist der harte Schnitt atomar machbar (D10).

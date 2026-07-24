@@ -1,0 +1,159 @@
+# ADR-0001 — Phase 0: Contract & Gerüst (Task-Breakdown)
+
+- Status: Ready
+- Datum: 2026-07-25
+- Bezug: [0001-stack-as-plugin-orchestrator-and-way2go-split.md](./0001-stack-as-plugin-orchestrator-and-way2go-split.md)
+
+Detaillierung von **Phase 0** aus ADR-0001. Ziel: den Plugin-Contract real und
+öffentlich machen und ihn an den zwei Bestands-Capabilities (tailwind, stencil)
+beweisen — **ohne Blast-Radius auf Artifacts**. Registrierungs-Inversion,
+`web`-Zerlegung und way2go-Inhalt bleiben späteren Phasen.
+
+## Findings, die Phase 0 zuschneiden
+
+1. **Der Contract lässt sich nicht allein promoten.** `capability.Capability`
+   führt `asset.AssetRef`, `asset.AssetKind` und `pipeline.WatchWorker` in der
+   Signatur, und Plugins konsumieren deren Helfer (tailwind baut Assets über
+   `asset.FromDir`/`Materialize`, startet Dev-Worker über
+   `pipeline.StartCommandWatchSpec`). `stack/plugin` öffentlich zu machen zieht
+   `internal/asset` → `stack/asset` und `internal/pipeline` → `stack/devwatch`
+   zwingend mit. Task 0.2 ist drei Promotions.
+
+2. **D12 ist fast gratis.** `BuildConfig any` trägt heute nur Mode +
+   tailwind/stencil-Felder. tailwind liest `STACK_TAILWIND_*` in `ResolveBinary`
+   (`internal/tailwind/build.go`) ohnehin direkt aus dem Environment. Also:
+   `BuildConfig any`/`DevConfig any` fallen weg, ersetzt durch ein explizites
+   `Mode`; die `tailwindConfig`/`stencilConfig`-Resolver in
+   `internal/build/capabilities.go` werden gelöscht.
+
+## Zielpaket-Layout
+
+```
+way2go/                         (nur Skelett in Phase 0)
+stack/plugin/     ← internal/capability   (Capability, Source, Context, Workspace, Target, NPM, Bin, Mode)
+stack/asset/      ← internal/asset        (AssetRef, AssetKind, AssetSource, AssetWorkspace, FromDir, …)
+stack/devwatch/   ← internal/pipeline     (WatchWorker, StartCommandWatchSpec, SnapshotPaths, …)
+```
+
+## Contract-Signaturen — `stack/plugin`
+
+```go
+package plugin
+
+import (
+	"context"
+
+	"github.com/cleanstartup/stack/asset"
+	"github.com/cleanstartup/stack/devwatch"
+)
+
+// Mode ersetzt das heutige BuildConfig any / DevConfig any.
+type Mode string
+
+const (
+	ModeBuild Mode = "build"
+	ModeDev   Mode = "dev"
+)
+
+// Context ist der öffentliche Vertrag, den stack an jedes Plugin reicht.
+type Context struct {
+	ProjectDir string      // Modul-/Command-Wurzel
+	OutputDir  string      // .assets-Ziel
+	Workspace  Workspace   // Asset-Zielpfade
+	Mode       Mode        // build | dev
+	NPM        NPM         // GETEILTER npm-Workspace (D3)
+	Bin        BinProvider // GETEILTES Binary-Provisioning (D3)
+}
+
+// Workspace: unverändert aus internal/capability, nur öffentlich.
+type Workspace interface {
+	RootDir() string
+	OutputDir() string
+	AssetDir(asset.AssetKind, string) string
+}
+
+// Target: unverändert.
+type Target interface {
+	RegisterCSS(asset.AssetRef)
+	RegisterJS(asset.AssetRef)
+}
+
+// Capability: unverändert bis auf devwatch-Typ.
+type Capability interface {
+	Install(context.Context, Context) error
+	Build(context.Context, Context) error
+	Dev(context.Context, Context) ([]devwatch.WatchWorker, error)
+	Register(Target)
+}
+
+// Source: optionales Interface für inkrementellen Dev-Rebuild (wie heute
+// per Type-Assertion in rebuildChangedCapabilities).
+type Source interface {
+	SourcePaths() []string
+	SourceChanged(string) bool
+	Rebuild(context.Context, Context) error
+}
+```
+
+## Geteilte Services
+
+**NPM** — die heutigen public Methoden von `*npm.Project` als Interface. `stack`
+besitzt weiter *einen* `Project` und reicht ihn als `ctx.NPM` an alle Plugins
+(löst „doppelte node_modules" aus D3). tailwind/stencil rufen
+`ctx.NPM.AddDependency(...)` statt des heutigen `AddNPMDependencies(project)` in
+`internal/build/capabilities.go`.
+
+```go
+type NPM interface {
+	AddDependency(name, version string)
+	AddDevDependency(name, version string)
+	RequireBin(name string) // z.B. "tailwindcss", "stencil"
+}
+```
+
+**BinProvider** — extrahiert den wiederverwendbaren Kern aus
+`tailwind.downloadBinary` (`internal/tailwind/build.go`): Download → Cache-Pfad →
+chmod → atomarer Rename. Plugin-spezifisch bleibt die URL-/Plattform-/
+Latest-Auflösung.
+
+```go
+type BinProvider interface {
+	// Ensure lädt spec.URL in den geteilten Cache unter Name/Version, macht
+	// die Datei ausführbar und gibt den lokalen Pfad zurück. Idempotent.
+	Ensure(ctx context.Context, spec BinarySpec) (string, error)
+}
+
+type BinarySpec struct {
+	Name    string // logischer Name, z.B. "tailwindcss"
+	Version string // aufgelöst, Teil des Cache-Pfads
+	URL     string // fertig aufgelöste, plattformspezifische Download-URL
+}
+```
+
+## Tasks
+
+| Task    | Inhalt                                                                                                                                           | Akzeptanz                                                                             |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **0.1** | `go.work` im stack-Repo; `way2go/`-Modul-Skelett (repo-lokaler Pfad, leeres `doc.go`).                                                          | `go work sync` grün; `go build ./...` unverändert grün.                               |
+| **0.2a**| `internal/asset` → `stack/asset` (öffentlich). Interne Importe umbiegen.                                                                        | alle Tests grün, keine `internal/asset`-Referenzen mehr.                              |
+| **0.2b**| `internal/pipeline` → `stack/devwatch` (öffentlich).                                                                                            | dito.                                                                                 |
+| **0.2c**| `internal/capability` → `stack/plugin`; `Dev()` auf `devwatch.WatchWorker`.                                                                     | tailwind/stencil/npm implementieren weiter das jetzt öffentliche Interface.          |
+| **0.3a**| `plugin.Context`: `BuildConfig any`/`DevConfig any` raus → `Mode`; `NPM`+`Bin` rein. `capabilityContext()` füllt die neuen Felder.              | `tailwindConfig`/`stencilConfig`-Resolver gelöscht; Build/Dev/Serve unverändert.     |
+| **0.3b**| `BinProvider`-Impl in stack (Download-/Cache-Kern aus `downloadBinary` extrahiert); `NPM` = `*npm.Project` hinter dem Interface.                | `TestBuildUsesExplicitTailwindBinary` grün; frischer Download landet im Cache.       |
+| **0.4** | tailwind/stencil auf `ctx.NPM`/`ctx.Bin` umstellen (Validierung, dass der Contract ausreicht — noch **intern**, Inversion erst Phase 2).        | `dev`+`build` in `fortego-app` unverändert; manueller End-to-End-Lauf grün.          |
+
+## Kritischer Prüfpunkt (Exit-Kriterium Phase 0)
+
+Reichen `NPM` + `BinProvider` als einzige geteilte Services, damit tailwind *und*
+stencil ohne stack-Interna auskommen? stencil schreibt `stencil.config.ts`/
+`tsconfig.json` ins ProjectDir — reines Filesystem, braucht keinen Service. Wenn
+beide nur über den öffentlichen `plugin.Context` laufen, ist der Contract für
+hugo (Phase 3) tragfähig. Andernfalls: fehlenden Service identifizieren und
+minimal ergänzen, bevor Phase 1 startet.
+```
+
+## Nicht in Phase 0
+
+- Registrierungs-Inversion `WebApp(tailwind.Plugin(), …)` → Phase 2
+- `web`-Zerlegung (D11) → Phase 1
+- way2go-Inhalt (activity/param/cli/config/web-runtime) → Phase 1
