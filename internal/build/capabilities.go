@@ -15,10 +15,13 @@ import (
 )
 
 func (e *BuildEngine) capabilities(cfg BuildConfig) []plugin.Capability {
-	project := npmpkg.NewProject()
+	if e == nil {
+		return nil
+	}
+	project := e.npm
 	var caps []plugin.Capability
 
-	if e != nil && e.builder != nil && e.builder.Styles() != nil && len(e.builder.Styles().Inputs()) > 0 {
+	if e.builder != nil && e.builder.Styles() != nil && len(e.builder.Styles().Inputs()) > 0 {
 		tailwindpkg.AddNPMDependencies(project)
 		caps = append(caps, tailwindpkg.NewCapability(e.builder.Styles(), func(ctx plugin.Context) tailwindpkg.Config {
 			return tailwindpkg.Config{
@@ -30,7 +33,7 @@ func (e *BuildEngine) capabilities(cfg BuildConfig) []plugin.Capability {
 			}
 		}))
 	}
-	if e != nil && e.builder != nil && e.builder.Components() != nil && len(e.builder.Components().Inputs()) > 0 {
+	if e.builder != nil && e.builder.Components() != nil && len(e.builder.Components().Inputs()) > 0 {
 		stencilpkg.AddNPMDependencies(project)
 		caps = append(caps, stencilpkg.NewCapability(e.builder.Components(), func(ctx plugin.Context) stencilpkg.Config {
 			return stencilpkg.Config{
@@ -39,7 +42,7 @@ func (e *BuildEngine) capabilities(cfg BuildConfig) []plugin.Capability {
 			}
 		}))
 	}
-	if e != nil && e.builder != nil {
+	if e.builder != nil {
 		for _, dep := range e.builder.NPMDeps() {
 			if dep.Dev {
 				project.AddDevDependency(dep.Name, dep.Version)
@@ -181,6 +184,8 @@ func (e *BuildEngine) capabilityContext(buildCfg BuildConfig, devCfg DevConfig, 
 		Workspace:  workspace,
 		OutputDir:  outputDir,
 		Mode:       mode,
+		NPM:        e.npm,
+		Bin:        e.bin,
 	}
 }
 

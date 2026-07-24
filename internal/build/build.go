@@ -15,8 +15,10 @@ import (
 	"time"
 
 	devwatchpkg "github.com/cleanstartup/stack/devwatch"
+	npmpkg "github.com/cleanstartup/stack/internal/npm"
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
+	"github.com/cleanstartup/stack/plugin"
 	"github.com/cleanstartup/stack/web"
 )
 
@@ -70,10 +72,25 @@ type BuildResult struct {
 
 type BuildEngine struct {
 	builder *web.Builder
+	npm     *npmpkg.Project
+	bin     plugin.BinProvider
 }
 
 func NewEngine(b *web.Builder) *BuildEngine {
-	return &BuildEngine{builder: b}
+	return &BuildEngine{
+		builder: b,
+		npm:     npmpkg.NewProject(),
+		bin:     plugin.NewBinProvider(defaultBinCacheDir()),
+	}
+}
+
+// defaultBinCacheDir mirrors tailwind's former per-plugin cache dir default,
+// generalized for the shared BinProvider (D3): $cache/stack/bin/<Name>/<Version>/<Name>.
+func defaultBinCacheDir() string {
+	if dir, err := os.UserCacheDir(); err == nil && strings.TrimSpace(dir) != "" {
+		return filepath.Join(dir, "stack", "bin")
+	}
+	return filepath.Join(os.TempDir(), "stack", "bin")
 }
 
 func (e *BuildEngine) Builder() *web.Builder {
