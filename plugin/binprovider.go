@@ -18,6 +18,28 @@ func NewBinProvider(cacheRoot string) BinProvider {
 	return &binProvider{cacheRoot: cacheRoot}
 }
 
+// DefaultBinCacheDir resolves the shared BinProvider's cache root:
+//
+//  1. STACK_BIN_CACHE_DIR — canonical override; generic because the provider
+//     serves every plugin, not just tailwind.
+//  2. STACK_TAILWIND_CACHE_DIR — backwards-compatible override. tailwind is
+//     currently the only downloader, so this keeps controlling where its
+//     binary lands (same root as tailwind's own latest-version pointer file,
+//     resolving the split-brain between the two).
+//  3. $UserCacheDir/stack/bin, falling back to $TMPDIR/stack/bin.
+func DefaultBinCacheDir() string {
+	if dir := strings.TrimSpace(os.Getenv("STACK_BIN_CACHE_DIR")); dir != "" {
+		return dir
+	}
+	if dir := strings.TrimSpace(os.Getenv("STACK_TAILWIND_CACHE_DIR")); dir != "" {
+		return dir
+	}
+	if dir, err := os.UserCacheDir(); err == nil && strings.TrimSpace(dir) != "" {
+		return filepath.Join(dir, "stack", "bin")
+	}
+	return filepath.Join(os.TempDir(), "stack", "bin")
+}
+
 type binProvider struct {
 	cacheRoot string
 }

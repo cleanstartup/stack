@@ -249,11 +249,10 @@ func ResolveBinary(ctx context.Context, cfg Config) (string, error) {
 		cacheDir = strings.TrimSpace(os.Getenv("STACK_TAILWIND_CACHE_DIR"))
 	}
 	if cacheDir == "" {
-		if userCacheDir, err := os.UserCacheDir(); err == nil && strings.TrimSpace(userCacheDir) != "" {
-			cacheDir = filepath.Join(userCacheDir, "stack", "tailwind")
-		} else {
-			cacheDir = filepath.Join(os.TempDir(), "stack", "tailwind")
-		}
+		// Same root as the shared BinProvider's default (plugin.DefaultBinCacheDir)
+		// so the latest-version pointer file below and the binary Bin.Ensure
+		// downloads never split-brain into two different cache directories.
+		cacheDir = pluginpkg.DefaultBinCacheDir()
 	}
 
 	downloadBase := strings.TrimSpace(cfg.DownloadBase)

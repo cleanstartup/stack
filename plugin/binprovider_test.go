@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -76,5 +77,68 @@ func TestBinProviderEnsureRejectsEmptySpec(t *testing.T) {
 	}
 	if _, err := provider.Ensure(context.Background(), BinarySpec{Name: "fakebin"}); err == nil {
 		t.Fatal("expected error for empty url")
+	}
+}
+
+func TestDefaultBinCacheDirPriority(t *testing.T) {
+	binDir := filepath.Join(t.TempDir(), "bin-override")
+	tailwindDir := filepath.Join(t.TempDir(), "tailwind-override")
+
+	t.Run("STACK_BIN_CACHE_DIR wins over everything", func(t *testing.T) {
+		t.Setenv("STACK_BIN_CACHE_DIR", binDir)
+		t.Setenv("STACK_TAILWIND_CACHE_DIR", tailwindDir)
+		if got := DefaultBinCacheDir(); got != binDir {
+			t.Fatalf("expected STACK_BIN_CACHE_DIR to win, got %q", got)
+		}
+	})
+
+	t.Run("STACK_TAILWIND_CACHE_DIR is honored as a BC fallback", func(t *testing.T) {
+		t.Setenv("STACK_BIN_CACHE_DIR", "")
+		t.Setenv("STACK_TAILWIND_CACHE_DIR", tailwindDir)
+		if got := DefaultBinCacheDir(); got != tailwindDir {
+			t.Fatalf("expected STACK_TAILWIND_CACHE_DIR fallback, got %q", got)
+		}
+	})
+
+	t.Run("falls back to the default when nothing is set", func(t *testing.T) {
+		t.Setenv("STACK_BIN_CACHE_DIR", "")
+		t.Setenv("STACK_TAILWIND_CACHE_DIR", "")
+		got := DefaultBinCacheDir()
+		if !strings.HasSuffix(filepath.ToSlash(got), "/stack/bin") {
+			t.Fatalf("expected default to end in /stack/bin, got %q", got)
+		}
+	})
+}
+
+// TestBinProviderEnsureRespectsConfiguredCacheDir reproduces the F1 fix: the
+// shared BinProvider built the way BuildEngine builds it
+// (NewBinProvider(DefaultBinCacheDir())) must honor STACK_TAILWIND_CACHE_DIR,
+// so a freshly downloaded binary lands exactly where that variable points —
+// not under the fixed $UserCacheDir/stack/bin default.
+func TestBinProviderEnsureRespectsConfiguredCacheDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("executable bit assertion is unix-only")
+	}
+
+	configuredDir := filepath.Join(t.TempDir(), "configured-tailwind-cache")
+	t.Setenv("STACK_BIN_CACHE_DIR", "")
+	t.Setenv("STACK_TAILWIND_CACHE_DIR", configuredDir)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("#!/bin/sh\necho hi\n"))
+	}))
+	defer server.Close()
+
+	provider := NewBinProvider(DefaultBinCacheDir())
+	path, err := provider.Ensure(context.Background(), BinarySpec{Name: "tailwindcss", Version: "v4.1.3", URL: server.URL})
+	if err != nil {
+		t.Fatalf("Ensure failed: %v", err)
+	}
+	wantPath := filepath.Join(configuredDir, "tailwindcss", "v4.1.3", "tailwindcss")
+	if path != wantPath {
+		t.Fatalf("expected download under configured STACK_TAILWIND_CACHE_DIR, got %q, want %q", path, wantPath)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected binary at %s: %v", path, err)
 	}
 }

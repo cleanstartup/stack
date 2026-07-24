@@ -130,6 +130,16 @@ type BinarySpec struct {
 }
 ```
 
+**Env-Auflösung des Cache-Roots** — `plugin.DefaultBinCacheDir()` (genutzt von
+`NewEngine`, um den geteilten `BinProvider` zu bauen):
+
+1. `STACK_BIN_CACHE_DIR` — kanonisch, generisch (bedient künftig alle Plugins).
+2. `STACK_TAILWIND_CACHE_DIR` — BC-Fallback, solange tailwind der einzige
+   Downloader ist. tailwind liest dieselbe Variable auch für die eigene
+   `latest.version`-Pointer-Datei — beide landen dadurch garantiert im selben
+   Root, kein Split-Brain.
+3. `$UserCacheDir/stack/bin`, sonst `$TMPDIR/stack/bin`.
+
 ## Tasks
 
 | Task    | Inhalt                                                                                                                                           | Akzeptanz                                                                             |
