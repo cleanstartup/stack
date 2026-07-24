@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/cleanstartup/stack/asset"
-	"github.com/cleanstartup/stack/internal/pipeline"
+	"github.com/cleanstartup/stack/devwatch"
 )
 
 type Context struct {
@@ -29,7 +29,7 @@ type Target interface {
 type Capability interface {
 	Install(context.Context, Context) error
 	Build(context.Context, Context) error
-	Dev(context.Context, Context) ([]pipeline.WatchWorker, error)
+	Dev(context.Context, Context) ([]devwatch.WatchWorker, error)
 	Register(Target)
 }
 

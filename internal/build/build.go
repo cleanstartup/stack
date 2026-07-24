@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	pipelinepkg "github.com/cleanstartup/stack/internal/pipeline"
+	devwatchpkg "github.com/cleanstartup/stack/devwatch"
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 	"github.com/cleanstartup/stack/web"
@@ -466,7 +466,7 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	if err != nil {
 		return err
 	}
-	defer pipelinepkg.StopWatchWorkers(workers)
+	defer devwatchpkg.StopWatchWorkers(workers)
 
 	serveCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -487,7 +487,7 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	for _, path := range paths {
 		fmt.Fprintf(os.Stderr, "[stack]   watch %s\n", path)
 	}
-	snapshot, err := pipelinepkg.SnapshotPaths(paths)
+	snapshot, err := devwatchpkg.SnapshotPaths(paths)
 	if err != nil {
 		return err
 	}
@@ -498,12 +498,12 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 			fmt.Fprintf(os.Stderr, "[stack]   mirror %s\n", path)
 		}
 	}
-	sourceSnapshot, err := pipelinepkg.SnapshotPaths(sourcePaths)
+	sourceSnapshot, err := devwatchpkg.SnapshotPaths(sourcePaths)
 	if err != nil {
 		return err
 	}
 
-	goSnapshot, err := pipelinepkg.SnapshotPaths([]string{cfg.ProjectDir})
+	goSnapshot, err := devwatchpkg.SnapshotPaths([]string{cfg.ProjectDir})
 	if err != nil {
 		return err
 	}
@@ -523,12 +523,12 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 			return err
 		case <-ticker.C:
 			if cfg.ProjectDir != "" {
-				currentGo, err := pipelinepkg.SnapshotPaths([]string{cfg.ProjectDir})
+				currentGo, err := devwatchpkg.SnapshotPaths([]string{cfg.ProjectDir})
 				if err != nil {
 					return err
 				}
-				if !pipelinepkg.SnapshotsEqual(goSnapshot, currentGo) {
-					changed := pipelinepkg.DiffSnapshotPaths(goSnapshot, currentGo)
+				if !devwatchpkg.SnapshotsEqual(goSnapshot, currentGo) {
+					changed := devwatchpkg.DiffSnapshotPaths(goSnapshot, currentGo)
 					changed = filterGoSourcePaths(changed)
 					if len(changed) > 0 {
 						fmt.Fprintf(os.Stderr, "[stack] Go sources changed (%s) — restart dev to apply\n", strings.Join(changed, ", "))
@@ -537,12 +537,12 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 				}
 			}
 			if len(sourcePaths) > 0 {
-				currentSource, err := pipelinepkg.SnapshotPaths(sourcePaths)
+				currentSource, err := devwatchpkg.SnapshotPaths(sourcePaths)
 				if err != nil {
 					return err
 				}
-				if !pipelinepkg.SnapshotsEqual(sourceSnapshot, currentSource) {
-					changed := pipelinepkg.DiffSnapshotPaths(sourceSnapshot, currentSource)
+				if !devwatchpkg.SnapshotsEqual(sourceSnapshot, currentSource) {
+					changed := devwatchpkg.DiffSnapshotPaths(sourceSnapshot, currentSource)
 					changed = FilterGeneratedProjectPaths(cfg.ProjectDir, changed)
 					if len(changed) == 0 {
 						sourceSnapshot = currentSource
@@ -553,12 +553,12 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 					sourceSnapshot = currentSource
 				}
 			}
-			current, err := pipelinepkg.SnapshotPaths(paths)
+			current, err := devwatchpkg.SnapshotPaths(paths)
 			if err != nil {
 				return err
 			}
-			if !pipelinepkg.SnapshotsEqual(snapshot, current) {
-				changed := pipelinepkg.DiffSnapshotPaths(snapshot, current)
+			if !devwatchpkg.SnapshotsEqual(snapshot, current) {
+				changed := devwatchpkg.DiffSnapshotPaths(snapshot, current)
 				fmt.Fprintf(os.Stderr, "[stack] dev output changed: %s\n", strings.Join(changed, ", "))
 				snapshot = current
 				dirty = true
@@ -619,14 +619,14 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 	if err != nil {
 		return err
 	}
-	defer pipelinepkg.StopWatchWorkers(workers)
+	defer devwatchpkg.StopWatchWorkers(workers)
 
 	paths := e.devOutputWatchPaths(cfg.OutputDir)
 	fmt.Fprintf(os.Stderr, "[stack] dev watching %d roots\n", len(paths))
 	for _, path := range paths {
 		fmt.Fprintf(os.Stderr, "[stack]   watch %s\n", path)
 	}
-	snapshot, err := pipelinepkg.SnapshotPaths(paths)
+	snapshot, err := devwatchpkg.SnapshotPaths(paths)
 	if err != nil {
 		return err
 	}
@@ -637,7 +637,7 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 			fmt.Fprintf(os.Stderr, "[stack]   source %s\n", path)
 		}
 	}
-	sourceSnapshot, err := pipelinepkg.SnapshotPaths(sourcePaths)
+	sourceSnapshot, err := devwatchpkg.SnapshotPaths(sourcePaths)
 	if err != nil {
 		return err
 	}
@@ -653,12 +653,12 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 			return ctx.Err()
 		case <-ticker.C:
 			if len(sourcePaths) > 0 {
-				currentSource, err := pipelinepkg.SnapshotPaths(sourcePaths)
+				currentSource, err := devwatchpkg.SnapshotPaths(sourcePaths)
 				if err != nil {
 					return err
 				}
-				if !pipelinepkg.SnapshotsEqual(sourceSnapshot, currentSource) {
-					changed := pipelinepkg.DiffSnapshotPaths(sourceSnapshot, currentSource)
+				if !devwatchpkg.SnapshotsEqual(sourceSnapshot, currentSource) {
+					changed := devwatchpkg.DiffSnapshotPaths(sourceSnapshot, currentSource)
 					changed = FilterGeneratedProjectPaths(cfg.ProjectDir, changed)
 					if len(changed) == 0 {
 						sourceSnapshot = currentSource
@@ -669,12 +669,12 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 					sourceSnapshot = currentSource
 				}
 			}
-			current, err := pipelinepkg.SnapshotPaths(paths)
+			current, err := devwatchpkg.SnapshotPaths(paths)
 			if err != nil {
 				return err
 			}
-			if !pipelinepkg.SnapshotsEqual(snapshot, current) {
-				changed := pipelinepkg.DiffSnapshotPaths(snapshot, current)
+			if !devwatchpkg.SnapshotsEqual(snapshot, current) {
+				changed := devwatchpkg.DiffSnapshotPaths(snapshot, current)
 				fmt.Fprintf(os.Stderr, "[stack] dev output changed: %s\n", strings.Join(changed, ", "))
 				snapshot = current
 				dirty = true

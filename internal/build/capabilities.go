@@ -8,7 +8,7 @@ import (
 
 	"github.com/cleanstartup/stack/internal/capability"
 	npmpkg "github.com/cleanstartup/stack/internal/npm"
-	pipelinepkg "github.com/cleanstartup/stack/internal/pipeline"
+	devwatchpkg "github.com/cleanstartup/stack/devwatch"
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 	"github.com/cleanstartup/stack/web"
@@ -81,20 +81,20 @@ func (e *BuildEngine) buildCapabilities(ctx context.Context, cfg BuildConfig, wo
 	return nil
 }
 
-func (e *BuildEngine) startCapabilityDevWorkers(ctx context.Context, cfg DevConfig, workspace *Workspace) ([]pipelinepkg.WatchWorker, error) {
+func (e *BuildEngine) startCapabilityDevWorkers(ctx context.Context, cfg DevConfig, workspace *Workspace) ([]devwatchpkg.WatchWorker, error) {
 	capabilityContext := e.capabilityContext(BuildConfig{
 		ProjectDir:   cfg.ProjectDir,
 		WorkspaceDir: cfg.WorkspaceDir,
 		OutputDir:    cfg.OutputDir,
 	}, cfg, workspace)
-	var workers []pipelinepkg.WatchWorker
+	var workers []devwatchpkg.WatchWorker
 	for _, cap := range e.capabilities() {
 		if cap == nil {
 			continue
 		}
 		capabilityWorkers, err := cap.Dev(ctx, capabilityContext)
 		if err != nil {
-			pipelinepkg.StopWatchWorkers(workers)
+			devwatchpkg.StopWatchWorkers(workers)
 			return nil, err
 		}
 		workers = append(workers, capabilityWorkers...)

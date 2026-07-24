@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/cleanstartup/stack/internal/capability"
-	"github.com/cleanstartup/stack/internal/pipeline"
+	"github.com/cleanstartup/stack/devwatch"
 )
 
 type Project struct {
@@ -142,7 +142,7 @@ func (c Capability) Install(ctx context.Context, cfg capability.Context) error {
 }
 
 func (c Capability) Build(context.Context, capability.Context) error { return nil }
-func (c Capability) Dev(context.Context, capability.Context) ([]pipeline.WatchWorker, error) {
+func (c Capability) Dev(context.Context, capability.Context) ([]devwatch.WatchWorker, error) {
 	return nil, nil
 }
 func (c Capability) Register(capability.Target) {}

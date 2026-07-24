@@ -9,7 +9,7 @@ import (
 
 	"github.com/cleanstartup/stack/asset"
 	"github.com/cleanstartup/stack/internal/capability"
-	"github.com/cleanstartup/stack/internal/pipeline"
+	"github.com/cleanstartup/stack/devwatch"
 )
 
 type ConfigResolver func(capability.Context) Config
@@ -55,7 +55,7 @@ func (c Capability) Build(ctx context.Context, cfg capability.Context) error {
 	return Build(ctx, workspaceAdapter{workspace: cfg.Workspace}, c.cacheRoot(cfg), outputPath, c.registry.Inputs(), c.registry.ScanPaths(), c.config(cfg))
 }
 
-func (c Capability) Dev(ctx context.Context, cfg capability.Context) ([]pipeline.WatchWorker, error) {
+func (c Capability) Dev(ctx context.Context, cfg capability.Context) ([]devwatch.WatchWorker, error) {
 	if c.empty() || cfg.Workspace == nil {
 		return nil, nil
 	}
@@ -74,12 +74,12 @@ func (c Capability) Dev(ctx context.Context, cfg capability.Context) ([]pipeline
 	if err != nil {
 		return nil, err
 	}
-	worker, err := pipeline.StartCommandWatchSpec(ctx, "tailwind", spec)
+	worker, err := devwatch.StartCommandWatchSpec(ctx, "tailwind", spec)
 	if err != nil {
 		return nil, err
 	}
 	fmt.Fprintf(os.Stderr, "[stack] tailwind watch started input=%s output=%s\n", inputPath, outputPath)
-	return []pipeline.WatchWorker{worker}, nil
+	return []devwatch.WatchWorker{worker}, nil
 }
 
 func (c Capability) Register(target capability.Target) {
@@ -110,7 +110,7 @@ func (c Capability) SourceChanged(path string) bool {
 		return false
 	}
 	for _, candidate := range c.SourcePaths() {
-		if pipeline.SourcePathMatches(candidate, path) {
+		if devwatch.SourcePathMatches(candidate, path) {
 			return true
 		}
 	}

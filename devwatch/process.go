@@ -1,4 +1,4 @@
-package pipeline
+package devwatch
 
 import (
 	"context"
