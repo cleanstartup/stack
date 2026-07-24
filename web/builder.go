@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/cleanstartup/stack/internal/capability"
-	assetpkg "github.com/cleanstartup/stack/internal/asset"
+	assetpkg "github.com/cleanstartup/stack/asset"
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 )

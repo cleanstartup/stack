@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	assetpkg "github.com/cleanstartup/stack/internal/asset"
+	assetpkg "github.com/cleanstartup/stack/asset"
 	"github.com/cleanstartup/stack/web"
 )
 

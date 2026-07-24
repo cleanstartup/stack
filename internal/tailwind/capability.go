@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cleanstartup/stack/internal/asset"
+	"github.com/cleanstartup/stack/asset"
 	"github.com/cleanstartup/stack/internal/capability"
 	"github.com/cleanstartup/stack/internal/pipeline"
 )

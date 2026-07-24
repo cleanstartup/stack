@@ -3,7 +3,7 @@ package capability
 import (
 	"context"
 
-	"github.com/cleanstartup/stack/internal/asset"
+	"github.com/cleanstartup/stack/asset"
 	"github.com/cleanstartup/stack/internal/pipeline"
 )
 

@@ -1,6 +1,6 @@
 package web
 
-import assetpkg "github.com/cleanstartup/stack/internal/asset"
+import assetpkg "github.com/cleanstartup/stack/asset"
 
 type AssetKind = assetpkg.AssetKind
 

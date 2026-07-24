@@ -13,7 +13,7 @@ import (
 	"runtime"
 	"strings"
 
-	assetspkg "github.com/cleanstartup/stack/internal/asset"
+	assetspkg "github.com/cleanstartup/stack/asset"
 )
 
 const (
