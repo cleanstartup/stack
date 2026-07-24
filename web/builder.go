@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cleanstartup/stack/internal/capability"
+	"github.com/cleanstartup/stack/plugin"
 	assetpkg "github.com/cleanstartup/stack/asset"
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
@@ -262,11 +262,11 @@ func (b *Builder) registerRoutes(reg *Registry) {
 	}
 }
 
-func (b *Builder) registrationCapabilities() []capability.Capability {
+func (b *Builder) registrationCapabilities() []plugin.Capability {
 	if b == nil {
 		return nil
 	}
-	var caps []capability.Capability
+	var caps []plugin.Capability
 	if b.tailwind != nil && len(b.tailwind.Inputs()) > 0 {
 		caps = append(caps, tailwindpkg.NewCapability(b.tailwind, nil))
 	}

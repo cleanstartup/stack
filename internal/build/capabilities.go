@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cleanstartup/stack/internal/capability"
+	"github.com/cleanstartup/stack/plugin"
 	npmpkg "github.com/cleanstartup/stack/internal/npm"
 	devwatchpkg "github.com/cleanstartup/stack/devwatch"
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
@@ -14,9 +14,9 @@ import (
 	"github.com/cleanstartup/stack/web"
 )
 
-func (e *BuildEngine) capabilities() []capability.Capability {
+func (e *BuildEngine) capabilities() []plugin.Capability {
 	project := npmpkg.NewProject()
-	var caps []capability.Capability
+	var caps []plugin.Capability
 
 	if e != nil && e.builder != nil && e.builder.Styles() != nil && len(e.builder.Styles().Inputs()) > 0 {
 		tailwindpkg.AddNPMDependencies(project)
@@ -36,16 +36,16 @@ func (e *BuildEngine) capabilities() []capability.Capability {
 		}
 	}
 	if !project.Empty() {
-		caps = append([]capability.Capability{npmpkg.NewCapability(project)}, caps...)
+		caps = append([]plugin.Capability{npmpkg.NewCapability(project)}, caps...)
 	}
 	return caps
 }
 
-func registrationCapabilities(b *web.Builder) []capability.Capability {
+func registrationCapabilities(b *web.Builder) []plugin.Capability {
 	if b == nil {
 		return nil
 	}
-	var caps []capability.Capability
+	var caps []plugin.Capability
 	if b.Styles() != nil && len(b.Styles().Inputs()) > 0 {
 		caps = append(caps, tailwindpkg.NewCapability(b.Styles(), nil))
 	}
@@ -109,7 +109,7 @@ func (e *BuildEngine) rebuildChangedCapabilities(ctx context.Context, cfg DevCon
 		OutputDir:    cfg.OutputDir,
 	}, cfg, workspace)
 	for _, cap := range e.capabilities() {
-		source, ok := cap.(capability.Source)
+		source, ok := cap.(plugin.Source)
 		if !ok {
 			continue
 		}
@@ -133,7 +133,7 @@ func (e *BuildEngine) capabilitySourceWatchPaths() []string {
 	seen := map[string]struct{}{}
 	var paths []string
 	for _, cap := range e.capabilities() {
-		source, ok := cap.(capability.Source)
+		source, ok := cap.(plugin.Source)
 		if !ok {
 			continue
 		}
@@ -152,7 +152,7 @@ func (e *BuildEngine) capabilitySourceWatchPaths() []string {
 	return paths
 }
 
-func (e *BuildEngine) capabilityContext(buildCfg BuildConfig, devCfg DevConfig, workspace *Workspace) capability.Context {
+func (e *BuildEngine) capabilityContext(buildCfg BuildConfig, devCfg DevConfig, workspace *Workspace) plugin.Context {
 	outputDir := strings.TrimSpace(buildCfg.OutputDir)
 	if outputDir == "" {
 		outputDir = strings.TrimSpace(devCfg.OutputDir)
@@ -161,7 +161,7 @@ func (e *BuildEngine) capabilityContext(buildCfg BuildConfig, devCfg DevConfig, 
 	if projectDir == "" {
 		projectDir = strings.TrimSpace(devCfg.ProjectDir)
 	}
-	return capability.Context{
+	return plugin.Context{
 		ProjectDir:  projectDir,
 		Workspace:   workspace,
 		OutputDir:   outputDir,
@@ -170,7 +170,7 @@ func (e *BuildEngine) capabilityContext(buildCfg BuildConfig, devCfg DevConfig, 
 	}
 }
 
-func tailwindConfig(ctx capability.Context) tailwindpkg.Config {
+func tailwindConfig(ctx plugin.Context) tailwindpkg.Config {
 	cfg, _ := ctx.BuildConfig.(BuildConfig)
 	return tailwindpkg.Config{
 		Binary:       cfg.TailwindBinary,
@@ -181,7 +181,7 @@ func tailwindConfig(ctx capability.Context) tailwindpkg.Config {
 	}
 }
 
-func stencilConfig(ctx capability.Context) stencilpkg.Config {
+func stencilConfig(ctx plugin.Context) stencilpkg.Config {
 	cfg, _ := ctx.BuildConfig.(BuildConfig)
 	return stencilpkg.Config{
 		Binary:     cfg.StencilBinary,

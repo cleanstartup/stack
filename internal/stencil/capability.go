@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/cleanstartup/stack/asset"
-	"github.com/cleanstartup/stack/internal/capability"
+	"github.com/cleanstartup/stack/plugin"
 	"github.com/cleanstartup/stack/devwatch"
 )
 
-type ConfigResolver func(capability.Context) Config
+type ConfigResolver func(plugin.Context) Config
 
 type Capability struct {
 	registry      *Registry
@@ -27,7 +27,7 @@ func OutputPath(outputRoot string) string {
 	return filepath.Join(outputRoot, "assets", "js", BundleID)
 }
 
-func (c Capability) Install(ctx context.Context, cfg capability.Context) error {
+func (c Capability) Install(ctx context.Context, cfg plugin.Context) error {
 	_ = ctx
 	if c.empty() {
 		return nil
@@ -56,14 +56,14 @@ func (c Capability) Install(ctx context.Context, cfg capability.Context) error {
 }
 
 
-func (c Capability) Build(ctx context.Context, cfg capability.Context) error {
+func (c Capability) Build(ctx context.Context, cfg plugin.Context) error {
 	if c.empty() || cfg.Workspace == nil {
 		return nil
 	}
 	return Build(ctx, workspaceAdapter{workspace: cfg.Workspace}, c.cacheRoot(cfg), cfg.Workspace.OutputDir(), c.registry.Inputs(), c.config(cfg))
 }
 
-func (c Capability) Dev(ctx context.Context, cfg capability.Context) ([]devwatch.WatchWorker, error) {
+func (c Capability) Dev(ctx context.Context, cfg plugin.Context) ([]devwatch.WatchWorker, error) {
 	if c.empty() {
 		return nil, nil
 	}
@@ -83,7 +83,7 @@ func (c Capability) Dev(ctx context.Context, cfg capability.Context) ([]devwatch
 	return []devwatch.WatchWorker{worker}, nil
 }
 
-func (c Capability) Register(target capability.Target) {
+func (c Capability) Register(target plugin.Target) {
 	if target == nil || c.empty() {
 		return
 	}
@@ -118,7 +118,7 @@ func (c Capability) SourceChanged(path string) bool {
 	return false
 }
 
-func (c Capability) Rebuild(context.Context, capability.Context) error {
+func (c Capability) Rebuild(context.Context, plugin.Context) error {
 	return nil
 }
 
@@ -126,7 +126,7 @@ func (c Capability) empty() bool {
 	return c.registry == nil || len(c.registry.Inputs()) == 0
 }
 
-func (c Capability) config(ctx capability.Context) Config {
+func (c Capability) config(ctx plugin.Context) Config {
 	if c.resolveConfig == nil {
 		return Config{ProjectDir: ctx.ProjectDir}
 	}
@@ -137,7 +137,7 @@ func (c Capability) config(ctx capability.Context) Config {
 	return cfg
 }
 
-func (c Capability) cacheRoot(ctx capability.Context) string {
+func (c Capability) cacheRoot(ctx plugin.Context) string {
 	if ctx.Workspace == nil {
 		return filepath.Join(".stack", "stencil-workspace")
 	}
@@ -145,7 +145,7 @@ func (c Capability) cacheRoot(ctx capability.Context) string {
 }
 
 type workspaceAdapter struct {
-	workspace capability.Workspace
+	workspace plugin.Workspace
 }
 
 func (a workspaceAdapter) AssetDir(kind AssetKind, id string) string {
