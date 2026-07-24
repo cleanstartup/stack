@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cleanstartup/stack/plugin"
 	"github.com/cleanstartup/stack/devwatch"
+	"github.com/cleanstartup/stack/plugin"
 )
 
 type Project struct {

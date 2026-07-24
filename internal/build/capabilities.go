@@ -6,25 +6,38 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cleanstartup/stack/plugin"
-	npmpkg "github.com/cleanstartup/stack/internal/npm"
 	devwatchpkg "github.com/cleanstartup/stack/devwatch"
+	npmpkg "github.com/cleanstartup/stack/internal/npm"
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
+	"github.com/cleanstartup/stack/plugin"
 	"github.com/cleanstartup/stack/web"
 )
 
-func (e *BuildEngine) capabilities() []plugin.Capability {
+func (e *BuildEngine) capabilities(cfg BuildConfig) []plugin.Capability {
 	project := npmpkg.NewProject()
 	var caps []plugin.Capability
 
 	if e != nil && e.builder != nil && e.builder.Styles() != nil && len(e.builder.Styles().Inputs()) > 0 {
 		tailwindpkg.AddNPMDependencies(project)
-		caps = append(caps, tailwindpkg.NewCapability(e.builder.Styles(), tailwindConfig))
+		caps = append(caps, tailwindpkg.NewCapability(e.builder.Styles(), func(ctx plugin.Context) tailwindpkg.Config {
+			return tailwindpkg.Config{
+				Binary:       cfg.TailwindBinary,
+				Version:      cfg.TailwindVersion,
+				CacheDir:     cfg.TailwindCacheDir,
+				DownloadBase: cfg.TailwindDownloadBase,
+				ProjectDir:   ctx.ProjectDir,
+			}
+		}))
 	}
 	if e != nil && e.builder != nil && e.builder.Components() != nil && len(e.builder.Components().Inputs()) > 0 {
 		stencilpkg.AddNPMDependencies(project)
-		caps = append(caps, stencilpkg.NewCapability(e.builder.Components(), stencilConfig))
+		caps = append(caps, stencilpkg.NewCapability(e.builder.Components(), func(ctx plugin.Context) stencilpkg.Config {
+			return stencilpkg.Config{
+				Binary:     cfg.StencilBinary,
+				ProjectDir: ctx.ProjectDir,
+			}
+		}))
 	}
 	if e != nil && e.builder != nil {
 		for _, dep := range e.builder.NPMDeps() {
@@ -56,8 +69,8 @@ func registrationCapabilities(b *web.Builder) []plugin.Capability {
 }
 
 func (e *BuildEngine) installCapabilities(ctx context.Context, cfg BuildConfig, workspace *Workspace) error {
-	capabilityContext := e.capabilityContext(cfg, DevConfig{}, workspace)
-	for _, cap := range e.capabilities() {
+	capabilityContext := e.capabilityContext(cfg, DevConfig{}, workspace, plugin.ModeBuild)
+	for _, cap := range e.capabilities(cfg) {
 		if cap == nil {
 			continue
 		}
@@ -69,8 +82,8 @@ func (e *BuildEngine) installCapabilities(ctx context.Context, cfg BuildConfig, 
 }
 
 func (e *BuildEngine) buildCapabilities(ctx context.Context, cfg BuildConfig, workspace *Workspace) error {
-	capabilityContext := e.capabilityContext(cfg, DevConfig{}, workspace)
-	for _, cap := range e.capabilities() {
+	capabilityContext := e.capabilityContext(cfg, DevConfig{}, workspace, plugin.ModeBuild)
+	for _, cap := range e.capabilities(cfg) {
 		if cap == nil {
 			continue
 		}
@@ -82,13 +95,14 @@ func (e *BuildEngine) buildCapabilities(ctx context.Context, cfg BuildConfig, wo
 }
 
 func (e *BuildEngine) startCapabilityDevWorkers(ctx context.Context, cfg DevConfig, workspace *Workspace) ([]devwatchpkg.WatchWorker, error) {
-	capabilityContext := e.capabilityContext(BuildConfig{
+	buildCfg := BuildConfig{
 		ProjectDir:   cfg.ProjectDir,
 		WorkspaceDir: cfg.WorkspaceDir,
 		OutputDir:    cfg.OutputDir,
-	}, cfg, workspace)
+	}
+	capabilityContext := e.capabilityContext(buildCfg, cfg, workspace, plugin.ModeDev)
 	var workers []devwatchpkg.WatchWorker
-	for _, cap := range e.capabilities() {
+	for _, cap := range e.capabilities(buildCfg) {
 		if cap == nil {
 			continue
 		}
@@ -103,12 +117,13 @@ func (e *BuildEngine) startCapabilityDevWorkers(ctx context.Context, cfg DevConf
 }
 
 func (e *BuildEngine) rebuildChangedCapabilities(ctx context.Context, cfg DevConfig, workspace *Workspace, changed []string) {
-	capabilityContext := e.capabilityContext(BuildConfig{
+	buildCfg := BuildConfig{
 		ProjectDir:   cfg.ProjectDir,
 		WorkspaceDir: cfg.WorkspaceDir,
 		OutputDir:    cfg.OutputDir,
-	}, cfg, workspace)
-	for _, cap := range e.capabilities() {
+	}
+	capabilityContext := e.capabilityContext(buildCfg, cfg, workspace, plugin.ModeDev)
+	for _, cap := range e.capabilities(buildCfg) {
 		source, ok := cap.(plugin.Source)
 		if !ok {
 			continue
@@ -132,7 +147,7 @@ func (e *BuildEngine) rebuildChangedCapabilities(ctx context.Context, cfg DevCon
 func (e *BuildEngine) capabilitySourceWatchPaths() []string {
 	seen := map[string]struct{}{}
 	var paths []string
-	for _, cap := range e.capabilities() {
+	for _, cap := range e.capabilities(BuildConfig{}) {
 		source, ok := cap.(plugin.Source)
 		if !ok {
 			continue
@@ -152,7 +167,7 @@ func (e *BuildEngine) capabilitySourceWatchPaths() []string {
 	return paths
 }
 
-func (e *BuildEngine) capabilityContext(buildCfg BuildConfig, devCfg DevConfig, workspace *Workspace) plugin.Context {
+func (e *BuildEngine) capabilityContext(buildCfg BuildConfig, devCfg DevConfig, workspace *Workspace, mode plugin.Mode) plugin.Context {
 	outputDir := strings.TrimSpace(buildCfg.OutputDir)
 	if outputDir == "" {
 		outputDir = strings.TrimSpace(devCfg.OutputDir)
@@ -162,30 +177,10 @@ func (e *BuildEngine) capabilityContext(buildCfg BuildConfig, devCfg DevConfig, 
 		projectDir = strings.TrimSpace(devCfg.ProjectDir)
 	}
 	return plugin.Context{
-		ProjectDir:  projectDir,
-		Workspace:   workspace,
-		OutputDir:   outputDir,
-		BuildConfig: buildCfg,
-		DevConfig:   devCfg,
-	}
-}
-
-func tailwindConfig(ctx plugin.Context) tailwindpkg.Config {
-	cfg, _ := ctx.BuildConfig.(BuildConfig)
-	return tailwindpkg.Config{
-		Binary:       cfg.TailwindBinary,
-		Version:      cfg.TailwindVersion,
-		CacheDir:     cfg.TailwindCacheDir,
-		DownloadBase: cfg.TailwindDownloadBase,
-		ProjectDir:   ctx.ProjectDir,
-	}
-}
-
-func stencilConfig(ctx plugin.Context) stencilpkg.Config {
-	cfg, _ := ctx.BuildConfig.(BuildConfig)
-	return stencilpkg.Config{
-		Binary:     cfg.StencilBinary,
-		ProjectDir: ctx.ProjectDir,
+		ProjectDir: projectDir,
+		Workspace:  workspace,
+		OutputDir:  outputDir,
+		Mode:       mode,
 	}
 }
 

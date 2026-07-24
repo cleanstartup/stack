@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/cleanstartup/stack/asset"
-	"github.com/cleanstartup/stack/plugin"
 	"github.com/cleanstartup/stack/devwatch"
+	"github.com/cleanstartup/stack/plugin"
 )
 
 type ConfigResolver func(plugin.Context) Config
@@ -54,7 +54,6 @@ func (c Capability) Install(ctx context.Context, cfg plugin.Context) error {
 	}
 	return os.WriteFile(filepath.Join(projectDir, "tsconfig.json"), []byte(tsconfigSource(srcDir)), 0o644)
 }
-
 
 func (c Capability) Build(ctx context.Context, cfg plugin.Context) error {
 	if c.empty() || cfg.Workspace == nil {

@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/cleanstartup/stack/asset"
-	"github.com/cleanstartup/stack/plugin"
 	"github.com/cleanstartup/stack/devwatch"
+	"github.com/cleanstartup/stack/plugin"
 )
 
 type ConfigResolver func(plugin.Context) Config

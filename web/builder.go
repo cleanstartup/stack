@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cleanstartup/stack/plugin"
 	assetpkg "github.com/cleanstartup/stack/asset"
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
+	"github.com/cleanstartup/stack/plugin"
 )
 
 type routeRegistration interface {

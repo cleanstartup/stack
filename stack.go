@@ -210,8 +210,8 @@ func Activity(id string, handler func(activity.Context) activity.Result, opts ..
 	return a
 }
 
-func Screen(name string, props any) templ.Component             { return web.Screen(name, props) }
-func Element(name string, props any) templ.Component            { return web.Element(name, props) }
+func Screen(name string, props any) templ.Component  { return web.Screen(name, props) }
+func Element(name string, props any) templ.Component { return web.Element(name, props) }
 
 func NPMDependency(name, version string) Part    { return web.NPMDependency(name, version) }
 func NPMDevDependency(name, version string) Part { return web.NPMDevDependency(name, version) }
@@ -341,7 +341,6 @@ func (b *bundle) rootDir() string {
 	}
 	return b.root
 }
-
 
 func parseWebAppOptions(opts ...WebAppOption) webAppConfig {
 	cfg := webAppConfig{}
