@@ -16,10 +16,10 @@ import (
 
 	"github.com/a-h/templ"
 	assetspkg "github.com/cleanstartup/stack/assets"
-	"github.com/cleanstartup/stack/cli"
 	buildpkg "github.com/cleanstartup/stack/internal/build"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 	"github.com/cleanstartup/stack/way2go/activity"
+	"github.com/cleanstartup/stack/way2go/cli"
 	"github.com/cleanstartup/stack/web"
 )
 

@@ -3,7 +3,7 @@ package cli_test
 import (
 	"fmt"
 
-	"github.com/cleanstartup/stack/cli"
+	"github.com/cleanstartup/stack/way2go/cli"
 )
 
 func ExampleActivity() {
