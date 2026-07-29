@@ -1,4 +1,4 @@
-package web
+package webasset
 
 import assetpkg "github.com/cleanstartup/stack/asset"
 

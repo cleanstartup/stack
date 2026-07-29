@@ -19,7 +19,8 @@ import (
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 	"github.com/cleanstartup/stack/plugin"
-	"github.com/cleanstartup/stack/web"
+	way2goweb "github.com/cleanstartup/stack/way2go/web"
+	"github.com/cleanstartup/stack/webasset"
 )
 
 const (
@@ -43,7 +44,7 @@ type ServeConfig struct {
 	OutputDir string
 	AssetsFS  fs.FS
 	AssetRoot string
-	DevState  *web.DevState
+	DevState  *way2goweb.DevState
 }
 
 type DevConfig struct {
@@ -54,7 +55,7 @@ type DevConfig struct {
 	AssetsFS     fs.FS
 	AssetRoot    string
 	PollInterval time.Duration
-	DevState     *web.DevState
+	DevState     *way2goweb.DevState
 }
 
 type MaterializedAsset struct {
@@ -71,20 +72,22 @@ type BuildResult struct {
 }
 
 type BuildEngine struct {
-	builder *web.Builder
+	app     *webasset.WebApp
+	builder *webasset.Builder
 	npm     *npmpkg.Project
 	bin     plugin.BinProvider
 }
 
-func NewEngine(b *web.Builder) *BuildEngine {
+func NewEngine(app *webasset.WebApp) *BuildEngine {
 	return &BuildEngine{
-		builder: b,
+		app:     app,
+		builder: app.Builder(),
 		npm:     npmpkg.NewProject(),
 		bin:     plugin.NewBinProvider(plugin.DefaultBinCacheDir()),
 	}
 }
 
-func (e *BuildEngine) Builder() *web.Builder {
+func (e *BuildEngine) Builder() *webasset.Builder {
 	if e == nil {
 		return nil
 	}
@@ -323,7 +326,7 @@ func (e *BuildEngine) syncDirSources(cfg BuildConfig) error {
 		if err := os.MkdirAll(dst, 0o755); err != nil {
 			return fmt.Errorf("sync sources %s: %w", entry.Namespace, err)
 		}
-		if _, err := web.CopyDir(dst, entry.AbsPath); err != nil {
+		if _, err := webasset.CopyDir(dst, entry.AbsPath); err != nil {
 			return fmt.Errorf("sync sources %s: %w", entry.Namespace, err)
 		}
 	}
@@ -343,8 +346,7 @@ func (e *BuildEngine) Serve(ctx context.Context, cfg ServeConfig) error {
 		addr = defaultAddr
 	}
 
-	registry := e.builder.BuildRouteHandler()
-	registry.SetAssets(e.builder.Manifest())
+	registry := e.app.Handler()
 	registry.SetDevState(cfg.DevState)
 
 	assetFS := cfg.AssetsFS
@@ -435,7 +437,7 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 		return fmt.Errorf("build engine is nil")
 	}
 	if cfg.DevState == nil {
-		cfg.DevState = web.NewDevState()
+		cfg.DevState = way2goweb.NewDevState()
 	}
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = 250 * time.Millisecond
@@ -593,7 +595,7 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 		return fmt.Errorf("build engine is nil")
 	}
 	if cfg.DevState == nil {
-		cfg.DevState = web.NewDevState()
+		cfg.DevState = way2goweb.NewDevState()
 	}
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = 250 * time.Millisecond
@@ -860,7 +862,7 @@ func (e *BuildEngine) watchPaths() []string {
 		return paths
 	}
 	for _, entry := range assets.Entries() {
-		if watcher, ok := entry.Source.(web.WatchPathsProvider); ok {
+		if watcher, ok := entry.Source.(webasset.WatchPathsProvider); ok {
 			for _, p := range watcher.WatchPaths() {
 				p = strings.TrimSpace(p)
 				if p == "" {

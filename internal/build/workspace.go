@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	assetpkg "github.com/cleanstartup/stack/asset"
-	"github.com/cleanstartup/stack/web"
 )
 
 type Workspace struct {
@@ -108,9 +107,9 @@ func (w *Workspace) SourceTailwindRoot() string {
 	return filepath.Join(w.Src, "tailwind")
 }
 
-// Materialize implements web.AssetWorkspace so this workspace can be passed
+// Materialize implements AssetWorkspace so this workspace can be passed
 // directly to AssetSource.Materialize.
-func (w *Workspace) Materialize(kind web.AssetKind, id string) string {
+func (w *Workspace) Materialize(kind assetpkg.AssetKind, id string) string {
 	return w.AssetDir(kind, id)
 }
 
@@ -146,7 +145,7 @@ func copyTreeExcept(dst, src string, skip func(rel string, entry fs.DirEntry) bo
 		if entry.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
-		return web.CopyFile(target, current)
+		return assetpkg.CopyFile(target, current)
 	})
 }
 

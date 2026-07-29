@@ -1,7 +1,6 @@
-package web
+package webasset
 
 import (
-	"net/http"
 	"strings"
 
 	assetpkg "github.com/cleanstartup/stack/asset"
@@ -9,30 +8,6 @@ import (
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 	"github.com/cleanstartup/stack/plugin"
 )
-
-type routeRegistration interface {
-	register(*Registry)
-}
-
-type webActivityRouteRegistration[C any] struct {
-	activity *WebActivity[C]
-}
-
-func (r webActivityRouteRegistration[C]) register(reg *Registry) {
-	RegisterWebActivity(reg, r.activity)
-}
-
-type mountRouteRegistration struct {
-	path    string
-	handler http.Handler
-}
-
-func (r mountRouteRegistration) register(reg *Registry) {
-	if reg == nil || r.handler == nil {
-		return
-	}
-	reg.Mount(r.path, r.handler)
-}
 
 type npmDep struct {
 	name    string
@@ -55,9 +30,10 @@ type DirSourceEntry struct {
 	AbsPath   string // resolved absolute path on disk
 }
 
+// Builder accumulates asset registrations (CSS/JS/Stencil/File/DirSource/npm)
+// for a WebApp. Routing lives in way2go's RouteAccumulator instead — Builder
+// knows nothing about routes, activities, or mounts.
 type Builder struct {
-	routes     []routeRegistration
-	mounts     []mountRouteRegistration
 	tailwind   *tailwindpkg.Registry
 	stencil    *stencilpkg.Registry
 	assets     *AssetRegistry
@@ -71,8 +47,6 @@ type manifestTarget struct {
 
 func NewBuilder() *Builder {
 	return &Builder{
-		routes:   []routeRegistration{},
-		mounts:   []mountRouteRegistration{},
 		tailwind: tailwindpkg.NewRegistry(),
 		stencil:  stencilpkg.NewRegistry(),
 		assets:   NewAssetRegistry(),
@@ -114,24 +88,6 @@ func (b *Builder) AddNPMDependency(name, version string, dev bool) {
 		return
 	}
 	b.npm = append(b.npm, npmDep{name: strings.TrimSpace(name), version: strings.TrimSpace(version), dev: dev})
-}
-
-func AddWebActivity[C any](b *Builder, activity *WebActivity[C]) {
-	if b == nil || activity == nil {
-		return
-	}
-	b.routes = append(b.routes, webActivityRouteRegistration[C]{activity: activity})
-}
-
-func AddMount(b *Builder, path string, handler http.Handler) {
-	if b == nil || handler == nil {
-		return
-	}
-	b.mounts = append(b.mounts, mountRouteRegistration{path: path, handler: handler})
-}
-
-func (b *Builder) AddMount(path string, handler http.Handler) {
-	AddMount(b, path, handler)
 }
 
 func (b *Builder) Assets() *AssetRegistry {
@@ -235,31 +191,6 @@ func (t *manifestTarget) RegisterJS(ref AssetRef) {
 		return
 	}
 	t.manifest.Scripts = append(t.manifest.Scripts, ref)
-}
-
-// BuildRouteHandler creates a new Registry and registers all routes into it.
-func (b *Builder) BuildRouteHandler() *Registry {
-	reg := NewRegistry()
-	b.registerRoutes(reg)
-	return reg
-}
-
-func (b *Builder) registerRoutes(reg *Registry) {
-	if b == nil || reg == nil {
-		return
-	}
-	for _, route := range b.routes {
-		if route == nil {
-			continue
-		}
-		route.register(reg)
-	}
-	for _, mount := range b.mounts {
-		if mount.handler == nil {
-			continue
-		}
-		mount.register(reg)
-	}
 }
 
 func (b *Builder) registrationCapabilities() []plugin.Capability {

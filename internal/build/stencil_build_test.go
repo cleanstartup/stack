@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cleanstartup/stack/web"
+	"github.com/cleanstartup/stack/webasset"
 )
 
 func TestStencilWorkspacePackageIncludesBrandDependencies(t *testing.T) {
@@ -71,8 +71,8 @@ func TestMaterializeProjectFilesWritesTargetWorkspaceFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app := web.NewApp(web.TailwindCSS(web.FromFile(cssPath)), web.Stencil(web.FromFile(tsPath)))
-	engine := NewEngine(app.Builder())
+	app := webasset.NewApp(webasset.TailwindCSS(webasset.FromFile(cssPath)), webasset.Stencil(webasset.FromFile(tsPath)))
+	engine := NewEngine(app)
 	if err := engine.materializeProjectFiles(projectDir, workspaceRoot, outputDir); err != nil {
 		t.Fatalf("materialize failed: %v", err)
 	}

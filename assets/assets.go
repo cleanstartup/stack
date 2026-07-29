@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 
 	"github.com/cleanstartup/stack/asset"
-	"github.com/cleanstartup/stack/web"
+	"github.com/cleanstartup/stack/webasset"
 )
 
 // Tailwind activates the Tailwind CSS builder for this Target.
@@ -42,7 +42,7 @@ func (d DirSource) AbsPath() string {
 
 // Apply is intentionally a no-op. DirSource is expanded into builder-specific
 // parts by the stack based on which Asset Builders are active.
-func (DirSource) Apply(_ *web.WebApp) {}
+func (DirSource) Apply(_ *webasset.WebApp) {}
 
 // Dir declares relPath (relative to the calling file) as an asset source
 // directory. Omit relPath to use the directory of the calling file.
@@ -72,8 +72,8 @@ func (s StaticDirSource) AbsPath() string {
 	return filepath.Clean(filepath.Join(s.CallerDir, s.RelPath))
 }
 
-func (s StaticDirSource) Apply(app *web.WebApp) {
-	app.RegisterFile(web.FromDir(s.AbsPath()))
+func (s StaticDirSource) Apply(app *webasset.WebApp) {
+	app.RegisterFile(webasset.FromDir(s.AbsPath()))
 }
 
 // StaticDir declares relPath as a static asset directory. Files are copied
@@ -90,6 +90,6 @@ func StaticDir(relPath ...string) StaticDirSource {
 }
 
 // Use declares an npm package dependency for this module's asset sources.
-func Use(name, version string) web.Part {
-	return web.NPMDependency(name, version)
+func Use(name, version string) webasset.Part {
+	return webasset.NPMDependency(name, version)
 }

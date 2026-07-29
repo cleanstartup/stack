@@ -11,7 +11,7 @@ import (
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
 	"github.com/cleanstartup/stack/plugin"
-	"github.com/cleanstartup/stack/web"
+	"github.com/cleanstartup/stack/webasset"
 )
 
 func (e *BuildEngine) capabilities(cfg BuildConfig) []plugin.Capability {
@@ -65,7 +65,7 @@ func (e *BuildEngine) capabilities(cfg BuildConfig) []plugin.Capability {
 	return caps
 }
 
-func registrationCapabilities(b *web.Builder) []plugin.Capability {
+func registrationCapabilities(b *webasset.Builder) []plugin.Capability {
 	if b == nil {
 		return nil
 	}
