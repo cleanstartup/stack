@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cleanstartup/stack/activity"
+	"github.com/cleanstartup/stack/way2go/activity"
 	"github.com/cleanstartup/stack/web"
 )
 

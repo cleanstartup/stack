@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cleanstartup/stack/activity"
 	buildpkg "github.com/cleanstartup/stack/internal/build"
+	"github.com/cleanstartup/stack/way2go/activity"
 	"github.com/cleanstartup/stack/web"
 )
 

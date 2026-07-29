@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cleanstartup/stack/activity"
+	"github.com/cleanstartup/stack/way2go/activity"
 	"github.com/cleanstartup/stack/way2go/param"
 
 	"github.com/a-h/templ"

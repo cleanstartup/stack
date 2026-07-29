@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/cleanstartup/stack/activity"
 	assetspkg "github.com/cleanstartup/stack/assets"
 	"github.com/cleanstartup/stack/cli"
 	buildpkg "github.com/cleanstartup/stack/internal/build"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
+	"github.com/cleanstartup/stack/way2go/activity"
 	"github.com/cleanstartup/stack/web"
 )
 
