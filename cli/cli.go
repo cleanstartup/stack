@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/cleanstartup/stack/activity"
-	"github.com/cleanstartup/stack/param"
+	"github.com/cleanstartup/stack/way2go/param"
 )
 
 type Result struct {

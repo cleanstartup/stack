@@ -122,7 +122,7 @@ type RouteActivity interface {
 func (a *WebActivity[C]) routeRegister(r *Registry) { RegisterWebActivity(r, a) }
 
 // Part ist die Kompositionsprimitive für reine Runtime-Beiträge.
-// Asset-Beiträge nutzen stacks eigenes Part (Apply(*Builder)), siehe unten.
+// Asset-Beiträge nutzen stacks eigenes Part (Apply(*WebApp)), siehe Abschnitt 3.
 type Part interface {
 	Apply(Registrar)
 }

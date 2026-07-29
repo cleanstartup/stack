@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/cleanstartup/stack/activity"
-	"github.com/cleanstartup/stack/param"
+	"github.com/cleanstartup/stack/way2go/param"
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
