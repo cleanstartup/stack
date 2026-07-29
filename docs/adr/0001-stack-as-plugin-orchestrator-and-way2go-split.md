@@ -75,8 +75,12 @@ explizit an `WebApp()`. Plugins hängen nur am `stack/plugin`-Contract.
 
 ## Offene Flags
 
-- **OF1 — Artifact-Wiring:** Workspace-weites `go.work` vs. `deps/`-replace pro
-  Modul. Entscheidung vor Phase 4. Blockiert den Kernumbau nicht.
+- **OF1 — Artifact-Wiring: AUFGELÖST (2026-07-25).** Build-tragend ist `replace`
+  im Artifact-go.mod auf `./deps/stack/<nested>` (deckt den standalone Fly-Deploy,
+  der die Superrepo-`go.work` nicht sieht); Workspace-`go.work` bleibt optionale
+  Dev-Bequemlichkeit. Phase 1 zieht die Artifact-Migration (ehem. Phase 4) im
+  harten Schnitt mit (P1-D1). Details + R1-Faktenlage:
+  [0001-phase-1-tasks.md](./0001-phase-1-tasks.md).
 - **OF3 — Repo-Split & Import-Rename:** Aus D9 folgt eine terminierte Schuld:
   beim späteren Split auf eigene Repos müssen die `github.com/cleanstartup/stack/…`
   Importpfade projektweit umbenannt werden.
