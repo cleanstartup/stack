@@ -98,7 +98,7 @@ festnagelt, bevor Code wandert.
 | **1.4**  | ✅ **Fertig & abgenommen (2026-07-30, Commits `d6437a6`+`0021ac2`).** `web` zerschnitten: Runtime → way2go (`web.go`, `screen.go`, `page.go`, `dev.go`, `module.go`-Gruppe-a) + `Registrar`/`RouteAccumulator`/`AssetLinks`; Builder-Rest → **eigenes Package `webasset`** (`Builder` minus Routing, `WebApp`=`runtime`+`builder`, `Handler()`+`toAssetLinks`, Asset-Parts). **Korrektur zur Namensfrage:** NICHT in `package stack` (Root) wie im Spike abgenickt — das hätte `stack → assets → stack` erzeugt (`assets/assets.go` implementiert `Part`/braucht `WebApp`, `stack.go` importiert `assets`). `webasset` ist azyklisch. | Erfüllt: `way2go` modulrein (kein stack-Import), way2go/web asset-frei, beide Module `build`/`test -count=1` grün, altes `web/` weg, Commit 1 bisect-grün. |
 | **1.5**  | stack-Root (`stack.go`, `ActivityDef`, `WebApp()`/`CLIApp()`) auf way2go-Typen umverdrahten. **Keine** Re-Export-Aliase (D10).           | Build/Dev/Serve unverändert; stack-Tests grün.                                               |
 | **1.6**  | Pro Artifact: `deps/stack`-Submodul-Pointer auf den Phase-1-stack-Commit bumpen; `replace`-Zeilen für `way2go` (+ später Plugins) auf `./deps/stack/<nested>` ergänzen. Optional: Workspace-`go.work` für lokale Multi-Modul-Dev. | Artifact baut **standalone** (`go build ./...` ohne go.work) grün.                            |
-| **1.7**  | Artifact-Migration (Phase 4, mitgezogen): branding, fortego-app, affiliate-funnel, happend-store, fortego-ecies auf way2go-Imports umstellen. **Enthält das Repointen der 8 `fortego-btc/app`-Dateien, die heute `stack/web` importieren** (Symbolkarte im Spike, F2) → way2go-Modulpfad; reines Import-Repoint, keine Symbolarbeit. Fly-CI: redundanten sqlc-Schritt entfernen, sobald happend-store-Pointer auf `0c6013c` steht (R2). | jedes Artifact `go build ./...` grün; manueller E2E gegen fortego-app grün; Fly-Deploy baut ohne Workspace-Kontext. |
+| **1.7**  | Artifact-Migration (Phase 4, mitgezogen): branding, fortego-app, affiliate-funnel, happend-store, fortego-ecies auf way2go-Imports umstellen. **Enthält das Repointen der 8 `fortego-btc/app`-Dateien, die heute `stack/web` importieren** (Symbolkarte im Spike, F2) → way2go-Modulpfad; reines Import-Repoint, keine Symbolarbeit. happend-store-Cleanup (R2) ist **out of scope** — die Fly-CI regeneriert sqlc selbst, der Schritt bleibt. | jedes Artifact `go build ./...` grün; manueller E2E gegen fortego-app grün; Fly-Deploy baut ohne Workspace-Kontext. |
 
 ## Offene Risiken / zu bestätigende Annahmen
 
@@ -107,11 +107,15 @@ festnagelt, bevor Code wandert.
   via `cmd/web/Dockerfile` auf Flys Remote-Builder — **Workspace-`go.work` ist
   dort unsichtbar.** Deshalb ist die build-tragende Auflösung `replace` im
   Artifact-go.mod auf `./deps/stack/<nested>` (Task 1.6), nicht go.work. Nebenbei:
-  die CI regeneriert happend-store-sqlc noch selbst → nach Pointer-Bump auf
-  `0c6013c` entfernbar (Task 1.7).
-- **R2 — happend-store-Durability.** Sein sqlc-Fix (`0c6013c`) ist noch ungepusht
-  und der Submodul-Pointer nicht gebumpt; blockiert den fortego-app-E2E in Task
-  1.7, bis gepusht + Pointer aktualisiert.
+  die CI regeneriert happend-store-sqlc selbst (bleibt so, R2 out of scope).
+- **R2 — happend-store-Durability: KEIN Blocker, out of scope (2026-07-30).**
+  Frühere Annahme „blockiert den fortego-app-E2E" war falsch: die Fly-CI hat
+  einen `sqlc generate`-Schritt in `deps/happend-store`, fortego-app baut/deployed
+  also auch ohne den committeten Fix. Das Cleanup (generierten Code committen,
+  Pointer bumpen, CI-Schritt löschen) ist nice-to-have, nicht Teil von Phase 1.
+  Echte externe Abhängigkeit für 1.7 ist stattdessen: **stack `new` pushen**,
+  damit der `deps/stack`-Pointer committbar auf den Phase-1-Commit zeigen kann
+  (nur fürs durable Landen nötig, nicht fürs lokale Arbeiten).
 - **R3 — Reshape-Risiko app.go.** Wenn der Spike (1.0) zeigt, dass die
   Part/WebApp-Trennung breiter streut als app.go, wächst 1.4 — früh im Spike
   verifizieren.
