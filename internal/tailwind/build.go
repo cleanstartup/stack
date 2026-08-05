@@ -13,7 +13,8 @@ import (
 	"runtime"
 	"strings"
 
-	assetspkg "github.com/cleanstartup/stack/internal/asset"
+	assetspkg "github.com/cleanstartup/stack/asset"
+	pluginpkg "github.com/cleanstartup/stack/plugin"
 )
 
 const (
@@ -27,6 +28,12 @@ type Config struct {
 	CacheDir     string
 	DownloadBase string
 	ProjectDir   string
+	// Bin is the shared binary-provisioning service (plugin.Context.Bin).
+	// URL/platform/latest-version resolution stays here in tailwind; Bin only
+	// does download -> cache -> chmod -> atomic rename. Falls back to a
+	// tailwind-local BinProvider over CacheDir when nil (e.g. direct package
+	// use outside the plugin.Context wiring).
+	Bin pluginpkg.BinProvider
 }
 
 func (r *Registry) Input(workspace Workspace) (string, error) {
@@ -242,11 +249,10 @@ func ResolveBinary(ctx context.Context, cfg Config) (string, error) {
 		cacheDir = strings.TrimSpace(os.Getenv("STACK_TAILWIND_CACHE_DIR"))
 	}
 	if cacheDir == "" {
-		if userCacheDir, err := os.UserCacheDir(); err == nil && strings.TrimSpace(userCacheDir) != "" {
-			cacheDir = filepath.Join(userCacheDir, "stack", "tailwind")
-		} else {
-			cacheDir = filepath.Join(os.TempDir(), "stack", "tailwind")
-		}
+		// Same root as the shared BinProvider's default (plugin.DefaultBinCacheDir)
+		// so the latest-version pointer file below and the binary Bin.Ensure
+		// downloads never split-brain into two different cache directories.
+		cacheDir = pluginpkg.DefaultBinCacheDir()
 	}
 
 	downloadBase := strings.TrimSpace(cfg.DownloadBase)
@@ -257,7 +263,7 @@ func ResolveBinary(ctx context.Context, cfg Config) (string, error) {
 		downloadBase = defaultDownloadBase
 	}
 
-	return downloadBinary(ctx, cacheDir, version, downloadBase)
+	return resolveBinaryDownload(ctx, cfg.Bin, cacheDir, version, downloadBase)
 }
 
 func commandSpec(ctx context.Context, cfg Config, inputPath, outputPath string, watch bool) (assetspkg.CommandSpec, error) {
@@ -327,11 +333,16 @@ func EnsureProjectDependencies(ctx context.Context, projectDir string) error {
 	return ensureProjectDependencies(ctx, projectDir)
 }
 
-func downloadBinary(ctx context.Context, cacheDir, version, downloadBase string) (string, error) {
+// resolveBinaryDownload resolves the concrete version and release URL
+// (platform/latest-version lookup stays tailwind's own concern), then
+// delegates the actual download/cache/chmod/rename to the shared
+// BinProvider. Falls back to a tailwind-local BinProvider over cacheDir when
+// bin is nil (e.g. direct package use outside the plugin.Context wiring).
+func resolveBinaryDownload(ctx context.Context, bin pluginpkg.BinProvider, cacheDir, version, downloadBase string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	assetName, err := assetName()
+	name, err := assetName()
 	if err != nil {
 		return "", err
 	}
@@ -339,63 +350,23 @@ func downloadBinary(ctx context.Context, cacheDir, version, downloadBase string)
 		if cachedVersion, ok := loadCachedLatestVersion(cacheDir); ok {
 			version = cachedVersion
 		} else {
-			version, err = resolveLatestVersion(ctx)
+			resolved, err := resolveLatestVersion(ctx)
 			if err != nil {
 				return "", err
 			}
-			if err := saveCachedLatestVersion(cacheDir, version); err != nil {
+			if err := saveCachedLatestVersion(cacheDir, resolved); err != nil {
 				return "", err
 			}
+			version = resolved
 		}
 	}
 	version = normalizeVersion(version)
 
-	targetDir := filepath.Join(cacheDir, version)
-	targetPath := filepath.Join(targetDir, assetName)
-	if info, err := os.Stat(targetPath); err == nil && !info.IsDir() {
-		return targetPath, nil
+	if bin == nil {
+		bin = pluginpkg.NewBinProvider(cacheDir)
 	}
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
-		return "", err
-	}
-
-	releaseURL := buildReleaseURL(downloadBase, version, assetName)
-	tmpPath := targetPath + ".download"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releaseURL, nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return "", fmt.Errorf("tailwind download failed: %s: %s", resp.Status, strings.TrimSpace(string(body)))
-	}
-	file, err := os.Create(tmpPath)
-	if err != nil {
-		return "", err
-	}
-	if _, err := io.Copy(file, resp.Body); err != nil {
-		file.Close()
-		_ = os.Remove(tmpPath)
-		return "", err
-	}
-	if err := file.Close(); err != nil {
-		_ = os.Remove(tmpPath)
-		return "", err
-	}
-	if err := os.Chmod(tmpPath, 0o755); err != nil {
-		_ = os.Remove(tmpPath)
-		return "", err
-	}
-	if err := os.Rename(tmpPath, targetPath); err != nil {
-		_ = os.Remove(tmpPath)
-		return "", err
-	}
-	return targetPath, nil
+	releaseURL := buildReleaseURL(downloadBase, version, name)
+	return bin.Ensure(ctx, pluginpkg.BinarySpec{Name: name, Version: version, URL: releaseURL})
 }
 
 func assetName() (string, error) {

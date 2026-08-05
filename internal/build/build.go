@@ -14,10 +14,13 @@ import (
 	"strings"
 	"time"
 
-	pipelinepkg "github.com/cleanstartup/stack/internal/pipeline"
+	devwatchpkg "github.com/cleanstartup/stack/devwatch"
+	npmpkg "github.com/cleanstartup/stack/internal/npm"
 	stencilpkg "github.com/cleanstartup/stack/internal/stencil"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
-	"github.com/cleanstartup/stack/web"
+	"github.com/cleanstartup/stack/plugin"
+	way2goweb "github.com/cleanstartup/stack/way2go/web"
+	"github.com/cleanstartup/stack/webasset"
 )
 
 const (
@@ -41,7 +44,7 @@ type ServeConfig struct {
 	OutputDir string
 	AssetsFS  fs.FS
 	AssetRoot string
-	DevState  *web.DevState
+	DevState  *way2goweb.DevState
 }
 
 type DevConfig struct {
@@ -52,7 +55,7 @@ type DevConfig struct {
 	AssetsFS     fs.FS
 	AssetRoot    string
 	PollInterval time.Duration
-	DevState     *web.DevState
+	DevState     *way2goweb.DevState
 }
 
 type MaterializedAsset struct {
@@ -69,14 +72,22 @@ type BuildResult struct {
 }
 
 type BuildEngine struct {
-	builder *web.Builder
+	app     *webasset.WebApp
+	builder *webasset.Builder
+	npm     *npmpkg.Project
+	bin     plugin.BinProvider
 }
 
-func NewEngine(b *web.Builder) *BuildEngine {
-	return &BuildEngine{builder: b}
+func NewEngine(app *webasset.WebApp) *BuildEngine {
+	return &BuildEngine{
+		app:     app,
+		builder: app.Builder(),
+		npm:     npmpkg.NewProject(),
+		bin:     plugin.NewBinProvider(plugin.DefaultBinCacheDir()),
+	}
 }
 
-func (e *BuildEngine) Builder() *web.Builder {
+func (e *BuildEngine) Builder() *webasset.Builder {
 	if e == nil {
 		return nil
 	}
@@ -315,7 +326,7 @@ func (e *BuildEngine) syncDirSources(cfg BuildConfig) error {
 		if err := os.MkdirAll(dst, 0o755); err != nil {
 			return fmt.Errorf("sync sources %s: %w", entry.Namespace, err)
 		}
-		if _, err := web.CopyDir(dst, entry.AbsPath); err != nil {
+		if _, err := webasset.CopyDir(dst, entry.AbsPath); err != nil {
 			return fmt.Errorf("sync sources %s: %w", entry.Namespace, err)
 		}
 	}
@@ -335,8 +346,7 @@ func (e *BuildEngine) Serve(ctx context.Context, cfg ServeConfig) error {
 		addr = defaultAddr
 	}
 
-	registry := e.builder.BuildRouteHandler()
-	registry.SetAssets(e.builder.Manifest())
+	registry := e.app.Handler()
 	registry.SetDevState(cfg.DevState)
 
 	assetFS := cfg.AssetsFS
@@ -427,7 +437,7 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 		return fmt.Errorf("build engine is nil")
 	}
 	if cfg.DevState == nil {
-		cfg.DevState = web.NewDevState()
+		cfg.DevState = way2goweb.NewDevState()
 	}
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = 250 * time.Millisecond
@@ -466,7 +476,7 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	if err != nil {
 		return err
 	}
-	defer pipelinepkg.StopWatchWorkers(workers)
+	defer devwatchpkg.StopWatchWorkers(workers)
 
 	serveCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -487,7 +497,7 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 	for _, path := range paths {
 		fmt.Fprintf(os.Stderr, "[stack]   watch %s\n", path)
 	}
-	snapshot, err := pipelinepkg.SnapshotPaths(paths)
+	snapshot, err := devwatchpkg.SnapshotPaths(paths)
 	if err != nil {
 		return err
 	}
@@ -498,12 +508,12 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 			fmt.Fprintf(os.Stderr, "[stack]   mirror %s\n", path)
 		}
 	}
-	sourceSnapshot, err := pipelinepkg.SnapshotPaths(sourcePaths)
+	sourceSnapshot, err := devwatchpkg.SnapshotPaths(sourcePaths)
 	if err != nil {
 		return err
 	}
 
-	goSnapshot, err := pipelinepkg.SnapshotPaths([]string{cfg.ProjectDir})
+	goSnapshot, err := devwatchpkg.SnapshotPaths([]string{cfg.ProjectDir})
 	if err != nil {
 		return err
 	}
@@ -523,12 +533,12 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 			return err
 		case <-ticker.C:
 			if cfg.ProjectDir != "" {
-				currentGo, err := pipelinepkg.SnapshotPaths([]string{cfg.ProjectDir})
+				currentGo, err := devwatchpkg.SnapshotPaths([]string{cfg.ProjectDir})
 				if err != nil {
 					return err
 				}
-				if !pipelinepkg.SnapshotsEqual(goSnapshot, currentGo) {
-					changed := pipelinepkg.DiffSnapshotPaths(goSnapshot, currentGo)
+				if !devwatchpkg.SnapshotsEqual(goSnapshot, currentGo) {
+					changed := devwatchpkg.DiffSnapshotPaths(goSnapshot, currentGo)
 					changed = filterGoSourcePaths(changed)
 					if len(changed) > 0 {
 						fmt.Fprintf(os.Stderr, "[stack] Go sources changed (%s) — restart dev to apply\n", strings.Join(changed, ", "))
@@ -537,12 +547,12 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 				}
 			}
 			if len(sourcePaths) > 0 {
-				currentSource, err := pipelinepkg.SnapshotPaths(sourcePaths)
+				currentSource, err := devwatchpkg.SnapshotPaths(sourcePaths)
 				if err != nil {
 					return err
 				}
-				if !pipelinepkg.SnapshotsEqual(sourceSnapshot, currentSource) {
-					changed := pipelinepkg.DiffSnapshotPaths(sourceSnapshot, currentSource)
+				if !devwatchpkg.SnapshotsEqual(sourceSnapshot, currentSource) {
+					changed := devwatchpkg.DiffSnapshotPaths(sourceSnapshot, currentSource)
 					changed = FilterGeneratedProjectPaths(cfg.ProjectDir, changed)
 					if len(changed) == 0 {
 						sourceSnapshot = currentSource
@@ -553,12 +563,12 @@ func (e *BuildEngine) Dev(ctx context.Context, cfg DevConfig) error {
 					sourceSnapshot = currentSource
 				}
 			}
-			current, err := pipelinepkg.SnapshotPaths(paths)
+			current, err := devwatchpkg.SnapshotPaths(paths)
 			if err != nil {
 				return err
 			}
-			if !pipelinepkg.SnapshotsEqual(snapshot, current) {
-				changed := pipelinepkg.DiffSnapshotPaths(snapshot, current)
+			if !devwatchpkg.SnapshotsEqual(snapshot, current) {
+				changed := devwatchpkg.DiffSnapshotPaths(snapshot, current)
 				fmt.Fprintf(os.Stderr, "[stack] dev output changed: %s\n", strings.Join(changed, ", "))
 				snapshot = current
 				dirty = true
@@ -585,7 +595,7 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 		return fmt.Errorf("build engine is nil")
 	}
 	if cfg.DevState == nil {
-		cfg.DevState = web.NewDevState()
+		cfg.DevState = way2goweb.NewDevState()
 	}
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = 250 * time.Millisecond
@@ -619,14 +629,14 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 	if err != nil {
 		return err
 	}
-	defer pipelinepkg.StopWatchWorkers(workers)
+	defer devwatchpkg.StopWatchWorkers(workers)
 
 	paths := e.devOutputWatchPaths(cfg.OutputDir)
 	fmt.Fprintf(os.Stderr, "[stack] dev watching %d roots\n", len(paths))
 	for _, path := range paths {
 		fmt.Fprintf(os.Stderr, "[stack]   watch %s\n", path)
 	}
-	snapshot, err := pipelinepkg.SnapshotPaths(paths)
+	snapshot, err := devwatchpkg.SnapshotPaths(paths)
 	if err != nil {
 		return err
 	}
@@ -637,7 +647,7 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 			fmt.Fprintf(os.Stderr, "[stack]   source %s\n", path)
 		}
 	}
-	sourceSnapshot, err := pipelinepkg.SnapshotPaths(sourcePaths)
+	sourceSnapshot, err := devwatchpkg.SnapshotPaths(sourcePaths)
 	if err != nil {
 		return err
 	}
@@ -653,12 +663,12 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 			return ctx.Err()
 		case <-ticker.C:
 			if len(sourcePaths) > 0 {
-				currentSource, err := pipelinepkg.SnapshotPaths(sourcePaths)
+				currentSource, err := devwatchpkg.SnapshotPaths(sourcePaths)
 				if err != nil {
 					return err
 				}
-				if !pipelinepkg.SnapshotsEqual(sourceSnapshot, currentSource) {
-					changed := pipelinepkg.DiffSnapshotPaths(sourceSnapshot, currentSource)
+				if !devwatchpkg.SnapshotsEqual(sourceSnapshot, currentSource) {
+					changed := devwatchpkg.DiffSnapshotPaths(sourceSnapshot, currentSource)
 					changed = FilterGeneratedProjectPaths(cfg.ProjectDir, changed)
 					if len(changed) == 0 {
 						sourceSnapshot = currentSource
@@ -669,12 +679,12 @@ func (e *BuildEngine) DevAssets(ctx context.Context, cfg DevConfig) error {
 					sourceSnapshot = currentSource
 				}
 			}
-			current, err := pipelinepkg.SnapshotPaths(paths)
+			current, err := devwatchpkg.SnapshotPaths(paths)
 			if err != nil {
 				return err
 			}
-			if !pipelinepkg.SnapshotsEqual(snapshot, current) {
-				changed := pipelinepkg.DiffSnapshotPaths(snapshot, current)
+			if !devwatchpkg.SnapshotsEqual(snapshot, current) {
+				changed := devwatchpkg.DiffSnapshotPaths(snapshot, current)
 				fmt.Fprintf(os.Stderr, "[stack] dev output changed: %s\n", strings.Join(changed, ", "))
 				snapshot = current
 				dirty = true
@@ -852,7 +862,7 @@ func (e *BuildEngine) watchPaths() []string {
 		return paths
 	}
 	for _, entry := range assets.Entries() {
-		if watcher, ok := entry.Source.(web.WatchPathsProvider); ok {
+		if watcher, ok := entry.Source.(webasset.WatchPathsProvider); ok {
 			for _, p := range watcher.WatchPaths() {
 				p = strings.TrimSpace(p)
 				if p == "" {

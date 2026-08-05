@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cleanstartup/stack/internal/asset"
-	"github.com/cleanstartup/stack/internal/capability"
-	"github.com/cleanstartup/stack/internal/pipeline"
+	"github.com/cleanstartup/stack/asset"
+	"github.com/cleanstartup/stack/devwatch"
+	"github.com/cleanstartup/stack/plugin"
 )
 
-type ConfigResolver func(capability.Context) Config
+type ConfigResolver func(plugin.Context) Config
 
 type Capability struct {
 	registry      *Registry
@@ -27,11 +27,12 @@ func OutputPath(outputRoot string) string {
 	return filepath.Join(outputRoot, "assets", "css", BundleID, BundleFile)
 }
 
-func (c Capability) Install(ctx context.Context, cfg capability.Context) error {
+func (c Capability) Install(ctx context.Context, cfg plugin.Context) error {
 	_ = ctx
 	if c.empty() {
 		return nil
 	}
+	AddNPMDependencies(cfg.NPM)
 	inputPath := ""
 	if strings.TrimSpace(cfg.ProjectDir) != "" {
 		inputPath = filepath.Join(cfg.ProjectDir, "tailwind.input.css")
@@ -44,7 +45,7 @@ func (c Capability) Install(ctx context.Context, cfg capability.Context) error {
 	return c.writeInput(cfg, inputPath)
 }
 
-func (c Capability) Build(ctx context.Context, cfg capability.Context) error {
+func (c Capability) Build(ctx context.Context, cfg plugin.Context) error {
 	if c.empty() || cfg.Workspace == nil {
 		return nil
 	}
@@ -55,7 +56,7 @@ func (c Capability) Build(ctx context.Context, cfg capability.Context) error {
 	return Build(ctx, workspaceAdapter{workspace: cfg.Workspace}, c.cacheRoot(cfg), outputPath, c.registry.Inputs(), c.registry.ScanPaths(), c.config(cfg))
 }
 
-func (c Capability) Dev(ctx context.Context, cfg capability.Context) ([]pipeline.WatchWorker, error) {
+func (c Capability) Dev(ctx context.Context, cfg plugin.Context) ([]devwatch.WatchWorker, error) {
 	if c.empty() || cfg.Workspace == nil {
 		return nil, nil
 	}
@@ -74,15 +75,15 @@ func (c Capability) Dev(ctx context.Context, cfg capability.Context) ([]pipeline
 	if err != nil {
 		return nil, err
 	}
-	worker, err := pipeline.StartCommandWatchSpec(ctx, "tailwind", spec)
+	worker, err := devwatch.StartCommandWatchSpec(ctx, "tailwind", spec)
 	if err != nil {
 		return nil, err
 	}
 	fmt.Fprintf(os.Stderr, "[stack] tailwind watch started input=%s output=%s\n", inputPath, outputPath)
-	return []pipeline.WatchWorker{worker}, nil
+	return []devwatch.WatchWorker{worker}, nil
 }
 
-func (c Capability) Register(target capability.Target) {
+func (c Capability) Register(target plugin.Target) {
 	if target == nil || c.empty() {
 		return
 	}
@@ -110,14 +111,14 @@ func (c Capability) SourceChanged(path string) bool {
 		return false
 	}
 	for _, candidate := range c.SourcePaths() {
-		if pipeline.SourcePathMatches(candidate, path) {
+		if devwatch.SourcePathMatches(candidate, path) {
 			return true
 		}
 	}
 	return false
 }
 
-func (c Capability) Rebuild(ctx context.Context, cfg capability.Context) error {
+func (c Capability) Rebuild(ctx context.Context, cfg plugin.Context) error {
 	if c.empty() || cfg.Workspace == nil {
 		return nil
 	}
@@ -137,7 +138,7 @@ func (c Capability) empty() bool {
 	return c.registry == nil || len(c.registry.Inputs()) == 0
 }
 
-func (c Capability) config(ctx capability.Context) Config {
+func (c Capability) config(ctx plugin.Context) Config {
 	if c.resolveConfig == nil {
 		return Config{ProjectDir: ctx.ProjectDir}
 	}
@@ -148,7 +149,7 @@ func (c Capability) config(ctx capability.Context) Config {
 	return cfg
 }
 
-func (c Capability) inputPath(ctx capability.Context) (string, error) {
+func (c Capability) inputPath(ctx plugin.Context) (string, error) {
 	if strings.TrimSpace(ctx.ProjectDir) == "" {
 		workspace := c.cacheWorkspace(ctx)
 		if workspace == nil {
@@ -163,23 +164,23 @@ func (c Capability) inputPath(ctx capability.Context) (string, error) {
 	return filepath.Join(absProjectDir, "tailwind.input.css"), nil
 }
 
-func (c Capability) writeInput(ctx capability.Context, inputPath string) error {
+func (c Capability) writeInput(ctx plugin.Context, inputPath string) error {
 	return c.registry.WriteInputFile(workspaceAdapter{workspace: ctx.Workspace}, inputPath)
 }
 
-func (c Capability) cacheRoot(ctx capability.Context) string {
+func (c Capability) cacheRoot(ctx plugin.Context) string {
 	if ctx.Workspace == nil {
 		return filepath.Join(".stack", "tailwind-cache")
 	}
 	return filepath.Join(filepath.Dir(ctx.Workspace.RootDir()), "tailwind-cache")
 }
 
-func (c Capability) cacheWorkspace(ctx capability.Context) *cacheWorkspace {
+func (c Capability) cacheWorkspace(ctx plugin.Context) *cacheWorkspace {
 	return newCacheWorkspace(c.cacheRoot(ctx))
 }
 
 type workspaceAdapter struct {
-	workspace capability.Workspace
+	workspace plugin.Workspace
 }
 
 func (a workspaceAdapter) AssetDir(kind AssetKind, id string) string {

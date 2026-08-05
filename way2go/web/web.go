@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cleanstartup/stack/activity"
-	"github.com/cleanstartup/stack/param"
+	"github.com/cleanstartup/stack/way2go/activity"
+	"github.com/cleanstartup/stack/way2go/param"
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
@@ -35,7 +35,7 @@ type Registry struct {
 	idPrefix     string
 	globalMW     []GlobalMiddleware
 	devState     *DevState
-	assets       AssetManifest
+	assets       AssetLinks
 }
 
 type RuntimeContext struct {
@@ -135,15 +135,13 @@ func (a *WebActivity[C]) URI() string {
 	return a.pattern
 }
 
-func (a *WebActivity[C]) Apply(app *WebApp) {
-	if app == nil {
+// Apply implements Part — binds this activity to a Registrar (routes,
+// activities, mounts only; no knowledge of Builder or asset registration).
+func (a *WebActivity[C]) Apply(reg Registrar) {
+	if reg == nil {
 		return
 	}
-	AddWebActivity(app.builder, a)
-}
-
-func (a *WebActivity[C]) register(r *Registry) {
-	RegisterWebActivity(r, a)
+	reg.AddActivity(a)
 }
 
 func RegisterWebActivity[C any](r *Registry, a *WebActivity[C]) {
@@ -164,7 +162,7 @@ func RegisterWebActivity[C any](r *Registry, a *WebActivity[C]) {
 
 	handler := func(w http.ResponseWriter, req *http.Request) {
 		req = withActivityMeta(req, ActivityMeta{ID: id, Pattern: pattern})
-		req = withAssetManifest(req, r.assets)
+		req = withAssetLinks(req, r.assets)
 		req = withDevState(req, r.devState)
 		ctx := newContext(w, req)
 		ctx.renderError = r.errorHandler
@@ -217,7 +215,7 @@ func (r *Registry) Mount(path string, handler http.Handler) {
 		return
 	}
 	wrapped := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		req = withAssetManifest(req, r.assets)
+		req = withAssetLinks(req, r.assets)
 		req = withDevState(req, r.devState)
 		handler.ServeHTTP(w, req)
 	})
@@ -273,11 +271,11 @@ func (r *Registry) SetDevState(state *DevState) {
 	r.devState = state
 }
 
-func (r *Registry) SetAssets(manifest AssetManifest) {
+func (r *Registry) SetAssets(links AssetLinks) {
 	if r == nil {
 		return
 	}
-	r.assets = manifest
+	r.assets = links
 }
 
 func (r *Registry) RegisterDevEndpoints(state *DevState) {

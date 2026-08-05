@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cleanstartup/stack/activity"
-	"github.com/cleanstartup/stack/web"
+	"github.com/cleanstartup/stack/way2go/activity"
+	"github.com/cleanstartup/stack/way2go/web"
 )
 
 func TestDuplicateRegistrationPanics(t *testing.T) {
@@ -145,9 +145,10 @@ func TestGlobalMiddlewareIsAppliedToWebActivities(t *testing.T) {
 
 func TestPageRendersWithTitleAndAssets(t *testing.T) {
 	r := web.NewRegistry()
-	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app.css"}
-	scriptRef := web.AssetRef{Kind: web.AssetKindJS, ID: "stack", Files: []string{"stack.esm.js"}}
-	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}, Scripts: []web.AssetRef{scriptRef}})
+	r.SetAssets(web.AssetLinks{
+		Styles:  []string{"/assets/css/app.css"},
+		Scripts: []string{"/assets/js/stack/stack.esm.js"},
+	})
 	a := web.NewActivity("page", func(ctx activity.Context) activity.Result {
 		return web.Page{
 			Title: "demo",
@@ -241,8 +242,7 @@ func TestPageRendersDevReloadAndVersionedAssets(t *testing.T) {
 	devState.MarkBuilt()
 	r.SetDevState(devState)
 
-	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app.css"}
-	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}})
+	r.SetAssets(web.AssetLinks{Styles: []string{"/assets/css/app.css"}})
 	a := web.NewActivity("dev", func(ctx activity.Context) activity.Result {
 		return web.Page{Title: "dev", Body: "hello"}
 	})
@@ -286,8 +286,7 @@ func TestDevEventsEndpointIsMounted(t *testing.T) {
 
 func TestMountedHandlerReceivesAssetManifest(t *testing.T) {
 	r := web.NewRegistry()
-	pageRef := web.AssetRef{Kind: web.AssetKindCSS, ID: "app.css"}
-	r.SetAssets(web.AssetManifest{Styles: []web.AssetRef{pageRef}})
+	r.SetAssets(web.AssetLinks{Styles: []string{"/assets/css/app.css"}})
 
 	r.Mount("/auth", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		_ = web.RenderResult(w, req, web.Page{Title: "mounted", Body: "hello"})

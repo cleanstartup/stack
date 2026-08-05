@@ -1,4 +1,4 @@
-package pipeline
+package devwatch
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	assetspkg "github.com/cleanstartup/stack/internal/asset"
+	assetspkg "github.com/cleanstartup/stack/asset"
 )
 
 type WatchWorker struct {

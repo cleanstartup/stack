@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/cleanstartup/stack/activity"
-	"github.com/cleanstartup/stack/web"
+	"github.com/cleanstartup/stack/way2go/activity"
+	"github.com/cleanstartup/stack/way2go/web"
 )
 
 func ExampleNewActivity() {

@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cleanstartup/stack/internal/capability"
-	"github.com/cleanstartup/stack/internal/pipeline"
+	"github.com/cleanstartup/stack/devwatch"
+	"github.com/cleanstartup/stack/plugin"
 )
 
 type Project struct {
@@ -120,7 +120,7 @@ func (p *Project) PackageLockJSON() string {
 	return string(buf) + "\n"
 }
 
-func (c Capability) Install(ctx context.Context, cfg capability.Context) error {
+func (c Capability) Install(ctx context.Context, cfg plugin.Context) error {
 	project := c.project
 	if project == nil || project.Empty() {
 		return nil
@@ -141,11 +141,11 @@ func (c Capability) Install(ctx context.Context, cfg capability.Context) error {
 	return EnsureDependencies(ctx, projectDir, project.requiredBins)
 }
 
-func (c Capability) Build(context.Context, capability.Context) error { return nil }
-func (c Capability) Dev(context.Context, capability.Context) ([]pipeline.WatchWorker, error) {
+func (c Capability) Build(context.Context, plugin.Context) error { return nil }
+func (c Capability) Dev(context.Context, plugin.Context) ([]devwatch.WatchWorker, error) {
 	return nil, nil
 }
-func (c Capability) Register(capability.Target) {}
+func (c Capability) Register(plugin.Target) {}
 
 func EnsureDependencies(ctx context.Context, projectDir string, requiredBins []string) error {
 	if ctx == nil {

@@ -15,19 +15,20 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/cleanstartup/stack/activity"
 	assetspkg "github.com/cleanstartup/stack/assets"
-	"github.com/cleanstartup/stack/cli"
 	buildpkg "github.com/cleanstartup/stack/internal/build"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
-	"github.com/cleanstartup/stack/web"
+	"github.com/cleanstartup/stack/way2go/activity"
+	"github.com/cleanstartup/stack/way2go/cli"
+	wayweb "github.com/cleanstartup/stack/way2go/web"
+	"github.com/cleanstartup/stack/webasset"
 )
 
 const defaultAddr = ":8080"
 
-type Part = web.Part
-type Page = web.Page
-type AssetSource = web.AssetSource
+type Part = webasset.Part
+type Page = wayweb.Page
+type AssetSource = webasset.AssetSource
 
 type Module interface {
 	Part
@@ -35,7 +36,7 @@ type Module interface {
 	CLIApp()
 
 	namespace() string
-	partsFor(features webAppFeatures) []web.Part
+	partsFor(features webAppFeatures) []Part
 	rootDir() string
 }
 
@@ -58,7 +59,7 @@ type stencilInclude interface {
 
 type bundle struct {
 	ns    string
-	parts []web.Part
+	parts []Part
 	root  string
 }
 
@@ -72,7 +73,7 @@ type ActivityDef struct {
 	help    string
 	// web
 	hasView  bool
-	viewOpts []web.ActivityOption[struct{}]
+	viewOpts []wayweb.ActivityOption[struct{}]
 	// cli
 	hasCommand bool
 	cmdPath    []string
@@ -83,7 +84,7 @@ type ActivityOption func(*ActivityDef)
 
 // WithView registers the activity as a web route. Optional web-specific opts
 // (e.g. web.WithStaticTitle) can be passed here.
-func WithView(opts ...web.ActivityOption[struct{}]) ActivityOption {
+func WithView(opts ...wayweb.ActivityOption[struct{}]) ActivityOption {
 	return func(a *ActivityDef) {
 		a.hasView = true
 		a.viewOpts = append(a.viewOpts, opts...)
@@ -114,15 +115,15 @@ func WithHelp(text string) ActivityOption {
 }
 
 // Apply registers the activity as a web route if WithView was set.
-// Implements web.Part — ignored by CLIApp.
-func (a *ActivityDef) Apply(app *web.WebApp) {
+// Implements Part — ignored by CLIApp.
+func (a *ActivityDef) Apply(app *webasset.WebApp) {
 	if a == nil || !a.hasView {
 		return
 	}
-	opts := append([]web.ActivityOption[struct{}]{
-		web.WithCrossMiddleware[struct{}](a.crossMW...),
+	opts := append([]wayweb.ActivityOption[struct{}]{
+		wayweb.WithCrossMiddleware[struct{}](a.crossMW...),
 	}, a.viewOpts...)
-	web.NewActivity(a.id, a.handler, opts...).Apply(app)
+	wayweb.NewActivity(a.id, a.handler, opts...).Apply(app.Registrar())
 }
 
 // ID returns the activity ID, satisfying the URIRef-compatible interface for
@@ -136,17 +137,17 @@ func (a *ActivityDef) ID() string {
 
 type webAppConfig struct {
 	features webAppFeatures
-	parts    []web.Part
+	parts    []Part
 	assetsFS fs.FS
 }
 
 type embeddedAssets struct{ fs fs.FS }
 
-func (e embeddedAssets) Apply(_ *web.WebApp) {}
+func (e embeddedAssets) Apply(_ *webasset.WebApp) {}
 
 // Assets returns a WebAppOption that serves the provided embedded filesystem
 // as the asset root at runtime. Pass the result of fs.Sub on your go:embed FS.
-func Assets(f fs.FS) web.Part { return embeddedAssets{fs: f} }
+func Assets(f fs.FS) Part { return embeddedAssets{fs: f} }
 
 type buildInput struct {
 	WorkspaceDir string
@@ -174,19 +175,19 @@ type devInput struct {
 // The namespace uniquely identifies the module and is used for activity IDs,
 // asset namespacing, logging, and analytics.
 // Namespace collisions are detected at composition time (WebApp call).
-func Bundle(namespace string, parts ...web.Part) Module {
+func Bundle(namespace string, parts ...Part) Module {
 	return &bundle{
 		ns:    strings.TrimSpace(namespace),
 		parts: cloneParts(parts),
-		root:  web.CallerDir(1),
+		root:  webasset.CallerDir(1),
 	}
 }
 
 // Extend wraps a base Module with additional parts. Use for adding
 // runtime-only concerns (e.g. HTTP mounts) that do not belong in Module().
-func Extend(base Module, parts ...web.Part) Module {
-	root := web.CallerDir(1)
-	var merged []web.Part
+func Extend(base Module, parts ...Part) Module {
+	root := webasset.CallerDir(1)
+	var merged []Part
 	if base != nil {
 		root = strings.TrimSpace(base.rootDir())
 		merged = append(merged, base)
@@ -198,7 +199,7 @@ func Extend(base Module, parts ...web.Part) Module {
 	}
 }
 
-func Compose(parts ...web.Part) web.Part { return web.Compose(parts...) }
+func Compose(parts ...Part) Part { return webasset.Compose(parts...) }
 
 // Activity defines a transport-agnostic activity. Use WithView() and/or
 // WithCommand() to declare which targets it participates in.
@@ -210,29 +211,29 @@ func Activity(id string, handler func(activity.Context) activity.Result, opts ..
 	return a
 }
 
-func Screen(name string, props any) templ.Component             { return web.Screen(name, props) }
-func Element(name string, props any) templ.Component            { return web.Element(name, props) }
+func Screen(name string, props any) templ.Component  { return wayweb.Screen(name, props) }
+func Element(name string, props any) templ.Component { return wayweb.Element(name, props) }
 
-func NPMDependency(name, version string) Part    { return web.NPMDependency(name, version) }
-func NPMDevDependency(name, version string) Part { return web.NPMDevDependency(name, version) }
+func NPMDependency(name, version string) Part    { return webasset.NPMDependency(name, version) }
+func NPMDevDependency(name, version string) Part { return webasset.NPMDevDependency(name, version) }
 
-func CSS(src AssetSource) Part                     { return web.CSS(src) }
-func JS(src AssetSource) Part                      { return web.JS(src) }
-func File(src AssetSource) Part                    { return web.File(src) }
-func Mount(path string, handler http.Handler) Part { return web.Mount(path, handler) }
+func CSS(src AssetSource) Part                     { return webasset.CSS(src) }
+func JS(src AssetSource) Part                      { return webasset.JS(src) }
+func File(src AssetSource) Part                    { return webasset.File(src) }
+func Mount(path string, handler http.Handler) Part { return webasset.Mount(path, handler) }
 
 // cliGroup wraps a cli.Command as a Part so it can be passed to Bundle().
 // The web target ignores it via the no-op Apply; CLIApp() picks it up.
 type cliGroup struct{ cmd cli.Command }
 
-func (g cliGroup) Apply(_ *web.WebApp) {}
+func (g cliGroup) Apply(_ *webasset.WebApp) {}
 
 // Group adds a CLI command group to a Module. Ignored by WebApp targets.
 func Group(name string, cmds ...cli.Command) Part {
 	return cliGroup{cli.Group(name, cmds...)}
 }
 
-func (b *bundle) Apply(app *web.WebApp) {
+func (b *bundle) Apply(app *webasset.WebApp) {
 	if b == nil || app == nil {
 		return
 	}
@@ -248,14 +249,14 @@ func (b *bundle) WebApp(opts ...WebAppOption) {
 	cfg := parseWebAppOptions(opts...)
 	root := strings.TrimSpace(b.rootDir())
 	if root == "" {
-		root = web.CallerDir(1)
+		root = webasset.CallerDir(1)
 	}
-	commandDir := web.CallerDir(1)
+	commandDir := webasset.CallerDir(1)
 
 	validateNamespaces(b)
 
 	parts := append(b.partsFor(cfg.features), cfg.parts...)
-	app := web.NewApp(parts...)
+	app := webasset.NewApp(parts...)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	registry := newBundleWebAppCLI(app, bundleCLIConfig{
@@ -324,11 +325,11 @@ func (b *bundle) namespace() string {
 	return b.ns
 }
 
-func (b *bundle) partsFor(features webAppFeatures) []web.Part {
+func (b *bundle) partsFor(features webAppFeatures) []Part {
 	if b == nil {
 		return nil
 	}
-	var out []web.Part
+	var out []Part
 	for _, part := range b.parts {
 		out = append(out, b.filteredPart(part, features)...)
 	}
@@ -342,7 +343,6 @@ func (b *bundle) rootDir() string {
 	return b.root
 }
 
-
 func parseWebAppOptions(opts ...WebAppOption) webAppConfig {
 	cfg := webAppConfig{}
 	for _, opt := range opts {
@@ -355,7 +355,7 @@ func parseWebAppOptions(opts ...WebAppOption) webAppConfig {
 			cfg.features.stencil = true
 		case embeddedAssets:
 			cfg.assetsFS = typed.fs
-		case web.Part:
+		case Part:
 			cfg.parts = append(cfg.parts, typed)
 		}
 	}
@@ -370,11 +370,11 @@ type dirSourceRegistration struct {
 	absPath   string
 }
 
-func (r dirSourceRegistration) Apply(app *web.WebApp) {
+func (r dirSourceRegistration) Apply(app *webasset.WebApp) {
 	app.RegisterDirSource(r.namespace, r.relPath, r.absPath)
 }
 
-func (b *bundle) filteredPart(part web.Part, features webAppFeatures) []web.Part {
+func (b *bundle) filteredPart(part Part, features webAppFeatures) []Part {
 	if part == nil {
 		return nil
 	}
@@ -384,14 +384,14 @@ func (b *bundle) filteredPart(part web.Part, features webAppFeatures) []web.Part
 	if dir, ok := part.(assetspkg.DirSource); ok {
 		return b.expandDirSource(dir, features)
 	}
-	return []web.Part{part}
+	return []Part{part}
 }
 
 // expandDirSource routes a DirSource to active builders and registers it for
 // install-time source syncing. CSS goes to Tailwind, TSX to Stencil.
-func (b *bundle) expandDirSource(dir assetspkg.DirSource, features webAppFeatures) []web.Part {
+func (b *bundle) expandDirSource(dir assetspkg.DirSource, features webAppFeatures) []Part {
 	root := dir.AbsPath()
-	parts := []web.Part{
+	parts := []Part{
 		dirSourceRegistration{namespace: b.ns, relPath: dir.RelPath, absPath: root},
 	}
 	if features.tailwind {
@@ -403,11 +403,11 @@ func (b *bundle) expandDirSource(dir assetspkg.DirSource, features webAppFeature
 	return parts
 }
 
-func cloneParts(parts []web.Part) []web.Part {
+func cloneParts(parts []Part) []Part {
 	if len(parts) == 0 {
 		return nil
 	}
-	out := make([]web.Part, 0, len(parts))
+	out := make([]Part, 0, len(parts))
 	out = append(out, parts...)
 	return out
 }
@@ -416,8 +416,8 @@ func cloneParts(parts []web.Part) []web.Part {
 // than one module in the composed tree.
 func validateNamespaces(root Module) {
 	seen := map[string]struct{}{}
-	var walk func(part web.Part)
-	walk = func(part web.Part) {
+	var walk func(part Part)
+	walk = func(part Part) {
 		if part == nil {
 			return
 		}
@@ -445,7 +445,7 @@ type lazyTailwindSource struct{ baseDir string }
 
 func (s lazyTailwindSource) ID() string { return "lazy-styles:" + s.baseDir }
 
-func (s lazyTailwindSource) Materialize(_ web.AssetWorkspace, _ web.AssetKind) ([]string, error) {
+func (s lazyTailwindSource) Materialize(_ webasset.AssetWorkspace, _ webasset.AssetKind) ([]string, error) {
 	return tailwindpkg.DiscoverStyles(s.baseDir), nil
 }
 
@@ -456,23 +456,23 @@ func (s lazyTailwindSource) WatchPaths() []string {
 	return []string{s.baseDir}
 }
 
-func tailwindStylesPart(baseDir string) web.Part {
+func tailwindStylesPart(baseDir string) Part {
 	if strings.TrimSpace(baseDir) == "" {
-		return web.Compose()
+		return webasset.Compose()
 	}
-	return web.Compose(
-		web.TailwindScan(baseDir),
-		web.TailwindCSS(lazyTailwindSource{baseDir: baseDir}),
+	return webasset.Compose(
+		webasset.TailwindScan(baseDir),
+		webasset.TailwindCSS(lazyTailwindSource{baseDir: baseDir}),
 	)
 }
 
-func stencilComponentsPart(baseDir string) web.Part {
+func stencilComponentsPart(baseDir string) Part {
 	if strings.TrimSpace(baseDir) == "" {
-		return web.Compose()
+		return webasset.Compose()
 	}
-	return web.Compose(
-		web.StencilScan(baseDir),
-		web.Stencil(web.FromDir(baseDir)),
+	return webasset.Compose(
+		webasset.StencilScan(baseDir),
+		webasset.Stencil(webasset.FromDir(baseDir)),
 	)
 }
 
@@ -489,7 +489,7 @@ type bundleCLIConfig struct {
 	assetsFS     fs.FS
 }
 
-func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
+func newBundleWebAppCLI(app *webasset.WebApp, cfg bundleCLIConfig) *cli.Registry {
 	r := cli.NewRegistry()
 	if app == nil {
 		return r
@@ -507,7 +507,7 @@ func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
 			}
 		},
 		func(ctx cli.Context[runInput]) cli.Result {
-			if err := buildpkg.NewEngine(app.Builder()).Serve(cfg.ctx, buildpkg.ServeConfig{
+			if err := buildpkg.NewEngine(app).Serve(cfg.ctx, buildpkg.ServeConfig{
 				Addr:      ctx.Data().Addr,
 				OutputDir: ctx.Data().OutputDir,
 				AssetsFS:  cfg.assetsFS,
@@ -529,7 +529,7 @@ func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
 			}
 		},
 		func(ctx cli.Context[installInput]) cli.Result {
-			if err := buildpkg.NewEngine(app.Builder()).Install(cfg.ctx, buildpkg.BuildConfig{
+			if err := buildpkg.NewEngine(app).Install(cfg.ctx, buildpkg.BuildConfig{
 				ProjectDir:   cfg.projectDir,
 				WorkspaceDir: ctx.Data().WorkspaceDir,
 				OutputDir:    ctx.Data().OutputDir,
@@ -551,7 +551,7 @@ func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
 			}
 		},
 		func(ctx cli.Context[buildInput]) cli.Result {
-			result, err := buildpkg.NewEngine(app.Builder()).BuildAssets(cfg.ctx, buildpkg.BuildConfig{
+			result, err := buildpkg.NewEngine(app).BuildAssets(cfg.ctx, buildpkg.BuildConfig{
 				ProjectDir:   cfg.projectDir,
 				WorkspaceDir: ctx.Data().WorkspaceDir,
 				OutputDir:    ctx.Data().OutputDir,
@@ -602,11 +602,11 @@ func newBundleWebAppCLI(app *web.WebApp, cfg bundleCLIConfig) *cli.Registry {
 	return r
 }
 
-func runWebAppDev(parent context.Context, app *web.WebApp, cfg buildpkg.DevConfig) error {
+func runWebAppDev(parent context.Context, app *webasset.WebApp, cfg buildpkg.DevConfig) error {
 	if app == nil {
 		return errors.New("web app is nil")
 	}
-	return buildpkg.NewEngine(app.Builder()).Dev(parent, cfg)
+	return buildpkg.NewEngine(app).Dev(parent, cfg)
 }
 
 func buildCurrentCommand(ctx context.Context, commandDir string) error {

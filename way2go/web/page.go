@@ -29,14 +29,14 @@ func (p Page) Render(ctx context.Context, w io.Writer) error {
 	out.WriteString("<title>")
 	out.WriteString(html.EscapeString(title))
 	out.WriteString("</title>")
-	manifest := assetManifestFromContext(ctx)
+	links := assetLinksFromContext(ctx)
 	version := assetVersionFromContext(ctx)
-	renderAssetLinks(&out, manifest.Styles, "stylesheet", version)
+	renderAssetLinks(&out, links.Styles, "stylesheet", version)
 	out.WriteString("</head><body>")
 	if err := renderPageBody(&out, p.Body, ctx); err != nil {
 		return err
 	}
-	renderAssetLinks(&out, manifest.Scripts, "script", version)
+	renderAssetLinks(&out, links.Scripts, "script", version)
 	if strings.TrimSpace(p.LiveReloadURL) != "" {
 		out.WriteString("<script>")
 		out.WriteString(`(()=>{const u=`)
@@ -60,26 +60,25 @@ func assetVersionFromContext(ctx context.Context) string {
 	return ""
 }
 
-func renderAssetLinks(out *strings.Builder, refs []AssetRef, kind string, version string) {
+func renderAssetLinks(out *strings.Builder, urls []string, kind string, version string) {
 	seen := map[string]struct{}{}
-	for _, ref := range refs {
-		for _, url := range ref.URLsWithVersion(version) {
-			if _, exists := seen[url]; exists {
-				continue
-			}
-			seen[url] = struct{}{}
-			switch kind {
-			case "stylesheet":
-				out.WriteString("<link rel=\"stylesheet\" href=\"")
-				out.WriteString(html.EscapeString(url))
-				out.WriteString("\">")
-			case "script":
-				out.WriteString("<script")
-				out.WriteString(" type=\"module\"")
-				out.WriteString(" src=\"")
-				out.WriteString(html.EscapeString(url))
-				out.WriteString("\"></script>")
-			}
+	for _, rawURL := range urls {
+		url := withVersion(rawURL, version)
+		if _, exists := seen[url]; exists {
+			continue
+		}
+		seen[url] = struct{}{}
+		switch kind {
+		case "stylesheet":
+			out.WriteString("<link rel=\"stylesheet\" href=\"")
+			out.WriteString(html.EscapeString(url))
+			out.WriteString("\">")
+		case "script":
+			out.WriteString("<script")
+			out.WriteString(" type=\"module\"")
+			out.WriteString(" src=\"")
+			out.WriteString(html.EscapeString(url))
+			out.WriteString("\"></script>")
 		}
 	}
 }

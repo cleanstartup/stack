@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cleanstartup/stack/activity"
 	assetspkg "github.com/cleanstartup/stack/assets"
-	"github.com/cleanstartup/stack/cli"
-	"github.com/cleanstartup/stack/param"
-	"github.com/cleanstartup/stack/web"
+	"github.com/cleanstartup/stack/way2go/activity"
+	"github.com/cleanstartup/stack/way2go/cli"
+	"github.com/cleanstartup/stack/way2go/param"
+	"github.com/cleanstartup/stack/webasset"
 )
 
 type testTailwindInclude struct{}
@@ -29,7 +29,7 @@ func TestModuleRecordsCallerPackageDir(t *testing.T) {
 }
 
 func TestBundleWebAppCLIHelp(t *testing.T) {
-	app := web.NewApp(Bundle("test.module").partsFor(webAppFeatures{})...)
+	app := webasset.NewApp(Bundle("test.module").partsFor(webAppFeatures{})...)
 	registry := newBundleWebAppCLI(app, bundleCLIConfig{
 		projectDir:   t.TempDir(),
 		commandDir:   t.TempDir(),
@@ -90,7 +90,7 @@ func TestBundleCLIDynamicCommandSegment(t *testing.T) {
 func TestBundleFeatureGating(t *testing.T) {
 	root := t.TempDir()
 	dir := assetspkg.DirSource{CallerDir: root, RelPath: "."}
-	b := &bundle{parts: []web.Part{dir}, root: root}
+	b := &bundle{parts: []Part{dir}, root: root}
 
 	// DirSource always emits a registration part (for install-time source sync)
 	// plus one part per active builder.
@@ -119,12 +119,12 @@ func TestBuiltAssetsRegisterTheirWebAppOutputs(t *testing.T) {
 
 	b := &bundle{
 		root: root,
-		parts: []web.Part{
+		parts: []Part{
 			assetspkg.DirSource{CallerDir: root, RelPath: "styles"},
 			assetspkg.DirSource{CallerDir: root, RelPath: "components"},
 		},
 	}
-	app := web.NewApp(b.partsFor(webAppFeatures{tailwind: true, stencil: true})...)
+	app := webasset.NewApp(b.partsFor(webAppFeatures{tailwind: true, stencil: true})...)
 	manifest := app.Builder().Manifest()
 
 	if got := len(manifest.Styles); got != 1 {

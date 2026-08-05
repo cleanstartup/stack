@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	assetspkg "github.com/cleanstartup/stack/internal/asset"
+	assetspkg "github.com/cleanstartup/stack/asset"
 )
 
 type Config struct {

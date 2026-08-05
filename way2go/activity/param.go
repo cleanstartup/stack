@@ -1,6 +1,6 @@
 package activity
 
-import "github.com/cleanstartup/stack/param"
+import "github.com/cleanstartup/stack/way2go/param"
 
 // Param reads a typed parameter from ctx. The ctx must implement param.Resolver
 // (CLI and HTTP transports do). If the value is missing and the param has a prompt

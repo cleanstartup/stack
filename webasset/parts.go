@@ -1,10 +1,14 @@
-package web
+package webasset
 
 import (
 	"net/http"
 	"strings"
 )
 
+// Part is the composition primitive Bundle()/WebApp() operate on. It covers
+// both asset contributions (bound to Builder) and runtime contributions
+// (bound to the app's Registrar) — WebApp is the single root that delegates
+// to whichever target a given Part actually needs.
 type Part interface {
 	Apply(*WebApp)
 }
@@ -29,15 +33,6 @@ func Compose(parts ...Part) Part {
 			part.Apply(app)
 		}
 	})
-}
-
-func cloneParts(parts []Part) []Part {
-	if len(parts) == 0 {
-		return nil
-	}
-	out := make([]Part, 0, len(parts))
-	out = append(out, parts...)
-	return out
 }
 
 func CSS(src AssetSource) Part {

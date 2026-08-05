@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cleanstartup/stack/internal/asset"
-	"github.com/cleanstartup/stack/internal/capability"
-	"github.com/cleanstartup/stack/internal/pipeline"
+	"github.com/cleanstartup/stack/asset"
+	"github.com/cleanstartup/stack/devwatch"
+	"github.com/cleanstartup/stack/plugin"
 )
 
-type ConfigResolver func(capability.Context) Config
+type ConfigResolver func(plugin.Context) Config
 
 type Capability struct {
 	registry      *Registry
@@ -27,11 +27,12 @@ func OutputPath(outputRoot string) string {
 	return filepath.Join(outputRoot, "assets", "js", BundleID)
 }
 
-func (c Capability) Install(ctx context.Context, cfg capability.Context) error {
+func (c Capability) Install(ctx context.Context, cfg plugin.Context) error {
 	_ = ctx
 	if c.empty() {
 		return nil
 	}
+	AddNPMDependencies(cfg.NPM)
 	projectDir := strings.TrimSpace(cfg.ProjectDir)
 	if projectDir == "" {
 		return nil
@@ -55,15 +56,14 @@ func (c Capability) Install(ctx context.Context, cfg capability.Context) error {
 	return os.WriteFile(filepath.Join(projectDir, "tsconfig.json"), []byte(tsconfigSource(srcDir)), 0o644)
 }
 
-
-func (c Capability) Build(ctx context.Context, cfg capability.Context) error {
+func (c Capability) Build(ctx context.Context, cfg plugin.Context) error {
 	if c.empty() || cfg.Workspace == nil {
 		return nil
 	}
 	return Build(ctx, workspaceAdapter{workspace: cfg.Workspace}, c.cacheRoot(cfg), cfg.Workspace.OutputDir(), c.registry.Inputs(), c.config(cfg))
 }
 
-func (c Capability) Dev(ctx context.Context, cfg capability.Context) ([]pipeline.WatchWorker, error) {
+func (c Capability) Dev(ctx context.Context, cfg plugin.Context) ([]devwatch.WatchWorker, error) {
 	if c.empty() {
 		return nil, nil
 	}
@@ -75,15 +75,15 @@ func (c Capability) Dev(ctx context.Context, cfg capability.Context) ([]pipeline
 	if err := os.MkdirAll(outputPath, 0o755); err != nil {
 		return nil, err
 	}
-	worker, err := pipeline.StartRestartingCommandWatchSpec(ctx, "stencil", spec)
+	worker, err := devwatch.StartRestartingCommandWatchSpec(ctx, "stencil", spec)
 	if err != nil {
 		return nil, err
 	}
 	fmt.Fprintf(os.Stderr, "[stack] stencil watch started output=%s\n", outputPath)
-	return []pipeline.WatchWorker{worker}, nil
+	return []devwatch.WatchWorker{worker}, nil
 }
 
-func (c Capability) Register(target capability.Target) {
+func (c Capability) Register(target plugin.Target) {
 	if target == nil || c.empty() {
 		return
 	}
@@ -111,14 +111,14 @@ func (c Capability) SourceChanged(path string) bool {
 		return false
 	}
 	for _, candidate := range c.SourcePaths() {
-		if pipeline.SourcePathMatches(candidate, path) {
+		if devwatch.SourcePathMatches(candidate, path) {
 			return true
 		}
 	}
 	return false
 }
 
-func (c Capability) Rebuild(context.Context, capability.Context) error {
+func (c Capability) Rebuild(context.Context, plugin.Context) error {
 	return nil
 }
 
@@ -126,7 +126,7 @@ func (c Capability) empty() bool {
 	return c.registry == nil || len(c.registry.Inputs()) == 0
 }
 
-func (c Capability) config(ctx capability.Context) Config {
+func (c Capability) config(ctx plugin.Context) Config {
 	if c.resolveConfig == nil {
 		return Config{ProjectDir: ctx.ProjectDir}
 	}
@@ -137,7 +137,7 @@ func (c Capability) config(ctx capability.Context) Config {
 	return cfg
 }
 
-func (c Capability) cacheRoot(ctx capability.Context) string {
+func (c Capability) cacheRoot(ctx plugin.Context) string {
 	if ctx.Workspace == nil {
 		return filepath.Join(".stack", "stencil-workspace")
 	}
@@ -145,7 +145,7 @@ func (c Capability) cacheRoot(ctx capability.Context) string {
 }
 
 type workspaceAdapter struct {
-	workspace capability.Workspace
+	workspace plugin.Workspace
 }
 
 func (a workspaceAdapter) AssetDir(kind AssetKind, id string) string {

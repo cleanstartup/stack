@@ -303,6 +303,7 @@ Execution order within a web handler: typed middlewares → cross-target middlew
 |---|---|
 | `STACK_TAILWIND_BINARY` | Path to a local Tailwind binary |
 | `STACK_TAILWIND_VERSION` | Tailwind version to download if binary is absent |
-| `STACK_TAILWIND_CACHE_DIR` | Directory for the downloaded Tailwind binary |
+| `STACK_BIN_CACHE_DIR` | Directory for every plugin's downloaded binaries (the shared `plugin.BinProvider`) |
+| `STACK_TAILWIND_CACHE_DIR` | Directory for the downloaded Tailwind binary and its version pointer file. Backwards-compatible fallback for `STACK_BIN_CACHE_DIR` — tailwind is currently the only downloader, so setting this still relocates the shared cache too |
 | `STACK_TAILWIND_DOWNLOAD_BASE` | Override the GitHub release download base URL |
 | `STACK_STENCIL_BINARY` | Path to a local Stencil CLI binary |

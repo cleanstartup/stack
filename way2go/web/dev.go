@@ -100,11 +100,11 @@ func withDevState(req *http.Request, state *DevState) *http.Request {
 	return req.WithContext(context.WithValue(req.Context(), devStateContextKey{}, state))
 }
 
-func withAssetManifest(req *http.Request, manifest AssetManifest) *http.Request {
+func withAssetLinks(req *http.Request, links AssetLinks) *http.Request {
 	if req == nil {
 		return req
 	}
-	return req.WithContext(context.WithValue(req.Context(), assetManifestContextKey{}, manifest))
+	return req.WithContext(context.WithValue(req.Context(), assetManifestContextKey{}, links))
 }
 
 func devStateFromContext(ctx context.Context) *DevState {
@@ -115,12 +115,12 @@ func devStateFromContext(ctx context.Context) *DevState {
 	return state
 }
 
-func assetManifestFromContext(ctx context.Context) AssetManifest {
+func assetLinksFromContext(ctx context.Context) AssetLinks {
 	if ctx == nil {
-		return AssetManifest{}
+		return AssetLinks{}
 	}
-	manifest, _ := ctx.Value(assetManifestContextKey{}).(AssetManifest)
-	return manifest
+	links, _ := ctx.Value(assetManifestContextKey{}).(AssetLinks)
+	return links
 }
 
 func devLiveReloadScriptURL() string {

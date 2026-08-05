@@ -1,4 +1,4 @@
-package web_test
+package webasset_test
 
 import (
 	"context"
@@ -6,9 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cleanstartup/stack/activity"
 	buildpkg "github.com/cleanstartup/stack/internal/build"
-	"github.com/cleanstartup/stack/web"
+	"github.com/cleanstartup/stack/webasset"
 )
 
 func TestBuildMaterializesAssets(t *testing.T) {
@@ -23,11 +22,10 @@ func TestBuildMaterializesAssets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app := web.NewApp(
-		web.NewActivity("smoke.page", func(ctx activity.Context) activity.Result { return "ok" }),
-		web.CSS(web.FromFile(cssPath)),
+	app := webasset.NewApp(
+		webasset.CSS(webasset.FromFile(cssPath)),
 	)
-	result, err := buildpkg.NewEngine(app.Builder()).Build(context.Background(), buildpkg.BuildConfig{
+	result, err := buildpkg.NewEngine(app).Build(context.Background(), buildpkg.BuildConfig{
 		WorkspaceDir: filepath.Join(tmp, "workspace"),
 		OutputDir:    filepath.Join(tmp, "public"),
 	})
