@@ -85,36 +85,17 @@ explizit an `WebApp()`. Plugins hängen nur am `stack/plugin`-Contract.
   beim späteren Split auf eigene Repos müssen die `github.com/cleanstartup/stack/…`
   Importpfade projektweit umbenannt werden.
 
-## Umsetzungs-Tasks
+## Umsetzungsstand
 
-### Phase 0 — Contract & Gerüst
-1. `go.work` im stack-Repo; way2go-Modul-Skelett (repo-lokaler Pfad).
-2. `internal/capability` → öffentliches `stack/plugin`; `AssetKind`/`AssetRef`/
-   `WatchWorker` mit-promoten.
-3. `plugin.Context` um öffentliche Shared-Services erweitern (npm-Workspace +
-   Binary-Provisioning). `BuildConfig any` von tailwind/stencil-Feldern befreien (D12).
+Phase 0 (Contract & Gerüst) und Phase 1 (way2go-Extraktion + `web`-Zerlegung)
+sind umgesetzt — Design-Rationale in [0001-phase-0-tasks.md](./0001-phase-0-tasks.md),
+[0001-phase-1-design-spike.md](./0001-phase-1-design-spike.md) und
+[0001-phase-1-tasks.md](./0001-phase-1-tasks.md). Die Artifact-Migration ist in
+Phase 1 aufgegangen (P1-D1).
 
-### Phase 1 — way2go extrahieren
-4. `activity`, `param`, `cli`, `config` → way2go.
-5. `web` zerschneiden: Runtime→way2go, Builder-Contract→stack. stack importiert
-   way2go; `WebApp/CLIApp` auf way2go-Typen umverdrahten. Hart, keine Aliases (D10).
-
-### Phase 2 — tailwind/stencil zu Plugins
-6. Module `tailwind`, `stencil`; `internal/tailwind|stencil`, npm-Deklaration,
-   Discovery, `web.TailwindCSS/StencilScan` + `expandDirSource`-Routing hineinziehen.
-7. Registrierung invertieren: Type-Switch in `capabilities()` + `assets.Tailwind()/
-   Stencil()`-Marker raus → `WebApp(tailwind.Plugin(), stencil.Plugin())`.
-
-### Phase 3 — hugo-Plugin
-8. Neues `hugo`-Modul (Content-Build + Dev-Watch), sieht ausschliesslich
-   `stack/plugin` — Beweis der Contract-Suffizienz am grünen Feld.
-
-### Phase 4 — Artifact-Migration (nach OF1)
-9. branding, fortego-app, affiliate-funnel, happend-store, fortego-ecies auf
-   way2go + explizite Plugin-Wiring umstellen.
-
-### Phase 5 — später
-10. Repo-Split, `replace`-Direktiven entfernen, Import-Rename (OF3).
+tailwind/stencil als eigene Plugin-Module, ein hugo-Plugin und der spätere
+Repo-Split (OF3) sind nicht begonnen. Planung und laufender Stand dazu gehören
+ins Projekt-Backlog, nicht in diese ADR.
 
 ## Alternativen (verworfen)
 

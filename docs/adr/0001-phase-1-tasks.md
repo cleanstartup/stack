@@ -1,6 +1,6 @@
-# ADR-0001 — Phase 1: way2go extrahieren + web-Zerlegung (Task-Breakdown)
+# ADR-0001 — Phase 1: way2go extrahieren + web-Zerlegung
 
-- Status: Ready
+- Status: Accepted, umgesetzt
 - Datum: 2026-07-25
 - Bezug: [0001-stack-as-plugin-orchestrator-and-way2go-split.md](./0001-stack-as-plugin-orchestrator-and-way2go-split.md),
   [0001-phase-0-tasks.md](./0001-phase-0-tasks.md)
@@ -89,40 +89,33 @@ festnagelt, bevor Code wandert.
 
 ## Tasks
 
-| Task     | Inhalt                                                                                                                                   | Akzeptanz                                                                                   |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| **1.0**  | Design-Spike: Runtime-Registrar-Interface(s), neuer `Part`-Zuschnitt (Runtime- vs. Asset-Ziel), `WebApp`-Kompositionsvertrag. Als kurze ADR-Notiz. | ✅ **Fertig & abgenommen (Rev. 2, Review `26f441d7`/`3fde7c78`, 2026-07-29).** Ergebnis: [0001-phase-1-design-spike.md](./0001-phase-1-design-spike.md). |
-| **1.1**  | `param`, `config` → way2go (Blätter, reiner Move + Import-Umbiegung).                                                                    | way2go baut; stack baut gegen way2go; Tests grün.                                            |
-| **1.2**  | `activity` → way2go (hängt an param).                                                                                                    | dito.                                                                                        |
-| **1.3**  | `cli` → way2go (hängt an activity/param).                                                                                                | `CLIApp`-Pfad unverändert funktional.                                                        |
-| **1.4**  | ✅ **Fertig & abgenommen (2026-07-30, Commits `d6437a6`+`0021ac2`).** `web` zerschnitten: Runtime → way2go (`web.go`, `screen.go`, `page.go`, `dev.go`, `module.go`-Gruppe-a) + `Registrar`/`RouteAccumulator`/`AssetLinks`; Builder-Rest → **eigenes Package `webasset`** (`Builder` minus Routing, `WebApp`=`runtime`+`builder`, `Handler()`+`toAssetLinks`, Asset-Parts). **Korrektur zur Namensfrage:** NICHT in `package stack` (Root) wie im Spike abgenickt — das hätte `stack → assets → stack` erzeugt (`assets/assets.go` implementiert `Part`/braucht `WebApp`, `stack.go` importiert `assets`). `webasset` ist azyklisch. | Erfüllt: `way2go` modulrein (kein stack-Import), way2go/web asset-frei, beide Module `build`/`test -count=1` grün, altes `web/` weg, Commit 1 bisect-grün. |
-| **1.5**  | stack-Root (`stack.go`, `ActivityDef`, `WebApp()`/`CLIApp()`) auf way2go-Typen umverdrahten. **Keine** Re-Export-Aliase (D10).           | Build/Dev/Serve unverändert; stack-Tests grün.                                               |
-| **1.6**  | Pro Artifact: `deps/stack`-Submodul-Pointer auf den Phase-1-stack-Commit bumpen; `replace`-Zeilen für `way2go` (+ später Plugins) auf `./deps/stack/<nested>` ergänzen. Optional: Workspace-`go.work` für lokale Multi-Modul-Dev. | Artifact baut **standalone** (`go build ./...` ohne go.work) grün.                            |
-| **1.7**  | Artifact-Migration auf way2go-Imports. **Realer Scope (2026-07-30, lokal verifiziert, breiter als die Spike-F2-Liste):** repointet werden ALLE Importer der verschobenen Pakete (`web`+`activity`/`cli`/`param`/`config`), nicht nur `stack/web`. Betroffen: **fortego-app** ~31 Dateien (reines Repoint), **affiliate-funnel** 2, **branding** nur go.mod, **cleanstartup/os** 2 (nachträglich aufgenommen, Adrian-Entscheid), **happend-store**/**fortego-ecies** nichts. **Regel:** jeder Stack-Consumer braucht `require`+`replace github.com/cleanstartup/stack/way2go => …/stack/way2go` in seiner eigenen go.mod — auch ohne direkten way2go-Import (Go wertet `replace` nur im Hauptmodul aus). happend-store-Cleanup (R2) out of scope. | jedes betroffene Repo `go build ./...` grün standalone; manueller E2E gegen fortego-app grün; Fly-Deploy baut ohne Workspace-Kontext. **Landet erst nach `new`-Push** (deps/stack-Pointer muss fetchbar sein); ein Commit pro Artifact/Repo. |
+Referenztabelle der Phase-1-Teilschritte; laufender Umsetzungsstand lebt im
+Projekt-Backlog, nicht hier.
 
-## Offene Risiken / zu bestätigende Annahmen
+| Task     | Inhalt                                                                                                                                   |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1.0**  | Design-Spike: Runtime-Registrar-Interface(s), neuer `Part`-Zuschnitt (Runtime- vs. Asset-Ziel), `WebApp`-Kompositionsvertrag → [0001-phase-1-design-spike.md](./0001-phase-1-design-spike.md). |
+| **1.1**  | `param`, `config` → way2go (Blätter, reiner Move + Import-Umbiegung). |
+| **1.2**  | `activity` → way2go (hängt an param). |
+| **1.3**  | `cli` → way2go (hängt an activity/param). |
+| **1.4**  | `web` zerschnitten: Runtime → way2go (`web.go`, `screen.go`, `page.go`, `dev.go`, `module.go`-Gruppe-a) + `Registrar`/`RouteAccumulator`/`AssetLinks`; Builder-Rest → eigenes Package `webasset` (`Builder` minus Routing, `WebApp`=`runtime`+`builder`, `Handler()`+`toAssetLinks`, Asset-Parts). Abweichung von der Namensfrage im Spike: `webasset` statt `package stack` (Root), sonst `stack → assets → stack`-Zyklus. |
+| **1.5**  | stack-Root (`stack.go`, `ActivityDef`, `WebApp()`/`CLIApp()`) auf way2go-Typen umverdrahtet. Keine Re-Export-Aliase (D10). |
+| **1.6**  | Pro Artifact: `deps/stack`-Submodul-Pointer bumpen; `require`+`replace` für `github.com/cleanstartup/stack/way2go` in der Artifact-go.mod ergänzen — jeder Stack-Consumer braucht das, auch ohne direkten way2go-Import (Go wertet `replace` nur im Hauptmodul aus). |
+| **1.7**  | Artifact-Migration auf way2go-Imports: repointet werden alle Importer der verschobenen Pakete (`web`+`activity`/`cli`/`param`/`config`), nicht nur `stack/web`. |
 
-- **R1 — AUFGELÖST (2026-07-25).** Fakt aus `fortego-btc/app/.github/workflows/fly-deploy.yml`:
-  der Deploy checkt nur das Artifact-Repo aus (`submodules: recursive`) und baut
-  via `cmd/web/Dockerfile` auf Flys Remote-Builder — **Workspace-`go.work` ist
-  dort unsichtbar.** Deshalb ist die build-tragende Auflösung `replace` im
-  Artifact-go.mod auf `./deps/stack/<nested>` (Task 1.6), nicht go.work. Nebenbei:
-  die CI regeneriert happend-store-sqlc selbst (bleibt so, R2 out of scope).
-- **R2 — happend-store-Durability: KEIN Blocker, out of scope (2026-07-30).**
-  Frühere Annahme „blockiert den fortego-app-E2E" war falsch: die Fly-CI hat
-  einen `sqlc generate`-Schritt in `deps/happend-store`, fortego-app baut/deployed
-  also auch ohne den committeten Fix. Das Cleanup (generierten Code committen,
-  Pointer bumpen, CI-Schritt löschen) ist nice-to-have, nicht Teil von Phase 1.
-  Echte externe Abhängigkeit für 1.7 ist stattdessen: **stack `new` pushen**,
-  damit der `deps/stack`-Pointer committbar auf den Phase-1-Commit zeigen kann
-  (nur fürs durable Landen nötig, nicht fürs lokale Arbeiten).
-- **R3 — Reshape-Risiko app.go.** Wenn der Spike (1.0) zeigt, dass die
-  Part/WebApp-Trennung breiter streut als app.go, wächst 1.4 — früh im Spike
-  verifizieren.
+## Entscheidungs-Notizen
+
+- **Artifact-Wiring (OF1):** Fakt aus `fortego-btc/app/.github/workflows/fly-deploy.yml` —
+  der Fly-Deploy checkt nur das Artifact-Repo aus und baut auf Flys
+  Remote-Builder; Workspace-`go.work` ist dort unsichtbar. Deshalb ist die
+  build-tragende Auflösung `replace` im Artifact-go.mod auf
+  `./deps/stack/<nested>` (Task 1.6), nicht `go.work`.
+- **happend-store-Cleanup:** out of scope für Phase 1. Die Fly-CI regeneriert
+  den sqlc-Code selbst, das committete Fix ist nice-to-have, kein Blocker für
+  1.7.
 
 ## Nicht in Phase 1
 
 - Registrierungs-Inversion `WebApp(tailwind.Plugin(), …)` + `compat.go`-Entkopplung
   → Phase 2.
 - hugo-Plugin → Phase 3.
-```

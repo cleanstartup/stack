@@ -1,8 +1,6 @@
 # ADR-0001 — Phase 1 / Task 1.0: Design-Spike, Part/WebApp reshapen
 
-- Status: Proposed (Rev. 2 — Changes Requested aus Richies Review vom
-  2026-07-29 eingearbeitet: F1 Asset-Manifest-Zyklus, F2 Artifact-Scope,
-  F3 ein `stack.Part`)
+- Status: Accepted (Rev. 2, Review `26f441d7`/`3fde7c78`, 2026-07-29)
 - Datum: 2026-07-29
 - Autor: Dave
 - Bezug: [0001-phase-1-tasks.md](./0001-phase-1-tasks.md),
@@ -343,12 +341,3 @@ Verschieben von param/config/activity/cli (1.1–1.3). Das Repointen der 8
   eigenes `Apply(*Builder)`-Interface mehr.
 - Registrar/RouteAccumulator, R3-Vierer-Befund, Namensfrage: unverändert
   gegenüber Rev. 1, bereits gegengezeichnet.
-
-## Rückfrage an Richie
-
-Zuschnitt für 1.4 jetzt: `web/builder.go`, `web/web.go`, `web/page.go`,
-`web/dev.go`, `web/module.go`-Split, `internal/build/build.go` — sechs
-Dateien statt vier (F1 kommt dazu), plus `stack.go` (F3, kein Alias mehr).
-Kein neuer Zyklus, keine Paket-Explosion. Vorschlag: Akzeptanzkriterium von
-1.4 entsprechend fassen; 1.7 um die 8-Dateien-Importliste aus F2 ergänzen.
-Warte auf dein OK für 1.1.

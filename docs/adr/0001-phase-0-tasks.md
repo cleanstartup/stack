@@ -1,13 +1,13 @@
-# ADR-0001 — Phase 0: Contract & Gerüst (Task-Breakdown)
+# ADR-0001 — Phase 0: Contract & Gerüst
 
-- Status: Ready
+- Status: Accepted, umgesetzt
 - Datum: 2026-07-25
 - Bezug: [0001-stack-as-plugin-orchestrator-and-way2go-split.md](./0001-stack-as-plugin-orchestrator-and-way2go-split.md)
 
-Detaillierung von **Phase 0** aus ADR-0001. Ziel: den Plugin-Contract real und
+Detaillierung von **Phase 0** aus ADR-0001: den Plugin-Contract real und
 öffentlich machen und ihn an den zwei Bestands-Capabilities (tailwind, stencil)
-beweisen — **ohne Blast-Radius auf Artifacts**. Registrierungs-Inversion,
-`web`-Zerlegung und way2go-Inhalt bleiben späteren Phasen.
+beweisen — ohne Blast-Radius auf Artifacts. Registrierungs-Inversion,
+`web`-Zerlegung und way2go-Inhalt blieben späteren Phasen vorbehalten.
 
 ## Findings, die Phase 0 zuschneiden
 
@@ -140,27 +140,20 @@ type BinarySpec struct {
    Root, kein Split-Brain.
 3. `$UserCacheDir/stack/bin`, sonst `$TMPDIR/stack/bin`.
 
-## Tasks
+## Umsetzung
 
-| Task    | Inhalt                                                                                                                                           | Akzeptanz                                                                             |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| **0.1** | `go.work` im stack-Repo; `way2go/`-Modul-Skelett (repo-lokaler Pfad, leeres `doc.go`).                                                          | `go work sync` grün; `go build ./...` unverändert grün.                               |
-| **0.2a**| `internal/asset` → `stack/asset` (öffentlich). Interne Importe umbiegen.                                                                        | alle Tests grün, keine `internal/asset`-Referenzen mehr.                              |
-| **0.2b**| `internal/pipeline` → `stack/devwatch` (öffentlich).                                                                                            | dito.                                                                                 |
-| **0.2c**| `internal/capability` → `stack/plugin`; `Dev()` auf `devwatch.WatchWorker`.                                                                     | tailwind/stencil/npm implementieren weiter das jetzt öffentliche Interface.          |
-| **0.3a**| `plugin.Context`: `BuildConfig any`/`DevConfig any` raus → `Mode`; `NPM`+`Bin` rein. `capabilityContext()` füllt die neuen Felder.              | `tailwindConfig`/`stencilConfig`-Resolver gelöscht; Build/Dev/Serve unverändert.     |
-| **0.3b**| `BinProvider`-Impl in stack (Download-/Cache-Kern aus `downloadBinary` extrahiert); `NPM` = `*npm.Project` hinter dem Interface.                | `TestBuildUsesExplicitTailwindBinary` grün; frischer Download landet im Cache.       |
-| **0.4** | tailwind/stencil auf `ctx.NPM`/`ctx.Bin` umstellen (Validierung, dass der Contract ausreicht — noch **intern**, Inversion erst Phase 2).        | `dev`+`build` in `fortego-app` unverändert; manueller End-to-End-Lauf grün.          |
+Paket-Promotions `internal/asset`→`stack/asset`, `internal/pipeline`→`stack/devwatch`,
+`internal/capability`→`stack/plugin`; `plugin.Context` von `BuildConfig any`/`DevConfig any`
+auf `Mode`+`NPM`+`Bin` umgestellt; `BinProvider` aus `downloadBinary` extrahiert;
+tailwind/stencil auf `ctx.NPM`/`ctx.Bin` umgestellt (Registrierungs-Inversion bleibt
+Phase 2).
 
-## Kritischer Prüfpunkt (Exit-Kriterium Phase 0)
+## Exit-Kriterium Phase 0
 
-Reichen `NPM` + `BinProvider` als einzige geteilte Services, damit tailwind *und*
-stencil ohne stack-Interna auskommen? stencil schreibt `stencil.config.ts`/
-`tsconfig.json` ins ProjectDir — reines Filesystem, braucht keinen Service. Wenn
-beide nur über den öffentlichen `plugin.Context` laufen, ist der Contract für
-hugo (Phase 3) tragfähig. Andernfalls: fehlenden Service identifizieren und
-minimal ergänzen, bevor Phase 1 startet.
-```
+`NPM` + `BinProvider` reichen als einzige geteilten Services, damit tailwind *und*
+stencil ohne stack-Interna auskommen — stencil schreibt `stencil.config.ts`/
+`tsconfig.json` rein filesystembasiert, braucht keinen Service. Der Contract ist
+damit für hugo (Phase 3) tragfähig.
 
 ## Nicht in Phase 0
 
