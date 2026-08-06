@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -217,10 +216,12 @@ func Element(name string, props any) templ.Component { return wayweb.Element(nam
 func NPMDependency(name, version string) Part    { return webasset.NPMDependency(name, version) }
 func NPMDevDependency(name, version string) Part { return webasset.NPMDevDependency(name, version) }
 
-func CSS(src AssetSource) Part                     { return webasset.CSS(src) }
-func JS(src AssetSource) Part                      { return webasset.JS(src) }
-func File(src AssetSource) Part                    { return webasset.File(src) }
-func Mount(path string, handler http.Handler) Part { return webasset.Mount(path, handler) }
+func CSS(src AssetSource) Part  { return webasset.CSS(src) }
+func JS(src AssetSource) Part   { return webasset.JS(src) }
+func File(src AssetSource) Part { return webasset.File(src) }
+
+// Mount (subject-first, overloaded) lives in ingredient.go — it replaces
+// this old path-first form as part of CUP-26's composition API (D-M).
 
 // cliGroup wraps a cli.Command as a Part so it can be passed to Bundle().
 // The web target ignores it via the no-op Apply; CLIApp() picks it up.
