@@ -1,10 +1,13 @@
 package stack
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/cleanstartup/stack/asset"
@@ -143,10 +146,139 @@ func (t *WebsiteTarget) recordManifest(contentType, dest string) {
 // OutputDir) that Consume has written so far.
 //
 // D-L specifies Website as "copy + relative <link>" — this only does the
-// copy half. Injecting relative <link>s needs a real HTML/template context
-// to inject into, which doesn't exist without an actual Website consumer;
-// deferred until one lands (CUP-22). Manifest() is that consumer's building
-// block for doing so itself.
+// copy half. InjectManifestLinks below is the real consumer of this
+// building block (CUP-22), doing the relative-<link> half against hugo's
+// real HTML output.
 func (t *WebsiteTarget) Manifest() map[string][]string {
 	return t.manifest
+}
+
+// InjectManifestLinks is the "relative <link>" half of D-L's Website policy
+// ("copy + relative <link>") that Manifest()'s doc comment names CUP-22 as
+// landing: it walks every .html file already written under OutputDir (by a
+// prior Consume) and, immediately before each file's first "</head>",
+// inserts a <link rel="stylesheet"> for every text/css Manifest() entry and
+// a <script> for every application/javascript(+*) entry — each href/src
+// computed relative to that HTML file's own directory, e.g. mounting a
+// hugo tree at /docs and tailwind's CSS at the output root yields
+// "../app.css" inside docs/index.html.
+//
+// Scope, deliberately minimal (CUP-22 judgment call — see task notes): a
+// plain byte-level "</head>" insertion, not an HTML parser or a templating
+// layer. That's enough to prove Manifest()-driven relative linking
+// end-to-end against a real producer's (hugo's) output tree without
+// inventing machinery (a templating system) that doesn't exist yet.
+// Explicitly out of scope, left for a real need to justify: per-page link
+// selection (every page gets every asset — hugo's own templates are the
+// right place for that, not a stack-level post-process), case-insensitive/
+// attribute-bearing "</head>" variants, +head/+footer hint-driven
+// placement (there's exactly one insertion point here), and idempotency
+// (calling this twice double-injects — callers invoke it once, after
+// Consume has finished writing). +module IS honored (unlike +head/+footer,
+// D-K classifies it as real byte semantics, not a placement hint an
+// injector is free to ignore) — a script contributed as
+// "application/javascript+module" gets type="module" so ESM import/export
+// actually parses in the browser.
+func (t *WebsiteTarget) InjectManifestLinks() error {
+	if strings.TrimSpace(t.OutputDir) == "" {
+		return fmt.Errorf("stack: website target: OutputDir not set")
+	}
+	cssRels := t.manifestFamily("text/css")
+	jsEntries := t.manifestJSEntries()
+	if len(cssRels) == 0 && len(jsEntries) == 0 {
+		return nil
+	}
+
+	return filepath.WalkDir(t.OutputDir, func(current string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !strings.EqualFold(filepath.Ext(current), ".html") {
+			return nil
+		}
+		return t.injectLinksIntoFile(current, cssRels, jsEntries)
+	})
+}
+
+// manifestFamily gathers every Manifest() entry whose content-type is base
+// or a "+hint" of base (D-K's family match) — used for text/css, where no
+// hint changes byte semantics, so hints can be safely ignored.
+func (t *WebsiteTarget) manifestFamily(base string) []string {
+	var out []string
+	for ct, rels := range t.manifest {
+		if ct == base || strings.HasPrefix(ct, base+"+") {
+			out = append(out, rels...)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// jsManifestEntry pairs a manifest-relative path with whether it needs
+// type="module" (D-K: +module is byte semantics, not a droppable hint).
+type jsManifestEntry struct {
+	rel    string
+	module bool
+}
+
+func (t *WebsiteTarget) manifestJSEntries() []jsManifestEntry {
+	const base = "application/javascript"
+	var out []jsManifestEntry
+	for ct, rels := range t.manifest {
+		if ct != base && !strings.HasPrefix(ct, base+"+") {
+			continue
+		}
+		module := ct == base+"+module"
+		for _, rel := range rels {
+			out = append(out, jsManifestEntry{rel: rel, module: module})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].rel < out[j].rel })
+	return out
+}
+
+func (t *WebsiteTarget) injectLinksIntoFile(htmlPath string, cssRels []string, jsEntries []jsManifestEntry) error {
+	body, err := os.ReadFile(htmlPath)
+	if err != nil {
+		return err
+	}
+	idx := bytes.Index(body, []byte("</head>"))
+	if idx < 0 {
+		return nil // no <head> to inject into — left untouched, see doc comment.
+	}
+	htmlDir := filepath.Dir(htmlPath)
+
+	var tags strings.Builder
+	for _, rel := range cssRels {
+		href, err := t.relativeAssetPath(htmlDir, rel)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(&tags, "<link rel=\"stylesheet\" href=\"%s\">\n", href)
+	}
+	for _, entry := range jsEntries {
+		src, err := t.relativeAssetPath(htmlDir, entry.rel)
+		if err != nil {
+			return err
+		}
+		if entry.module {
+			fmt.Fprintf(&tags, "<script type=\"module\" src=\"%s\"></script>\n", src)
+		} else {
+			fmt.Fprintf(&tags, "<script src=\"%s\"></script>\n", src)
+		}
+	}
+
+	injected := make([]byte, 0, len(body)+tags.Len())
+	injected = append(injected, body[:idx]...)
+	injected = append(injected, []byte(tags.String())...)
+	injected = append(injected, body[idx:]...)
+	return os.WriteFile(htmlPath, injected, 0o644)
+}
+
+func (t *WebsiteTarget) relativeAssetPath(htmlDir, manifestRel string) (string, error) {
+	rel, err := filepath.Rel(htmlDir, filepath.Join(t.OutputDir, filepath.FromSlash(manifestRel)))
+	if err != nil {
+		return "", err
+	}
+	return filepath.ToSlash(rel), nil
 }
