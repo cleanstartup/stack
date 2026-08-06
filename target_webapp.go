@@ -58,6 +58,31 @@ func (t *WebAppTarget) Build(ctx context.Context, stageCtx plugin.StageContext) 
 	if err != nil {
 		return err
 	}
+	twContribution, err := t.buildTailwindStage(ctx, stageCtx)
+	if err != nil {
+		return err
+	}
+	if twContribution != nil {
+		// twContribution is appended after flattenIngredients already ran, so
+		// it never passed through that function's own seenPaths dedup (D-J:
+		// a repeated Asset.Path from a different producer edge is a
+		// composition bug). Re-check here against what flattenIngredients
+		// already collected, so a manually-wired tailwind Producer ingredient
+		// colliding with this auto-stage still fails fast instead of silently
+		// double-mounting the same file under two URLs.
+		seenPaths := map[string]string{}
+		for _, c := range contributions {
+			for _, a := range c.Assets {
+				seenPaths[a.Path] = c.Mount
+			}
+		}
+		for _, a := range twContribution.Assets {
+			if prevMount, ok := seenPaths[a.Path]; ok {
+				return fmt.Errorf("stack: duplicate asset path %q (contributed via mount %q, again via the tailwind stage)", a.Path, prevMount)
+			}
+		}
+		contributions = append(contributions, *twContribution)
+	}
 	return t.Consume(ctx, contributions)
 }
 

@@ -20,9 +20,9 @@ import (
 // route Module and http.Handler mounts into (D-M: "Module edge: routes+
 // assets under a prefix"). Website/CLI targets have no such thing — for
 // those, app is nil, a bare or mounted Module is accepted but contributes
-// nothing (Module→Sources isn't modeled yet, deferred to CUP-21/25 per the
-// design note's D-N), and a mounted http.Handler is rejected as
-// meaningless without a live server.
+// nothing (Module→Sources beyond CUP-21's tailwind-content case isn't
+// modeled yet, deferred to CUP-25/27 per the design note's D-N), and a
+// mounted http.Handler is rejected as meaningless without a live server.
 func flattenIngredients(ctx context.Context, stageCtx plugin.StageContext, app *webasset.WebApp, ingredients []Ingredient) ([]plugin.Contribution, error) {
 	var contributions []plugin.Contribution
 	seenPaths := map[string]string{} // Asset.Path -> describing mount point of first contributor
@@ -85,9 +85,11 @@ func applyMountEdge(ctx context.Context, stageCtx plugin.StageContext, app *weba
 		// which only knows its own unprefixed paths) and drops the
 		// sub-module's asset contributions entirely — "+ Assets" would be a
 		// lie. Fenced with a loud error rather than silently shipping a
-		// half-working nature; real support is CUP-21/25 territory (see the
-		// design-abgleich handoff, deviation 1).
-		return fmt.Errorf("stack: Mount(Module, %q) on a WebApp target is not yet supported (CUP-21)", edge.at)
+		// half-working nature. Not CUP-21's job (that task scoped narrowly to
+		// tailwind's app-level stage, confirmed against the PRD's task
+		// breakdown table) — still unscheduled; pick up whenever a task
+		// actually needs namespaced sub-app mounting to work.
+		return fmt.Errorf("stack: Mount(Module, %q) on a WebApp target is not yet supported", edge.at)
 	case http.Handler:
 		if app == nil {
 			return fmt.Errorf("stack: Mount(http.Handler, %q): requires a WebApp target", edge.at)

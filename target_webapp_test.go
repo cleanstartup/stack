@@ -7,10 +7,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/cleanstartup/stack"
 	"github.com/cleanstartup/stack/asset"
+	"github.com/cleanstartup/stack/assets"
+	"github.com/cleanstartup/stack/internal/tailwind"
 	"github.com/cleanstartup/stack/plugin"
 	"github.com/cleanstartup/stack/way2go/activity"
 )
@@ -148,6 +152,91 @@ func TestWebAppTargetIgnoresLegacyModuleParts(t *testing.T) {
 	}
 }
 
+// TestWebAppTargetRunsTailwindStageForDeclaredContent pins CUP-21: a Module
+// declaring content via assets.Dir(...) gets its own app-level tailwind CSS
+// Contribution, alongside whatever other producers contribute — no ingredient
+// needed to opt in, since tailwind is a stage of the WebApp target's own
+// nature (D-N/PRD §7), not a composed arg.
+func TestWebAppTargetRunsTailwindStageForDeclaredContent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake shell binary helper is unix-only")
+	}
+
+	contentDir := t.TempDir()
+	writeTestFile(t, contentDir, "extra.tailwind.css", ".extra{color:blue}")
+
+	binaryPath := filepath.Join(t.TempDir(), "tailwind-fake.sh")
+	script := "#!/bin/sh\nset -eu\ninput=\noutput=\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    -i) input=\"$2\"; shift 2 ;;\n    -o) output=\"$2\"; shift 2 ;;\n    --minify|--watch) shift ;;\n    *) shift ;;\n  esac\ndone\ncp \"$input\" \"$output\"\n"
+	if err := os.WriteFile(binaryPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("STACK_TAILWIND_BINARY", binaryPath)
+
+	module := stack.Bundle("webapp-tailwind-test", assets.Dir(contentDir))
+	target := stack.WebApp(module)
+	if err := target.Build(context.Background(), plugin.StageContext{OutputDir: t.TempDir()}); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	links := target.AssetLinks()
+	if len(links.Styles) != 1 {
+		t.Fatalf("got %d style links, want 1 (the tailwind stage's output): %+v", len(links.Styles), links)
+	}
+
+	server := httptest.NewServer(target.Handler())
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + links.Styles[0])
+	if err != nil {
+		t.Fatalf("GET %s: %v", links.Styles[0], err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if !strings.Contains(string(body), `@import "tailwindcss";`) {
+		t.Fatalf("served tailwind CSS %q missing tailwindcss import", body)
+	}
+}
+
+// TestWebAppTargetTailwindStageCollisionErrors pins the fix for the D-J dedup
+// gap the tailwind stage's Contribution would otherwise bypass (it's appended
+// after flattenIngredients already ran, so it never saw flattenIngredients'
+// own seenPaths check): a manually-wired ingredient producing an Asset at the
+// exact same path the tailwind stage would write to must still fail fast,
+// not silently double-mount.
+func TestWebAppTargetTailwindStageCollisionErrors(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake shell binary helper is unix-only")
+	}
+
+	contentDir := t.TempDir()
+	writeTestFile(t, contentDir, "extra.tailwind.css", ".extra{color:blue}")
+
+	binaryPath := filepath.Join(t.TempDir(), "tailwind-fake.sh")
+	script := "#!/bin/sh\nset -eu\ninput=\noutput=\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    -i) input=\"$2\"; shift 2 ;;\n    -o) output=\"$2\"; shift 2 ;;\n    --minify|--watch) shift ;;\n    *) shift ;;\n  esac\ndone\ncp \"$input\" \"$output\"\n"
+	if err := os.WriteFile(binaryPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("STACK_TAILWIND_BINARY", binaryPath)
+
+	outputDir := t.TempDir()
+	collidingProducer := fakeProducer{assets: []plugin.Asset{
+		{Path: tailwind.OutputPath(outputDir), ContentType: "text/css"},
+	}}
+
+	module := stack.Bundle("webapp-tailwind-collision-test", assets.Dir(contentDir))
+	target := stack.WebApp(module, collidingProducer)
+	err := target.Build(context.Background(), plugin.StageContext{OutputDir: outputDir})
+	if err == nil {
+		t.Fatal("want an error: an ingredient producing an Asset at the tailwind stage's own output path must not silently double-mount")
+	}
+	if !strings.Contains(err.Error(), "duplicate asset path") {
+		t.Fatalf("err = %v, want it to mention the duplicate asset path", err)
+	}
+}
+
 func assertBodyEquals(t *testing.T, url, want string) {
 	t.Helper()
 	resp, err := http.Get(url)
@@ -180,6 +269,6 @@ func TestModuleEdgeMountOnWebAppIsFenced(t *testing.T) {
 	target := stack.WebApp(stack.Bundle("roottest"), stack.Mount(sub, "/docs"))
 	err := target.Build(context.Background(), plugin.StageContext{})
 	if err == nil {
-		t.Fatal("want an error: Module-edge Mount on a WebApp target is not yet supported (CUP-21)")
+		t.Fatal("want an error: Module-edge Mount on a WebApp target is not yet supported")
 	}
 }
