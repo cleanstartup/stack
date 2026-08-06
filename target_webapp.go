@@ -63,27 +63,45 @@ func (t *WebAppTarget) Build(ctx context.Context, stageCtx plugin.StageContext) 
 		return err
 	}
 	if twContribution != nil {
-		// twContribution is appended after flattenIngredients already ran, so
-		// it never passed through that function's own seenPaths dedup (D-J:
-		// a repeated Asset.Path from a different producer edge is a
-		// composition bug). Re-check here against what flattenIngredients
-		// already collected, so a manually-wired tailwind Producer ingredient
-		// colliding with this auto-stage still fails fast instead of silently
-		// double-mounting the same file under two URLs.
-		seenPaths := map[string]string{}
-		for _, c := range contributions {
-			for _, a := range c.Assets {
-				seenPaths[a.Path] = c.Mount
-			}
+		if err := appendSingletonContribution(&contributions, *twContribution, "the tailwind stage"); err != nil {
+			return err
 		}
-		for _, a := range twContribution.Assets {
-			if prevMount, ok := seenPaths[a.Path]; ok {
-				return fmt.Errorf("stack: duplicate asset path %q (contributed via mount %q, again via the tailwind stage)", a.Path, prevMount)
-			}
+	}
+	litContribution, err := t.buildLitStage(ctx, stageCtx)
+	if err != nil {
+		return err
+	}
+	if litContribution != nil {
+		if err := appendSingletonContribution(&contributions, *litContribution, "the lit stage"); err != nil {
+			return err
 		}
-		contributions = append(contributions, *twContribution)
 	}
 	return t.Consume(ctx, contributions)
+}
+
+// appendSingletonContribution appends contribution to *contributions after
+// checking its Assets against every Asset.Path already collected (D-J).
+// The WebApp target's app-level singleton stages (tailwind, lit) run after
+// flattenIngredients and are appended afterward, so they never pass through
+// that function's own seenPaths dedup — re-checking here catches a
+// manually-wired ingredient colliding with an auto-stage's output path and
+// fails fast instead of silently double-mounting the same file under two
+// URLs. label names the stage in the error for debuggability (e.g. "the
+// tailwind stage", "the lit stage").
+func appendSingletonContribution(contributions *[]plugin.Contribution, contribution plugin.Contribution, label string) error {
+	seenPaths := map[string]string{}
+	for _, c := range *contributions {
+		for _, a := range c.Assets {
+			seenPaths[a.Path] = c.Mount
+		}
+	}
+	for _, a := range contribution.Assets {
+		if prevMount, ok := seenPaths[a.Path]; ok {
+			return fmt.Errorf("stack: duplicate asset path %q (contributed via mount %q, again via %s)", a.Path, prevMount, label)
+		}
+	}
+	*contributions = append(*contributions, contribution)
+	return nil
 }
 
 // Consume implements plugin.TargetKind. It branches only on content-type

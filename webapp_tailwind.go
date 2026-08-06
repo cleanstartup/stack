@@ -13,6 +13,12 @@ import (
 // assetspkg.DirSource declared anywhere in it, deduped by AbsPath. Reuses the
 // existing assets.Dir(...) module-facing API as-is (CUP-21) — no new
 // module-facing mechanism for declaring tailwind-scannable content.
+//
+// Shared with the lit stage (webapp_lit.go, CUP-25): both stages need "every
+// module-declared source dir", differing only in which files within each dir
+// they care about (an internal, per-plugin naming-convention filter applied
+// downstream, not a difference in how the dir itself is declared) — so
+// there's one collector, not two.
 func moduleContentDirs(module Module) []string {
 	var dirs []string
 	seen := map[string]bool{}
