@@ -10,11 +10,12 @@ import (
 // buildLitStage runs lit as the WebApp target's app-level singleton build
 // stage (D-N/PRD §7), mirroring buildTailwindStage (webapp_tailwind.go)
 // exactly: one pass over every assets.Dir(...) source dir declared by
-// t.module. dirs is t.module's moduleContentDirs, computed once by Build and
-// shared with buildTailwindStage so the module's Part tree is walked a
-// single time per build, not once per stage. Returns nil, nil when no
-// *.lit.ts/*.lit.tsx entry point is discovered anywhere in those dirs — the
-// stage is a no-op, not an error.
+// t.module and every Module composed as an Ingredient (CUP-27 —
+// moduleContentDirs/ingredientModules). dirs is that combined set, computed
+// once by Build and shared with buildTailwindStage so the composed tree is
+// walked a single time per build, not once per stage. Returns nil, nil when
+// no *.lit.ts/*.lit.tsx entry point is discovered anywhere in those dirs —
+// the stage is a no-op, not an error.
 //
 // Source-declaration mechanism: reuses assets.Dir(...) as-is, the same
 // DirSource moduleContentDirs already collects for tailwind — no new
@@ -26,11 +27,14 @@ import (
 // non-entry .ts files in the same declared dir are not a second concept
 // needing their own API, just importable-but-not-an-entry modules).
 //
-// Same scope fence as buildTailwindStage: scoped to t.module only, not
-// ingredient Modules — flattenIngredients doesn't yet model a Module
-// ingredient contributing sources beyond routes, so walking ingredient
-// Modules here would be speculative, untestable code with no reachable
-// caller today. CUP-27's ui.Module() is what will need this.
+// Ingredient Modules now included (CUP-27, closing the gap this doc comment
+// used to describe as deferred): stack.WebApp(module, ui.Module(), ...)
+// composes ui.Module() as an Ingredient, not as the WebApp's own module — a
+// real Module meant to contribute component sources without being "the"
+// app module. See ingredientModules (webapp_tailwind.go) for how those
+// Modules are found among t.ingredients; Mount(Module, at)'s "at" is
+// ignored for this purpose (build-time source scanning, not runtime
+// routing).
 func (t *WebAppTarget) buildLitStage(ctx context.Context, stageCtx plugin.StageContext, dirs []string) (*plugin.Contribution, error) {
 	if len(dirs) == 0 {
 		return nil, nil

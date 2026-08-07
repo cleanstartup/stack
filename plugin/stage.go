@@ -16,6 +16,27 @@ type StageContext struct {
 	Mode      Mode
 	NPM       NPM
 	Bin       BinProvider
+
+	// ProjectDir is the consuming app's project root — the directory a
+	// Producer can point a real npm-aware tool at to resolve bare
+	// specifiers (e.g. esbuild's AbsWorkingDir, so `import ... from "lit"`
+	// resolves against a real node_modules tree) (CUP-27). Optional: a zero
+	// value means "no real npm project available" — a Producer must treat
+	// bare-specifier resolution as best-effort/unavailable, not panic.
+	//
+	// This is a deliberately minimal slice of the larger StageContext
+	// contract gap CUP-25 flagged (internal/lit/npm.go): nothing in this
+	// module yet constructs a live StageContext in production (only tests
+	// do), so ProjectDir has exactly one real populator today —
+	// WebAppTarget.Build defaults it from the composed Module's rootDir()
+	// when a caller-supplied StageContext leaves it empty (target_webapp.go).
+	// That default is a heuristic (the directory a stack.Bundle(...) call
+	// was made from, which is where an app is expected to keep its
+	// package.json/node_modules, not a verified fact) — a real app-level
+	// build orchestrator that constructs StageContext explicitly, and a real
+	// npm-install step that populates node_modules there, are both still
+	// open (see CUP-27's Implementation Notes).
+	ProjectDir string
 }
 
 // Asset is a flat, typed build output. No placement, no claim, no ownership
