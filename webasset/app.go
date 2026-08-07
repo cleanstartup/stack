@@ -3,7 +3,7 @@ package webasset
 import (
 	"net/http"
 
-	way2goweb "github.com/cleanstartup/stack/way2go/web"
+	way2goweb "github.com/theway2go/way2go/web"
 )
 
 // WebApp is the composition root: it bridges way2go's runtime registrar

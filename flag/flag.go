@@ -3,7 +3,7 @@ package flag
 import (
 	"sync"
 
-	"github.com/cleanstartup/stack/way2go/activity"
+	"github.com/theway2go/way2go/activity"
 )
 
 // Resolver is implemented by providers (e.g. PostHog) to evaluate a flag

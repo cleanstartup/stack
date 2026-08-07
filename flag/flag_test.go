@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/cleanstartup/stack/flag"
-	"github.com/cleanstartup/stack/way2go/activity"
+	"github.com/theway2go/way2go/activity"
 )
 
 // fakeContext is a minimal activity.Context stub for testing flag resolution
