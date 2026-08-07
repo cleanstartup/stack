@@ -18,10 +18,17 @@
 //     unlike tailwind (which still shells out to a real tailwindcss
 //     binary/npm). stageCtx.Bin is therefore unused here. stageCtx.NPM is
 //     still used (producer.go, npm.go) to declare the "lit" package as an
-//     intended dependency, same shape as tailwind's AddNPMDependencies — but
-//     see npm.go's doc comment for why that alone doesn't yet make a real
-//     `import ... from "lit"` resolvable; today only relative-import sources
-//     bundle successfully.
+//     intended dependency, same shape as tailwind's AddNPMDependencies.
+//     stageCtx.ProjectDir (CUP-27) is threaded into esbuild's AbsWorkingDir
+//     (see Build below) so a bare `import ... from "lit"` (or any real npm
+//     package, e.g. Web Awesome) resolves against a real node_modules tree
+//     rooted at or above ProjectDir — esbuild's Go API does the same
+//     upward-walking node_modules resolution the JS CLI does once
+//     AbsWorkingDir is set. This closes the *resolution* half of the gap
+//     npm.go's doc comment describes; it does not close the other half
+//     (nothing here runs `npm install` to populate that node_modules tree —
+//     see this package's tests for how they sidestep that with a
+//     hand-built fixture node_modules instead of a real npm install).
 //
 // Trade-off accepted: esbuild's Go implementation becomes a compile-time
 // dependency of the stack module itself (not just an npm devDependency),
@@ -54,7 +61,25 @@ import (
 //
 // ctx is checked for cancellation between entries; esbuild's api.Build call
 // itself is synchronous and has no context parameter of its own.
-func Build(ctx context.Context, entries []string, outDir string) ([]pluginpkg.Asset, error) {
+//
+// absWorkingDir, when non-empty (CUP-27's StageContext.ProjectDir), is
+// passed through as esbuild's AbsWorkingDir *and* appended (as
+// absWorkingDir/node_modules) to NodePaths. Both are needed, not just
+// AbsWorkingDir: esbuild's bare-specifier (e.g. `from "lit"`) resolution
+// walks node_modules directories upward from the *importing file's own
+// directory*, not from AbsWorkingDir — and a Module's component sources
+// (CUP-27's ui.Module()) live whereever their Go module was checked out
+// (GOPATH/pkg/mod or a local replace), essentially never inside the
+// consuming app's own directory tree. Without NodePaths, an import from
+// such a file would never find the app's node_modules no matter how the
+// upward walk went; discovered by this package's own
+// TestBuildResolvesBareSpecifierViaNodePaths, which fails without this line
+// (confirmed by temporarily removing it) even though AbsWorkingDir alone
+// looks like it should be enough. Empty absWorkingDir is a legitimate value
+// (no known project root) — esbuild then falls back to its own process-cwd
+// default and NodePaths stays unset, so any bare specifier simply fails to
+// resolve, exactly like before this field existed.
+func Build(ctx context.Context, entries []string, outDir, absWorkingDir string) ([]pluginpkg.Asset, error) {
 	if len(entries) == 0 {
 		return nil, nil
 	}
@@ -66,6 +91,11 @@ func Build(ctx context.Context, entries []string, outDir string) ([]pluginpkg.As
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return nil, err
+	}
+
+	var nodePaths []string
+	if strings.TrimSpace(absWorkingDir) != "" {
+		nodePaths = []string{filepath.Join(absWorkingDir, "node_modules")}
 	}
 
 	assets := make([]pluginpkg.Asset, 0, len(entries))
@@ -83,6 +113,8 @@ func Build(ctx context.Context, entries []string, outDir string) ([]pluginpkg.As
 			Platform:          api.PlatformBrowser,
 			Target:            api.ESNext,
 			TreeShaking:       api.TreeShakingTrue,
+			AbsWorkingDir:     absWorkingDir,
+			NodePaths:         nodePaths,
 			MinifyWhitespace:  true,
 			MinifyIdentifiers: true,
 			MinifySyntax:      true,

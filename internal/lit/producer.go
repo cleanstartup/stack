@@ -61,5 +61,5 @@ func (p *Producer) Build(ctx context.Context, stageCtx pluginpkg.StageContext) (
 	AddNPMDependencies(stageCtx.NPM)
 
 	outDir := filepath.Join(stageCtx.OutputDir, "lit")
-	return Build(ctx, entries, outDir)
+	return Build(ctx, entries, outDir, stageCtx.ProjectDir)
 }

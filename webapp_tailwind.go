@@ -8,18 +8,28 @@ import (
 	"github.com/cleanstartup/stack/plugin"
 )
 
-// moduleContentDirs walks module's Part tree (same shape validateNamespaces
-// in stack.go already uses for nested *bundles) collecting every
-// assetspkg.DirSource declared anywhere in it, deduped by AbsPath. Reuses the
-// existing assets.Dir(...) module-facing API as-is (CUP-21) — no new
-// module-facing mechanism for declaring tailwind-scannable content.
+// moduleContentDirs walks each of modules' Part trees (same shape
+// validateNamespaces in stack.go already uses for nested *bundles)
+// collecting every assetspkg.DirSource declared anywhere in any of them,
+// deduped by AbsPath across all of them together. Reuses the existing
+// assets.Dir(...) module-facing API as-is (CUP-21) — no new module-facing
+// mechanism for declaring tailwind/lit-scannable content.
 //
 // Shared with the lit stage (webapp_lit.go, CUP-25): both stages need "every
 // module-declared source dir", differing only in which files within each dir
 // they care about (an internal, per-plugin naming-convention filter applied
 // downstream, not a difference in how the dir itself is declared) — so
 // there's one collector, not two.
-func moduleContentDirs(module Module) []string {
+//
+// Takes multiple roots (CUP-27): t.module plus any Module composed as an
+// Ingredient (e.g. `stack.WebApp(module, ui.Module())` — see
+// ingredientModules below) all contribute to the same content-dir set. Before
+// CUP-27 this only ever walked t.module — ingredient Modules were
+// deliberately unscanned because nothing exercised that path (see prior
+// history of this function); ui.Module() is the first real Module meant to
+// be composed as an ingredient rather than as the WebApp's own module, so
+// leaving it unscanned would silently drop its lit/tailwind sources.
+func moduleContentDirs(modules ...Module) []string {
 	var dirs []string
 	seen := map[string]bool{}
 	var walk func(part Part)
@@ -39,24 +49,44 @@ func moduleContentDirs(module Module) []string {
 			}
 		}
 	}
-	walk(module)
+	for _, module := range modules {
+		walk(module)
+	}
 	return dirs
+}
+
+// ingredientModules extracts every Module found among ingredients — both a
+// bare Module ingredient and a Module mounted via Mount(module, at)
+// (mountEdge.subject) — so callers can fold their content dirs into
+// moduleContentDirs alongside t.module. A Mount(Module, at)'s "at" is
+// deliberately ignored here: content-dir scanning for the app-level
+// singleton tailwind/lit stages is a build-time source concern (D-N), not a
+// runtime routing concern — the mount point only matters to
+// flattenIngredients' routing, not to what gets scanned for
+// tailwind classes / lit entry points.
+func ingredientModules(ingredients []Ingredient) []Module {
+	var modules []Module
+	for _, ingredient := range ingredients {
+		switch v := ingredient.(type) {
+		case Module:
+			modules = append(modules, v)
+		case mountEdge:
+			if m, ok := v.subject.(Module); ok {
+				modules = append(modules, m)
+			}
+		}
+	}
+	return modules
 }
 
 // buildTailwindStage runs tailwind as the WebApp target's app-level singleton
 // build stage (D-N/PRD §7): one pass over every assets.Dir(...) content dir
-// declared by t.module. dirs is t.module's moduleContentDirs, computed once
-// by Build and shared with buildLitStage so the module's Part tree is walked
-// a single time per build, not once per stage. Returns nil, nil when no
-// content is declared — the stage is a no-op, not an error, and nothing
-// changes for a target that never opts in.
-//
-// Scoped to t.module only, not ingredient Modules: flattenIngredients
-// (compose.go) doesn't yet model a Module ingredient contributing anything
-// beyond routes ("Module→Sources isn't modeled yet, deferred to CUP-21/25"),
-// so scanning ingredient Modules here would be speculative, untestable code
-// with no reachable caller today — CUP-27's ui.Module() is what will need
-// this, and it can extend this function when it lands.
+// declared by t.module and every Module composed as an Ingredient (D-C —
+// see moduleContentDirs/ingredientModules, CUP-27). dirs is that combined
+// set, computed once by Build and shared with buildLitStage so the composed
+// tree is walked a single time per build, not once per stage. Returns nil,
+// nil when no content is declared — the stage is a no-op, not an error, and
+// nothing changes for a target that never opts in.
 func (t *WebAppTarget) buildTailwindStage(ctx context.Context, stageCtx plugin.StageContext, dirs []string) (*plugin.Contribution, error) {
 	if len(dirs) == 0 {
 		return nil, nil

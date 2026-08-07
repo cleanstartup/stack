@@ -52,13 +52,25 @@ func (t *WebAppTarget) ensureApp() *webasset.WebApp {
 // bundle.WebApp(opts...) — the self-rebuild lifecycle (build/run/dev/test/
 // clean subcommands, host-native orchestrator, -tags release embed-gen) is
 // a distinct, large design (D-E–D-I) outside CUP-26's scope.
+//
+// stageCtx.ProjectDir defaults from t.module.rootDir() when the caller
+// leaves it empty (CUP-27): today nothing constructs a real StageContext in
+// production (see plugin.StageContext's doc comment), so this default is
+// what makes a directly-called Build(ctx, plugin.StageContext{OutputDir:
+// ...}) — the shape every existing caller and test uses — still resolve a
+// real `import ... from "lit"`/Web Awesome specifier via the lit stage's
+// esbuild AbsWorkingDir, without requiring every caller to know to set
+// ProjectDir itself. An explicit stageCtx.ProjectDir always wins.
 func (t *WebAppTarget) Build(ctx context.Context, stageCtx plugin.StageContext) error {
 	app := t.ensureApp()
+	if strings.TrimSpace(stageCtx.ProjectDir) == "" && t.module != nil {
+		stageCtx.ProjectDir = t.module.rootDir()
+	}
 	contributions, err := flattenIngredients(ctx, stageCtx, app, t.ingredients)
 	if err != nil {
 		return err
 	}
-	contentDirs := moduleContentDirs(t.module)
+	contentDirs := moduleContentDirs(append([]Module{t.module}, ingredientModules(t.ingredients)...)...)
 	twContribution, err := t.buildTailwindStage(ctx, stageCtx, contentDirs)
 	if err != nil {
 		return err
