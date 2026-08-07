@@ -27,7 +27,13 @@ type Config struct {
 	Version      string
 	CacheDir     string
 	DownloadBase string
-	ProjectDir   string
+	// APIBase overrides the GitHub API host the "latest" version lookup
+	// queries (STACK_TAILWIND_API_BASE). Independent from DownloadBase since
+	// they're different hosts (api.github.com vs github.com) — a mirror or
+	// hermetic test that redirects DownloadBase must also redirect this to
+	// avoid a live github.com/api.github.com call slipping through.
+	APIBase    string
+	ProjectDir string
 	// Bin is the shared binary-provisioning service (plugin.Context.Bin).
 	// URL/platform/latest-version resolution stays here in tailwind; Bin only
 	// does download -> cache -> chmod -> atomic rename. Falls back to a
@@ -263,7 +269,15 @@ func ResolveBinary(ctx context.Context, cfg Config) (string, error) {
 		downloadBase = defaultDownloadBase
 	}
 
-	return resolveBinaryDownload(ctx, cfg.Bin, cacheDir, version, downloadBase)
+	apiBase := strings.TrimSpace(cfg.APIBase)
+	if apiBase == "" {
+		apiBase = strings.TrimSpace(os.Getenv("STACK_TAILWIND_API_BASE"))
+	}
+	if apiBase == "" {
+		apiBase = defaultAPIBase
+	}
+
+	return resolveBinaryDownload(ctx, cfg.Bin, cacheDir, version, downloadBase, apiBase)
 }
 
 func commandSpec(ctx context.Context, cfg Config, inputPath, outputPath string, watch bool) (assetspkg.CommandSpec, error) {
@@ -338,7 +352,7 @@ func EnsureProjectDependencies(ctx context.Context, projectDir string) error {
 // delegates the actual download/cache/chmod/rename to the shared
 // BinProvider. Falls back to a tailwind-local BinProvider over cacheDir when
 // bin is nil (e.g. direct package use outside the plugin.Context wiring).
-func resolveBinaryDownload(ctx context.Context, bin pluginpkg.BinProvider, cacheDir, version, downloadBase string) (string, error) {
+func resolveBinaryDownload(ctx context.Context, bin pluginpkg.BinProvider, cacheDir, version, downloadBase, apiBase string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -350,7 +364,7 @@ func resolveBinaryDownload(ctx context.Context, bin pluginpkg.BinProvider, cache
 		if cachedVersion, ok := loadCachedLatestVersion(cacheDir); ok {
 			version = cachedVersion
 		} else {
-			resolved, err := resolveLatestVersion(ctx)
+			resolved, err := resolveLatestVersion(ctx, apiBase)
 			if err != nil {
 				return "", err
 			}
@@ -401,11 +415,15 @@ func buildReleaseURL(base, version, assetName string) string {
 	return fmt.Sprintf("%s/download/%s/%s", strings.TrimRight(base, "/"), version, assetName)
 }
 
-func resolveLatestVersion(ctx context.Context) (string, error) {
+func resolveLatestVersion(ctx context.Context, apiBase string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/releases/latest", defaultAPIBase), nil)
+	apiBase = strings.TrimSpace(apiBase)
+	if apiBase == "" {
+		apiBase = defaultAPIBase
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/releases/latest", apiBase), nil)
 	if err != nil {
 		return "", err
 	}

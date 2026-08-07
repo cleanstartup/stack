@@ -33,9 +33,11 @@ func ensureExtractedBinary(archivePath, extractDir string) (string, error) {
 // extractTarGzEntry extracts the single regular-file entry named entryName
 // (matched by base name, since release tarballs may nest it under a
 // version-named directory) from the .tar.gz at archivePath into destPath.
-// Writes via a temp file + atomic rename, mirroring
-// plugin.BinProvider.Ensure's download-then-rename pattern, so a failed or
-// concurrent extraction never leaves a partially-written binary at destPath.
+// Writes to a uniquely-named temp file in destPath's directory, then renames
+// atomically into place, mirroring plugin.BinProvider.Ensure's
+// download-then-rename pattern — a fixed ".extract" suffix would let two
+// concurrent extractions (e.g. two Hugo(...) producers racing to warm the
+// same version's cache) clobber each other's temp file mid-write.
 func extractTarGzEntry(archivePath, entryName, destPath string) error {
 	f, err := os.Open(archivePath)
 	if err != nil {
@@ -70,14 +72,15 @@ func extractTarGzEntry(archivePath, entryName, destPath string) error {
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		destDir := filepath.Dir(destPath)
+		if err := os.MkdirAll(destDir, 0o755); err != nil {
 			return err
 		}
-		tmpPath := destPath + ".extract"
-		out, err := os.Create(tmpPath)
+		out, err := os.CreateTemp(destDir, filepath.Base(destPath)+".*.extract")
 		if err != nil {
 			return err
 		}
+		tmpPath := out.Name()
 		if _, err := io.Copy(out, tr); err != nil {
 			out.Close()
 			_ = os.Remove(tmpPath)

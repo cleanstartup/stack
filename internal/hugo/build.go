@@ -30,6 +30,12 @@ type Config struct {
 	Version      string
 	CacheDir     string
 	DownloadBase string
+	// APIBase overrides the GitHub API host the "latest" version lookup
+	// queries (STACK_HUGO_API_BASE). Independent from DownloadBase since
+	// they're different hosts (api.github.com vs github.com) — a mirror or
+	// hermetic test that redirects DownloadBase must also redirect this to
+	// avoid a live github.com/api.github.com call slipping through.
+	APIBase string
 	// Bin is the shared binary-provisioning service (StageContext.Bin).
 	// Falls back to a hugo-local BinProvider over CacheDir when nil (e.g.
 	// direct package use outside the plugin.StageContext wiring).
@@ -74,7 +80,15 @@ func ResolveBinary(ctx context.Context, cfg Config) (string, error) {
 		downloadBase = defaultDownloadBase
 	}
 
-	return resolveBinaryDownload(ctx, cfg.Bin, cacheDir, version, downloadBase)
+	apiBase := strings.TrimSpace(cfg.APIBase)
+	if apiBase == "" {
+		apiBase = strings.TrimSpace(os.Getenv("STACK_HUGO_API_BASE"))
+	}
+	if apiBase == "" {
+		apiBase = defaultAPIBase
+	}
+
+	return resolveBinaryDownload(ctx, cfg.Bin, cacheDir, version, downloadBase, apiBase)
 }
 
 // resolveBinaryDownload resolves the concrete release tag + archive URL,
@@ -82,7 +96,7 @@ func ResolveBinary(ctx context.Context, cfg Config) (string, error) {
 // cache -> chmod -> atomic rename, identical contract tailwind uses for its
 // raw binary), then extracts the "hugo" executable out of that archive into
 // a local, idempotent extraction cache.
-func resolveBinaryDownload(ctx context.Context, bin pluginpkg.BinProvider, cacheDir, version, downloadBase string) (string, error) {
+func resolveBinaryDownload(ctx context.Context, bin pluginpkg.BinProvider, cacheDir, version, downloadBase, apiBase string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -90,7 +104,7 @@ func resolveBinaryDownload(ctx context.Context, bin pluginpkg.BinProvider, cache
 		if cached, ok := loadCachedLatestVersion(cacheDir); ok {
 			version = cached
 		} else {
-			resolved, err := resolveLatestVersion(ctx)
+			resolved, err := resolveLatestVersion(ctx, apiBase)
 			if err != nil {
 				return "", err
 			}
@@ -156,11 +170,15 @@ func buildReleaseURL(base, tagVersion, assetName string) string {
 	return fmt.Sprintf("%s/download/%s/%s", strings.TrimRight(base, "/"), tagVersion, assetName)
 }
 
-func resolveLatestVersion(ctx context.Context) (string, error) {
+func resolveLatestVersion(ctx context.Context, apiBase string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/releases/latest", defaultAPIBase), nil)
+	apiBase = strings.TrimSpace(apiBase)
+	if apiBase == "" {
+		apiBase = defaultAPIBase
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/releases/latest", apiBase), nil)
 	if err != nil {
 		return "", err
 	}

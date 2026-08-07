@@ -58,7 +58,8 @@ func (t *WebAppTarget) Build(ctx context.Context, stageCtx plugin.StageContext) 
 	if err != nil {
 		return err
 	}
-	twContribution, err := t.buildTailwindStage(ctx, stageCtx)
+	contentDirs := moduleContentDirs(t.module)
+	twContribution, err := t.buildTailwindStage(ctx, stageCtx, contentDirs)
 	if err != nil {
 		return err
 	}
@@ -67,7 +68,7 @@ func (t *WebAppTarget) Build(ctx context.Context, stageCtx plugin.StageContext) 
 			return err
 		}
 	}
-	litContribution, err := t.buildLitStage(ctx, stageCtx)
+	litContribution, err := t.buildLitStage(ctx, stageCtx, contentDirs)
 	if err != nil {
 		return err
 	}
@@ -123,13 +124,13 @@ func (t *WebAppTarget) Consume(ctx context.Context, contributions []plugin.Contr
 				return err
 			}
 			switch {
-			case isContentTypeFamily(a.ContentType, "text/css"):
+			case plugin.ContentTypeInFamily(a.ContentType, "text/css"):
 				url, err := t.mountGeneratedAsset(app, "css", a)
 				if err != nil {
 					return err
 				}
 				t.links.Styles = append(t.links.Styles, url)
-			case isContentTypeFamily(a.ContentType, "application/javascript"):
+			case plugin.ContentTypeInFamily(a.ContentType, "application/javascript"):
 				url, err := t.mountGeneratedAsset(app, "js", a)
 				if err != nil {
 					return err
@@ -205,10 +206,4 @@ func mountAssetTree(app *webasset.WebApp, at string, a plugin.Asset) error {
 	}
 	app.Registrar().AddMount(at, handler)
 	return nil
-}
-
-// isContentTypeFamily implements D-K's "+*" family match against a fixed
-// base (the general bare/+hint/+* form is plugin.Assets.OfType).
-func isContentTypeFamily(contentType, base string) bool {
-	return contentType == base || strings.HasPrefix(contentType, base+"+")
 }

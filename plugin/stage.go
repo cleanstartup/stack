@@ -42,7 +42,7 @@ func (as Assets) OfType(contentType string) Assets {
 	var out Assets
 	if base, ok := strings.CutSuffix(contentType, "+*"); ok {
 		for _, a := range as {
-			if a.ContentType == base || strings.HasPrefix(a.ContentType, base+"+") {
+			if ContentTypeInFamily(a.ContentType, base) {
 				out = append(out, a)
 			}
 		}
@@ -54,6 +54,15 @@ func (as Assets) OfType(contentType string) Assets {
 		}
 	}
 	return out
+}
+
+// ContentTypeInFamily reports whether contentType is base itself or a
+// "+hint" refinement of it (D-K's family match) — the predicate behind
+// OfType("base+*"), also reused by target kinds that need the same
+// bare-or-hinted match against a single asset instead of filtering a whole
+// Assets slice (e.g. WebApp/Website's css/js dispatch).
+func ContentTypeInFamily(contentType, base string) bool {
+	return contentType == base || strings.HasPrefix(contentType, base+"+")
 }
 
 // Contribution groups one producer edge's assets with that edge's wiring

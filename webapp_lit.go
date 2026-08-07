@@ -10,8 +10,11 @@ import (
 // buildLitStage runs lit as the WebApp target's app-level singleton build
 // stage (D-N/PRD §7), mirroring buildTailwindStage (webapp_tailwind.go)
 // exactly: one pass over every assets.Dir(...) source dir declared by
-// t.module. Returns nil, nil when no *.lit.ts/*.lit.tsx entry point is
-// discovered anywhere in those dirs — the stage is a no-op, not an error.
+// t.module. dirs is t.module's moduleContentDirs, computed once by Build and
+// shared with buildTailwindStage so the module's Part tree is walked a
+// single time per build, not once per stage. Returns nil, nil when no
+// *.lit.ts/*.lit.tsx entry point is discovered anywhere in those dirs — the
+// stage is a no-op, not an error.
 //
 // Source-declaration mechanism: reuses assets.Dir(...) as-is, the same
 // DirSource moduleContentDirs already collects for tailwind — no new
@@ -28,8 +31,7 @@ import (
 // ingredient contributing sources beyond routes, so walking ingredient
 // Modules here would be speculative, untestable code with no reachable
 // caller today. CUP-27's ui.Module() is what will need this.
-func (t *WebAppTarget) buildLitStage(ctx context.Context, stageCtx plugin.StageContext) (*plugin.Contribution, error) {
-	dirs := moduleContentDirs(t.module)
+func (t *WebAppTarget) buildLitStage(ctx context.Context, stageCtx plugin.StageContext, dirs []string) (*plugin.Contribution, error) {
 	if len(dirs) == 0 {
 		return nil, nil
 	}

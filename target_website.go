@@ -206,7 +206,7 @@ func (t *WebsiteTarget) InjectManifestLinks() error {
 func (t *WebsiteTarget) manifestFamily(base string) []string {
 	var out []string
 	for ct, rels := range t.manifest {
-		if ct == base || strings.HasPrefix(ct, base+"+") {
+		if plugin.ContentTypeInFamily(ct, base) {
 			out = append(out, rels...)
 		}
 	}
@@ -225,7 +225,7 @@ func (t *WebsiteTarget) manifestJSEntries() []jsManifestEntry {
 	const base = "application/javascript"
 	var out []jsManifestEntry
 	for ct, rels := range t.manifest {
-		if ct != base && !strings.HasPrefix(ct, base+"+") {
+		if !plugin.ContentTypeInFamily(ct, base) {
 			continue
 		}
 		module := ct == base+"+module"

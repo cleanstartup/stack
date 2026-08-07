@@ -45,9 +45,11 @@ func moduleContentDirs(module Module) []string {
 
 // buildTailwindStage runs tailwind as the WebApp target's app-level singleton
 // build stage (D-N/PRD §7): one pass over every assets.Dir(...) content dir
-// declared by t.module. Returns nil, nil when no content is declared — the
-// stage is a no-op, not an error, and nothing changes for a target that never
-// opts in.
+// declared by t.module. dirs is t.module's moduleContentDirs, computed once
+// by Build and shared with buildLitStage so the module's Part tree is walked
+// a single time per build, not once per stage. Returns nil, nil when no
+// content is declared — the stage is a no-op, not an error, and nothing
+// changes for a target that never opts in.
 //
 // Scoped to t.module only, not ingredient Modules: flattenIngredients
 // (compose.go) doesn't yet model a Module ingredient contributing anything
@@ -55,8 +57,7 @@ func moduleContentDirs(module Module) []string {
 // so scanning ingredient Modules here would be speculative, untestable code
 // with no reachable caller today — CUP-27's ui.Module() is what will need
 // this, and it can extend this function when it lands.
-func (t *WebAppTarget) buildTailwindStage(ctx context.Context, stageCtx plugin.StageContext) (*plugin.Contribution, error) {
-	dirs := moduleContentDirs(t.module)
+func (t *WebAppTarget) buildTailwindStage(ctx context.Context, stageCtx plugin.StageContext, dirs []string) (*plugin.Contribution, error) {
 	if len(dirs) == 0 {
 		return nil, nil
 	}
