@@ -55,15 +55,21 @@ func moduleContentDirs(modules ...Module) []string {
 	return dirs
 }
 
-// ingredientModules extracts every Module found among ingredients — both a
-// bare Module ingredient and a Module mounted via Mount(module, at)
-// (mountEdge.subject) — so callers can fold their content dirs into
-// moduleContentDirs alongside t.module. A Mount(Module, at)'s "at" is
-// deliberately ignored here: content-dir scanning for the app-level
-// singleton tailwind/lit stages is a build-time source concern (D-N), not a
-// runtime routing concern — the mount point only matters to
-// flattenIngredients' routing, not to what gets scanned for
-// tailwind classes / lit entry points.
+// ingredientModules extracts every Module found among ingredients so
+// callers can fold their content dirs into moduleContentDirs alongside
+// t.module. In practice today that means only a *bare* Module ingredient —
+// `stack.WebApp(module, ui.Module())`, the shape CUP-27's ui.Module()
+// actually uses. The `case mountEdge` branch below is dead code on a
+// WebAppTarget, not a second supported path, and should not be read as one:
+// applyMountEdge (compose.go) unconditionally errors on `Mount(Module, at)`
+// for a non-nil app, so flattenIngredients (called before moduleContentDirs
+// in WebAppTarget.Build) already returns that error before this function
+// ever runs — pinned by TestModuleEdgeMountOnWebAppIsFenced
+// (target_webapp_test.go). Kept rather than deleted because it costs
+// nothing and is already correct for the day Mount(Module, at) routing is
+// implemented for real (D-M's "routes+assets under a prefix, namespaced" —
+// still unscheduled, see applyMountEdge's own doc comment): content-dir
+// scanning for that Module will already work with no further change here.
 func ingredientModules(ingredients []Ingredient) []Module {
 	var modules []Module
 	for _, ingredient := range ingredients {

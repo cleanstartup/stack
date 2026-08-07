@@ -68,7 +68,7 @@ import (
 // AbsWorkingDir: esbuild's bare-specifier (e.g. `from "lit"`) resolution
 // walks node_modules directories upward from the *importing file's own
 // directory*, not from AbsWorkingDir — and a Module's component sources
-// (CUP-27's ui.Module()) live whereever their Go module was checked out
+// (CUP-27's ui.Module()) live wherever their Go module was checked out
 // (GOPATH/pkg/mod or a local replace), essentially never inside the
 // consuming app's own directory tree. Without NodePaths, an import from
 // such a file would never find the app's node_modules no matter how the
@@ -79,6 +79,17 @@ import (
 // (no known project root) — esbuild then falls back to its own process-cwd
 // default and NodePaths stays unset, so any bare specifier simply fails to
 // resolve, exactly like before this field existed.
+//
+// absWorkingDir is trimmed and, if non-empty and not already absolute, made
+// absolute (filepath.Abs, resolved against the process's cwd) before being
+// handed to esbuild: esbuild's AbsWorkingDir field name is a real
+// requirement, not just a naming convention — a relative value there
+// produces surprising/undefined resolution behavior, not a clean error.
+// today's one real caller (WebAppTarget.Build's t.module.rootDir() default)
+// always produces an absolute path already, so this only matters for a
+// StageContext a caller constructs directly with a relative ProjectDir —
+// but silently misbehaving in that case would be a trap, so it's normalized
+// here rather than left as a footgun for whoever calls this next.
 func Build(ctx context.Context, entries []string, outDir, absWorkingDir string) ([]pluginpkg.Asset, error) {
 	if len(entries) == 0 {
 		return nil, nil
@@ -93,8 +104,16 @@ func Build(ctx context.Context, entries []string, outDir, absWorkingDir string) 
 		return nil, err
 	}
 
+	absWorkingDir = strings.TrimSpace(absWorkingDir)
 	var nodePaths []string
-	if strings.TrimSpace(absWorkingDir) != "" {
+	if absWorkingDir != "" {
+		if !filepath.IsAbs(absWorkingDir) {
+			abs, err := filepath.Abs(absWorkingDir)
+			if err != nil {
+				return nil, fmt.Errorf("lit: resolving absWorkingDir %q: %w", absWorkingDir, err)
+			}
+			absWorkingDir = abs
+		}
 		nodePaths = []string{filepath.Join(absWorkingDir, "node_modules")}
 	}
 

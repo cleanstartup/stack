@@ -53,14 +53,29 @@ func (t *WebAppTarget) ensureApp() *webasset.WebApp {
 // clean subcommands, host-native orchestrator, -tags release embed-gen) is
 // a distinct, large design (D-E–D-I) outside CUP-26's scope.
 //
-// stageCtx.ProjectDir defaults from t.module.rootDir() when the caller
-// leaves it empty (CUP-27): today nothing constructs a real StageContext in
-// production (see plugin.StageContext's doc comment), so this default is
-// what makes a directly-called Build(ctx, plugin.StageContext{OutputDir:
-// ...}) — the shape every existing caller and test uses — still resolve a
-// real `import ... from "lit"`/Web Awesome specifier via the lit stage's
-// esbuild AbsWorkingDir, without requiring every caller to know to set
-// ProjectDir itself. An explicit stageCtx.ProjectDir always wins.
+// stageCtx.ProjectDir defaults from t.module.rootDir() — the WebApp's own
+// module, never an ingredient's — when the caller leaves it empty (CUP-27):
+// today nothing constructs a real StageContext in production (see
+// plugin.StageContext's doc comment), so this default is what makes a
+// directly-called Build(ctx, plugin.StageContext{OutputDir: ...}) — the
+// shape every existing caller and test uses — still resolve a real
+// `import ... from "lit"`/Web Awesome specifier via the lit stage's esbuild
+// AbsWorkingDir, without requiring every caller to know to set ProjectDir
+// itself. An explicit stageCtx.ProjectDir always wins.
+//
+// Deliberately t.module only, never any ingredient Module's rootDir (code
+// review asked this be verified, not assumed — see
+// TestWebAppTargetDefaultsProjectDirFromOwnModuleNotIngredient): in the
+// shape this exists for, `stack.WebApp(myModule, ui.Module())`, ProjectDir
+// must land on the *consuming app's* project root, since that's the only
+// place a real npm project (package.json/node_modules with lit + Web
+// Awesome installed) can plausibly live. ui.Module()'s own rootDir() points
+// at wherever the cleanstartup/ui Go module was checked out — never the
+// app's npm project root — so falling back to an ingredient's rootDir here
+// would be wrong for the primary use case, not just an untested edge case.
+// This is asymmetric with moduleContentDirs/ingredientModules on purpose:
+// those fold ingredient Modules in because *content dirs* (component
+// sources) legitimately live in the ingredient; ProjectDir does not.
 func (t *WebAppTarget) Build(ctx context.Context, stageCtx plugin.StageContext) error {
 	app := t.ensureApp()
 	if strings.TrimSpace(stageCtx.ProjectDir) == "" && t.module != nil {

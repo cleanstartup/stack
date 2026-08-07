@@ -9,19 +9,20 @@ import "github.com/cleanstartup/stack/plugin"
 // (Producer.Build calls this once real work is about to happen), but the
 // parallel is not yet load-bearing the way tailwind's is.
 //
-// Honest limitation: declaring this only records intent on the shared
-// plugin.NPM registry (D3) — nothing today turns it into an actual
-// node_modules tree on disk that esbuild's api.Build can resolve a bare
-// specifier against. Unlike tailwind (which shells out to a real npm
-// project directory it controls via Config.ProjectDir), esbuild's Go API
-// runs in-process against StageContext alone, and StageContext
-// (plugin/stage.go) has no ProjectDir/workspace-root field a Producer could
-// point esbuild's AbsWorkingDir/NodePaths at. That's a genuine contract gap
-// this task cannot close unilaterally (it's CUP-26-contract-shaped, not
-// CUP-25-producer-shaped) — today, Producer.Build only builds entries whose
-// imports resolve via plain relative paths (this package's own tests; a
-// real CUP-27 ui.Module() component library, once it exists, is what will
-// force this gap closed).
+// Honest limitation, updated by CUP-27: declaring this only records intent
+// on the shared plugin.NPM registry (D3) — it does not itself turn "lit"
+// into an actual node_modules entry on disk. That half of the gap is now
+// closed differently: StageContext (plugin/stage.go) gained a ProjectDir
+// field, threaded into esbuild's AbsWorkingDir/NodePaths (build.go), so a
+// bare `import ... from "lit"` resolves against a real, already-installed
+// node_modules tree rooted at ProjectDir. What's still missing is the other
+// half — nothing in this repo runs `npm install` to populate that
+// node_modules tree in the first place; a consuming app (e.g. CUP-27's
+// cleanstartup/ui, via its ui.Module()) must install "lit" (and any other
+// real npm package it needs, e.g. Web Awesome) into StageContext.ProjectDir
+// itself today. See internal/lit/build.go's Build doc comment and
+// TestBuildResolvesBareSpecifierViaNodePaths for the resolution mechanism
+// this now relies on.
 func AddNPMDependencies(project plugin.NPM) {
 	if project == nil {
 		return
