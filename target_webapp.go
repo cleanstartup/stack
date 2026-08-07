@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/cleanstartup/stack/plugin"
-	way2goweb "github.com/cleanstartup/stack/way2go/web"
+	way2goweb "github.com/theway2go/way2go/web"
 	"github.com/cleanstartup/stack/webasset"
 )
 

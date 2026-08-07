@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	assetspkg "github.com/cleanstartup/stack/assets"
-	"github.com/cleanstartup/stack/way2go/activity"
-	"github.com/cleanstartup/stack/way2go/cli"
-	"github.com/cleanstartup/stack/way2go/param"
+	"github.com/theway2go/way2go/activity"
+	"github.com/theway2go/way2go/cli"
+	"github.com/theway2go/way2go/param"
 	"github.com/cleanstartup/stack/webasset"
 )
 

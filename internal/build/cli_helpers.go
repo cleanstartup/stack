@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cleanstartup/stack/way2go/cli"
+	"github.com/theway2go/way2go/cli"
 )
 
 type runCommandInput struct {

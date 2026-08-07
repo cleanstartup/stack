@@ -17,9 +17,9 @@ import (
 	assetspkg "github.com/cleanstartup/stack/assets"
 	buildpkg "github.com/cleanstartup/stack/internal/build"
 	tailwindpkg "github.com/cleanstartup/stack/internal/tailwind"
-	"github.com/cleanstartup/stack/way2go/activity"
-	"github.com/cleanstartup/stack/way2go/cli"
-	wayweb "github.com/cleanstartup/stack/way2go/web"
+	"github.com/theway2go/way2go/activity"
+	"github.com/theway2go/way2go/cli"
+	wayweb "github.com/theway2go/way2go/web"
 	"github.com/cleanstartup/stack/webasset"
 )
 

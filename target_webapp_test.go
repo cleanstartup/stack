@@ -16,7 +16,7 @@ import (
 	"github.com/cleanstartup/stack/assets"
 	"github.com/cleanstartup/stack/internal/tailwind"
 	"github.com/cleanstartup/stack/plugin"
-	"github.com/cleanstartup/stack/way2go/activity"
+	"github.com/theway2go/way2go/activity"
 )
 
 type fakeProducer struct {
