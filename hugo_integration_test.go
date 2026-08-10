@@ -9,12 +9,12 @@ import (
 	"testing"
 
 	"github.com/cleanstartup/stack"
-	hugopkg "github.com/cleanstartup/stack/internal/hugo"
+	hugopkg "github.com/cleanstartup/stack/hugo"
 	"github.com/cleanstartup/stack/plugin"
 )
 
 // writeFakeHugoBinary stands in for the real hugo binary in these
-// stack-level integration tests, without depending on internal/hugo's own
+// stack-level integration tests, without depending on hugo's own
 // (unexported) test helper. It writes a marker index.html with an empty
 // <head> into --destination, matching real hugo's own output shape closely
 // enough to prove InjectManifestLinks against it.
