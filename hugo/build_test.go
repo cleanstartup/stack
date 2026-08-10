@@ -42,10 +42,24 @@ func TestResolveBinaryUsesSharedBinProviderAndExtractsArchive(t *testing.T) {
 		t.Skip("hugo release assets are only mapped here for darwin/linux")
 	}
 
-	archivePath := writeTestTarGz(t, t.TempDir(), "hugo-fake.tar.gz", map[string]string{
-		"LICENSE": "license text",
-		"hugo":    "#!/bin/sh\necho fake-hugo\n",
-	})
+	// releaseAssetName (exercised below via ResolveBinary) picks the archive
+	// format by runtime.GOOS, so the fake archive handed to fakeBinProvider
+	// must actually be in that format — linux .tar.gz vs darwin .pkg (see
+	// releaseAssetName / CUP-33) — for the real end of resolveBinaryDownload
+	// (ensureExtractedBinary's suffix dispatch) to exercise the real path.
+	var archivePath string
+	if runtime.GOOS == "darwin" {
+		requirePkgTools(t)
+		archivePath = writeTestPkg(t, t.TempDir(), "hugo-fake.pkg", map[string]string{
+			"LICENSE": "license text",
+			"hugo":    "#!/bin/sh\necho fake-hugo\n",
+		})
+	} else {
+		archivePath = writeTestTarGz(t, t.TempDir(), "hugo-fake.tar.gz", map[string]string{
+			"LICENSE": "license text",
+			"hugo":    "#!/bin/sh\necho fake-hugo\n",
+		})
+	}
 	fake := &fakeBinProvider{path: archivePath}
 	cacheDir := t.TempDir()
 	cfg := Config{Version: "v0.134.3", Bin: fake, CacheDir: cacheDir}
@@ -92,8 +106,14 @@ func TestReleaseAssetNameEmbedsFileVersion(t *testing.T) {
 	if !strings.Contains(name, "0.134.3") {
 		t.Fatalf("expected asset name to embed the file version, got %q", name)
 	}
-	if !strings.HasSuffix(name, ".tar.gz") {
-		t.Fatalf("expected a .tar.gz asset name, got %q", name)
+	// darwin dropped the .tar.gz release asset; hugo only ships .pkg there
+	// now (see releaseAssetName / CUP-33). linux is unaffected.
+	wantSuffix := ".tar.gz"
+	if runtime.GOOS == "darwin" {
+		wantSuffix = ".pkg"
+	}
+	if !strings.HasSuffix(name, wantSuffix) {
+		t.Fatalf("expected a %s asset name, got %q", wantSuffix, name)
 	}
 }
 

@@ -24,7 +24,8 @@ const (
 // set) only does download -> cache -> chmod -> atomic rename, exactly the
 // same split tailwind uses (see internal/tailwind/build.go's Config/
 // ResolveBinary) — the difference is hugo's GitHub release assets are
-// .tar.gz archives, not a raw executable, so this package also extracts.
+// archives (.tar.gz on linux, .pkg on darwin), not a raw executable, so this
+// package also extracts.
 type Config struct {
 	Binary       string
 	Version      string
@@ -133,7 +134,7 @@ func resolveBinaryDownload(ctx context.Context, bin pluginpkg.BinProvider, cache
 	}
 
 	extractDir := filepath.Join(cacheDir, "hugo", tagVersion, "extracted")
-	return ensureExtractedBinary(archivePath, extractDir)
+	return ensureExtractedBinary(archivePath, extractDir, assetFile)
 }
 
 // releaseAssetName mirrors tailwind's assetName() (internal/tailwind/
@@ -142,11 +143,15 @@ func resolveBinaryDownload(ctx context.Context, bin pluginpkg.BinProvider, cache
 // tailwind's own release matrix (darwin universal + linux amd64/arm64) —
 // windows is left unsupported for the same reason tailwind's assetName
 // leaves it unsupported: no released binary name mapped here yet, not a
-// fundamental limitation of the approach.
+// fundamental limitation of the approach. darwin returns a .pkg, not a
+// .tar.gz: hugo dropped the darwin .tar.gz asset somewhere between v0.150.0
+// and v0.162.1 and now ships macOS builds only as a .pkg installer (see
+// CUP-33) — ensureExtractedBinary dispatches on this suffix to pick the
+// matching extraction path (extractPkgEntry vs extractTarGzEntry).
 func releaseAssetName(fileVersion string) (string, error) {
 	switch runtime.GOOS {
 	case "darwin":
-		return fmt.Sprintf("hugo_%s_darwin-universal.tar.gz", fileVersion), nil
+		return fmt.Sprintf("hugo_%s_darwin-universal.pkg", fileVersion), nil
 	case "linux":
 		switch runtime.GOARCH {
 		case "amd64":
