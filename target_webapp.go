@@ -1,8 +1,11 @@
 package stack
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,9 +24,11 @@ type WebAppTarget struct {
 	module      Module
 	ingredients []Ingredient
 
-	app      *webasset.WebApp
-	links    way2goweb.AssetLinks
-	assetSeq int
+	app       *webasset.WebApp
+	links     way2goweb.AssetLinks
+	assetSeq  int
+	manifest  AssetManifest
+	outputDir string
 }
 
 var _ plugin.TargetKind = (*WebAppTarget)(nil)
@@ -78,6 +83,7 @@ func (t *WebAppTarget) ensureApp() *webasset.WebApp {
 // sources) legitimately live in the ingredient; ProjectDir does not.
 func (t *WebAppTarget) Build(ctx context.Context, stageCtx plugin.StageContext) error {
 	app := t.ensureApp()
+	t.outputDir = stageCtx.OutputDir
 	if strings.TrimSpace(stageCtx.ProjectDir) == "" && t.module != nil {
 		stageCtx.ProjectDir = t.module.rootDir()
 	}
@@ -177,9 +183,11 @@ func (t *WebAppTarget) Consume(ctx context.Context, contributions []plugin.Contr
 					return fmt.Errorf("stack: webapp target: mount point %q is already used by another asset", mount)
 				}
 				usedForeignMounts[mount] = true
-				if err := mountAssetTree(app, mount, a); err != nil {
+				fsys, path := diskAssetFS(a.Path)
+				if err := mountAssetTree(app, mount, fsys, path); err != nil {
 					return err
 				}
+				t.manifest.Entries = append(t.manifest.Entries, AssetEntry{URL: mount, EmbedPath: t.manifestEmbedPath(a.Path), Kind: "mount"})
 			}
 		}
 	}
@@ -206,31 +214,127 @@ func (t *WebAppTarget) AssetLinks() way2goweb.AssetLinks {
 	return t.links
 }
 
+// rehydrate is Consume's release-mode counterpart: a release binary never
+// calls Build (there is no npm/StageContext/Stage to run), so instead of
+// deriving mounts+links from live plugin.Assets it replays manifest, the
+// frozen output of a `build` run's own Consume, against fsys (an embed.FS
+// subtree). Every entry gets mounted via the exact same mountAssetTree dev
+// uses; css/js entries additionally rehydrate t.links since Handler() reads
+// that, not the manifest, to populate AssetLinks.
+func (t *WebAppTarget) rehydrate(fsys fs.FS, manifest AssetManifest) error {
+	app := t.ensureApp()
+	for _, e := range manifest.Entries {
+		if err := mountAssetTree(app, e.URL, fsys, e.EmbedPath); err != nil {
+			return err
+		}
+		switch e.Kind {
+		case "css":
+			t.links.Styles = append(t.links.Styles, e.URL)
+		case "js":
+			t.links.Scripts = append(t.links.Scripts, e.URL)
+		}
+	}
+	return nil
+}
+
 func (t *WebAppTarget) mountGeneratedAsset(app *webasset.WebApp, kind string, a plugin.Asset) (string, error) {
 	t.assetSeq++
 	url := fmt.Sprintf("/assets/%s/%d-%s", kind, t.assetSeq, filepath.Base(a.Path))
-	if err := mountAssetTree(app, url, a); err != nil {
+	fsys, path := diskAssetFS(a.Path)
+	if err := mountAssetTree(app, url, fsys, path); err != nil {
 		return "", err
 	}
+	t.manifest.Entries = append(t.manifest.Entries, AssetEntry{URL: url, EmbedPath: t.manifestEmbedPath(a.Path), Kind: kind})
 	return url, nil
 }
 
-// mountAssetTree mounts a.Path (file or self-contained dir) as an HTTP
-// handler at the given prefix on app's registrar.
-func mountAssetTree(app *webasset.WebApp, at string, a plugin.Asset) error {
-	info, err := os.Stat(a.Path)
+// manifestEmbedPath is deliberately a different path space than
+// diskAssetFS's (used for the live dev mount, always rooted at "/"): a
+// manifest entry's EmbedPath has to resolve against `.assets`' own embed.FS
+// subtree at release time (writeEmbedGen's `//go:embed all:.assets` +
+// fs.Sub(_, ".assets")), so it must be relative to OutputDir specifically,
+// not to disk root. Real producers always write under stageCtx.OutputDir
+// (every Builder in this module does), so the Rel below succeeds for every
+// asset a `build` run ever actually manifests; the diskAssetFS fallback only
+// matters for tests that call Consume directly with assets outside any
+// OutputDir, whose manifest output (if any) nothing in this module reads.
+func (t *WebAppTarget) manifestEmbedPath(absPath string) string {
+	if t.outputDir != "" {
+		if rel, err := filepath.Rel(t.outputDir, absPath); err == nil && !strings.HasPrefix(rel, "..") {
+			return filepath.ToSlash(rel)
+		}
+	}
+	_, path := diskAssetFS(absPath)
+	return path
+}
+
+// diskAssetFS turns an Asset.Path — always some absolute on-disk path, but
+// with no contract tying it to any particular OutputDir (producers write
+// under stageCtx.OutputDir by convention; tests and third-party Builders are
+// free not to) — into the (fsys, path) pair mountAssetTree needs: an fs.FS
+// rooted at the filesystem root plus absPath with its leading slash
+// stripped. This is deliberately a superset of "os.DirFS(OutputDir)" (the
+// design's dev-mode sketch): rooting at "/" instead resolves any absolute
+// path, inside OutputDir or not, through the exact same fs.FS-based
+// mountAssetTree a release build's embedded rehydrate path also uses.
+func diskAssetFS(absPath string) (fs.FS, string) {
+	clean := filepath.ToSlash(filepath.Clean(absPath))
+	return os.DirFS("/"), strings.TrimPrefix(clean, "/")
+}
+
+// mountAssetTree mounts path (a file or self-contained dir) within fsys as
+// an HTTP handler at the given prefix on app's registrar. Dev (diskAssetFS)
+// and a release binary's rehydrate path (an embed.FS subtree) share this
+// exact function — only fsys's root differs; the byte-serving logic is
+// identical either way (D-M's manifest design).
+func mountAssetTree(app *webasset.WebApp, at string, fsys fs.FS, path string) error {
+	info, err := fs.Stat(fsys, path)
 	if err != nil {
-		return fmt.Errorf("stack: webapp target: asset %q: %w", a.Path, err)
+		return fmt.Errorf("stack: webapp target: asset %q: %w", path, err)
 	}
 	var handler http.Handler
 	if info.IsDir() {
-		handler = http.StripPrefix(at, http.FileServer(http.Dir(a.Path)))
+		sub, err := fs.Sub(fsys, path)
+		if err != nil {
+			return fmt.Errorf("stack: webapp target: asset %q: %w", path, err)
+		}
+		handler = http.StripPrefix(at, http.FileServer(http.FS(sub)))
 	} else {
-		path := a.Path
-		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, path)
-		})
+		handler = serveFSFile(fsys, path)
 	}
 	app.Registrar().AddMount(at, handler)
 	return nil
+}
+
+// serveFSFile always serves the one file at path within fsys, regardless of
+// the incoming request path — mirrors the old a.Path-based http.ServeFile
+// handler, just fs.FS-sourced so it works identically against os.DirFS and
+// an embed.FS. Falls back to buffering the whole file only when fsys's File
+// doesn't implement io.ReadSeeker — both os.DirFS's and embed.FS's do, so
+// this is a defensive fallback for any other fs.FS a future Builder might
+// supply, not a path either of those two exercise.
+func serveFSFile(fsys fs.FS, path string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f, err := fsys.Open(path)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer f.Close()
+		stat, err := f.Stat()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		rs, ok := f.(io.ReadSeeker)
+		if !ok {
+			data, err := io.ReadAll(f)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			rs = bytes.NewReader(data)
+		}
+		http.ServeContent(w, r, stat.Name(), stat.ModTime(), rs)
+	})
 }
