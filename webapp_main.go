@@ -201,6 +201,7 @@ func (t *WebAppTarget) releaseRegistry(fsys fs.FS, cfg mainConfig) *cli.Registry
 // serve straight off OutputDir — the everyday inner-loop command (CUP-30
 // Kernentscheidung #1: "In-Process-Build statt Dev-Zeit-Zweischritt").
 func (t *WebAppTarget) serveDev(ctx context.Context, outputDir, addr string, npmDeps map[string]string) error {
+	log.Printf("stack: ensuring npm dependencies (real `npm install`, network required on first run)")
 	project, err := t.ensureNPM(ctx, npmDeps)
 	if err != nil {
 		return fmt.Errorf("stack: npm install: %w", err)
@@ -211,6 +212,7 @@ func (t *WebAppTarget) serveDev(ctx context.Context, outputDir, addr string, npm
 		NPM:       project,
 		Bin:       plugin.NewBinProvider(plugin.DefaultBinCacheDir()),
 	}
+	log.Printf("stack: building (tailwind + lit app-level stages; binaries download to %s on first run, also network required)", plugin.DefaultBinCacheDir())
 	if err := t.Build(ctx, stageCtx); err != nil {
 		return fmt.Errorf("stack: build: %w", err)
 	}
@@ -226,6 +228,7 @@ func (t *WebAppTarget) serveDev(ctx context.Context, outputDir, addr string, npm
 // invariant, "keine Self-Recursion"): the release binary's registry
 // (releaseRegistry) has no build command to call back into this.
 func (t *WebAppTarget) runBuild(ctx context.Context, commandDir, outputDir string, npmDeps map[string]string) (string, error) {
+	log.Printf("stack: ensuring npm dependencies (real `npm install`, network required on first run)")
 	project, err := t.ensureNPM(ctx, npmDeps)
 	if err != nil {
 		return "", fmt.Errorf("stack: npm install: %w", err)
@@ -236,15 +239,18 @@ func (t *WebAppTarget) runBuild(ctx context.Context, commandDir, outputDir strin
 		NPM:       project,
 		Bin:       plugin.NewBinProvider(plugin.DefaultBinCacheDir()),
 	}
+	log.Printf("stack: building (tailwind + lit app-level stages; binaries download to %s on first run, also network required)", plugin.DefaultBinCacheDir())
 	if err := t.Build(ctx, stageCtx); err != nil {
 		return "", fmt.Errorf("stack: build: %w", err)
 	}
+	log.Printf("stack: built — %d style link(s), %d script link(s)", len(t.links.Styles), len(t.links.Scripts))
 	if err := writeManifest(outputDir, t.manifest); err != nil {
 		return "", fmt.Errorf("stack: writing manifest: %w", err)
 	}
 	if err := writeEmbedGen(commandDir); err != nil {
 		return "", fmt.Errorf("stack: generating %s: %w", embedGenFileName, err)
 	}
+	log.Printf("stack: go build -tags release ...")
 	binPath, err := buildReleaseBinary(ctx, commandDir)
 	if err != nil {
 		return "", fmt.Errorf("stack: go build -tags release: %w", err)
